@@ -26,7 +26,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Cairo',
       ),
-      home: const HomePage(),
+      home: const WelcomeScreen(),
     );
   }
 }
