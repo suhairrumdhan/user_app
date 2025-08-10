@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:user_application/screens/login_page.dart';
 import 'package:user_application/screens/signup_page.dart';
-import 'package:user_application/theme/theme.dart';
 import 'package:user_application/widgets/custom_scaffold.dart';
 import 'package:user_application/widgets/welcome_button.dart';
 

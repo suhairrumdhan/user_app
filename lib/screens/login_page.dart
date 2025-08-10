@@ -18,7 +18,8 @@ class _LoginPageState extends State<LoginPage> {
   final passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
-  bool _obscurePassword = true;
+
+  //bool _obscurePassword = true;
   final authService = AuthService();
 
   @override

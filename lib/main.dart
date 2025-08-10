@@ -1,7 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:user_application/screens/home_page.dart';
-import 'package:user_application/screens/welcome_page.dart';
 import 'firebase_options.dart'; // تولده من Firebase Console
 import 'package:user_application/auth/user_repository.dart';
 import 'package:get/get.dart';
@@ -26,7 +25,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Cairo',
       ),
-      home: const WelcomeScreen(),
+      home: const HomePage(),
     );
   }
 }

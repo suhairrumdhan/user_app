@@ -8,6 +8,8 @@ import 'package:geolocator/geolocator.dart';
 import 'profile_page.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart'; // إضافة المكتبة الجديدة
+import 'package:path_provider/path_provider.dart';
 
 const Color inActiveIconColor = Color(0xFFB6B6B6);
 
@@ -20,7 +22,9 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int currentSelectedIndex = 0;
-  File? _selectedImage;
+  File? _selectedFile;
+  String? _fileType; // 'image' أو 'pdf'
+
   bool _isLoading = false;
   LatLng? _currentPosition;
   List<LatLng> _pharmacies = [];
@@ -32,12 +36,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _requestPermissions() async {
-    if (await Permission.storage.request().isGranted) {
-      // أو: READ_MEDIA_DOCUMENTS لجهازك
-    } else {
+    final status = await Permission.storage.request();
+    final manageExternalStatus = await Permission.manageExternalStorage
+        .request();
+
+    if (!status.isGranted || !manageExternalStatus.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى السماح بالوصول للملفات')),
+        const SnackBar(content: Text('يجب منح صلاحيات الوصول للملفات')),
       );
+      await openAppSettings(); // يفتح إعدادات التطبيق ليتمكن المستخدم من منح الصلاحيات يدوياً
     }
   }
 
@@ -92,9 +99,17 @@ class _HomePageState extends State<HomePage> {
     try {
       final pickedFile = await ImagePicker().pickImage(source: source);
       if (pickedFile != null) {
-        setState(() {
-          _selectedImage = File(pickedFile.path);
-        });
+        final imageFile = File(pickedFile.path);
+
+        // عرض شاشة المعاينة
+        final confirmed = await _showPreviewDialog(imageFile, 'image');
+
+        if (confirmed) {
+          setState(() {
+            _selectedFile = imageFile;
+            _fileType = 'image';
+          });
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(
@@ -105,73 +120,99 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _pickPDF() async {
+    await _requestPermissions();
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData: true, // مهم لقراءة محتوى الملف
+        withReadStream: true, // بديل جيد للملفات الكبيرة
+      );
+
+      if (result != null) {
+        PlatformFile file = result.files.first;
+
+        if (file.path != null) {
+          File pdfFile = File(file.path!);
+
+          // معاينة الملف
+          final confirmed = await _showPreviewDialog(pdfFile, 'pdf');
+
+          if (confirmed) {
+            setState(() {
+              _selectedFile = pdfFile;
+              _fileType = 'pdf';
+            });
+          }
+        } else if (file.bytes != null) {
+          // حل بديل إذا لم يكن هناك مسار
+          final tempDir = await getTemporaryDirectory();
+          final tempFile = File('${tempDir.path}/${file.name}');
+          await tempFile.writeAsBytes(file.bytes!);
+
+          final confirmed = await _showPreviewDialog(tempFile, 'pdf');
+
+          if (confirmed) {
+            setState(() {
+              _selectedFile = tempFile;
+              _fileType = 'pdf';
+            });
+          }
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('حدث خطأ: ${e.toString()}')));
+    }
+  }
+
+  Future<bool> _showPreviewDialog(File file, String type) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => Dialog(
+            child: PreviewScreen(
+              file: file,
+              fileType: type,
+              onConfirm: () => Navigator.pop(context, true),
+              onCancel: () => Navigator.pop(context, false),
+            ),
+          ),
+        ) ??
+        false;
+  }
+
   void _showImageSourceDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add Recipe'),
+        title: const Text('إضافة وصفة طبية'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Take Photo'),
+              leading: const Icon(Icons.camera_alt, color: Colors.blue),
+              title: const Text('التقاط صورة'),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(ImageSource.camera);
               },
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Choose from Gallery'),
+              leading: const Icon(Icons.photo_library, color: Colors.green),
+              title: const Text('اختيار من المعرض'),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(ImageSource.gallery);
               },
             ),
             ListTile(
-              leading: const Icon(Icons.picture_as_pdf),
-              title: const Text('Upload PDF'),
+              leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
+              title: const Text('رفع ملف PDF'),
               onTap: () {
-                //Navigator.pop(context);
-                ListTile(
-                  leading: const Icon(Icons.picture_as_pdf),
-                  title: const Text('Upload PDF'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await _requestPermissions();
-                    FilePickerResult? result = await FilePicker.platform
-                        .pickFiles(
-                          type: FileType.custom,
-                          allowedExtensions: ['pdf'],
-                          withData: true, // أو withReadStream: true
-                        );
-
-                    if (result != null && result.files.single.path != null) {
-                      File pdfFile = File(result.files.single.path!);
-
-                      // فقط عرض اسم الملف بعد التحميل كاختبار أولي
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'PDF selected: ${pdfFile.path.split('/').last}',
-                          ),
-                        ),
-                      );
-
-                      // إذا أردت تخزينه في متغير لاستخدام لاحق:
-                      setState(() {
-                        _selectedImage =
-                            pdfFile; // فقط مؤقتًا لو كنت تريد عرضه بنفس واجهة الصور
-                      });
-                    } else {
-                      // المستخدم لم يختار أي ملف
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('لم يتم اختيار أي ملف')),
-                      );
-                    }
-                  },
-                );
+                Navigator.pop(context);
+                _pickPDF();
               },
             ),
           ],
@@ -197,29 +238,15 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pharmacy '),
+        title: const Text('Pharmacy*'),
         centerTitle: true,
         actions: [
           IconButton(icon: const Icon(Icons.notifications), onPressed: () {}),
         ],
       ),
-      body: Stack(
-        children: [
-          pages[currentSelectedIndex],
-          if (_selectedImage != null && currentSelectedIndex == 0)
-            Positioned(
-              bottom: 100,
-              left: 16,
-              right: 16,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.file(_selectedImage!),
-              ),
-            ),
-        ],
-      ),
+      body: Stack(children: [pages[currentSelectedIndex]]),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showImageSourceDialog,
+        onPressed: _showImageSourceDialog, // تم التعديل هنا
         backgroundColor: Theme.of(context).primaryColor,
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -304,6 +331,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+// باقي الكود (أجزاء _HomeTabContent و _MapTab والرموز SVG) يبقى كما هو بدون تغيير
 class _HomeTabContent extends StatelessWidget {
   const _HomeTabContent();
 
@@ -367,6 +395,121 @@ class _HomeTabContent extends StatelessWidget {
         const SizedBox(height: 8),
         Text(label),
       ],
+    );
+  }
+}
+
+class PreviewScreen extends StatelessWidget {
+  final File file;
+  final String fileType;
+  final VoidCallback onConfirm;
+  final VoidCallback onCancel;
+
+  const PreviewScreen({
+    super.key,
+    required this.file,
+    required this.fileType,
+    required this.onConfirm,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        title: const Text(
+          'معاينة الملف',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+        ),
+        elevation: 4,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.2),
+                        spreadRadius: 2,
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: fileType == 'image'
+                      ? Image.file(file, fit: BoxFit.contain)
+                      : SfPdfViewer.file(file),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // زر الإلغاء (يسار)
+                ElevatedButton(
+                  onPressed: onCancel,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red[400],
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.close, color: Colors.white),
+                      SizedBox(width: 8),
+                      Text('إلغاء', style: TextStyle(color: Colors.white)),
+                    ],
+                  ),
+                ),
+
+                // زر التأكيد (يمين)
+                ElevatedButton(
+                  onPressed: onConfirm,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('تأكيد', style: TextStyle(color: Colors.white)),
+                      SizedBox(width: 8),
+                      Icon(Icons.check, color: Colors.white),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

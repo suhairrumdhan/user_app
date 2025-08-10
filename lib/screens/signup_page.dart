@@ -4,7 +4,6 @@ import 'package:user_application/widgets/custom_scaffold.dart';
 import 'package:user_application/widgets/custom_text_field.dart';
 import 'package:user_application/widgets/social_sign_in_button.dart';
 import 'package:user_application/auth/auth_services.dart';
-import 'package:user_application/screens/health_info.dart';
 
 class FullSignUpPage extends StatefulWidget {
   const FullSignUpPage({super.key});
