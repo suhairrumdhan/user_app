@@ -8,8 +8,10 @@ import 'package:geolocator/geolocator.dart';
 import 'profile_page.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart'; // إضافة المكتبة الجديدة
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 const Color inActiveIconColor = Color(0xFFB6B6B6);
 
@@ -24,6 +26,7 @@ class _HomePageState extends State<HomePage> {
   int currentSelectedIndex = 0;
   File? _selectedFile;
   String? _fileType; // 'image' أو 'pdf'
+  String _extractedText = ''; // نص المستخرج
 
   bool _isLoading = false;
   LatLng? _currentPosition;
@@ -37,14 +40,13 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _requestPermissions() async {
     final status = await Permission.storage.request();
-    final manageExternalStatus = await Permission.manageExternalStorage
-        .request();
+    final manageExternalStatus = await Permission.manageExternalStorage.request();
 
     if (!status.isGranted || !manageExternalStatus.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('يجب منح صلاحيات الوصول للملفات')),
       );
-      await openAppSettings(); // يفتح إعدادات التطبيق ليتمكن المستخدم من منح الصلاحيات يدوياً
+      await openAppSettings();
     }
   }
 
@@ -105,16 +107,21 @@ class _HomePageState extends State<HomePage> {
         final confirmed = await _showPreviewDialog(imageFile, 'image');
 
         if (confirmed) {
+          // استخراج النص من الصورة
+          final extractedText = await _extractTextFromImage(imageFile);
+
           setState(() {
             _selectedFile = imageFile;
             _fileType = 'image';
+            _extractedText = extractedText;
           });
+
+          // عرض النص المستخرج
+          _showExtractedText(extractedText);
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -126,60 +133,58 @@ class _HomePageState extends State<HomePage> {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
-        withData: true, // مهم لقراءة محتوى الملف
-        withReadStream: true, // بديل جيد للملفات الكبيرة
+        withData: true,
+        withReadStream: true,
       );
 
       if (result != null) {
         PlatformFile file = result.files.first;
+        File? pdfFile;
 
         if (file.path != null) {
-          File pdfFile = File(file.path!);
+          pdfFile = File(file.path!);
+        } else if (file.bytes != null) {
+          final tempDir = await getTemporaryDirectory();
+          pdfFile = File('${tempDir.path}/${file.name}');
+          await pdfFile.writeAsBytes(file.bytes!);
+        }
 
+        if (pdfFile != null) {
           // معاينة الملف
           final confirmed = await _showPreviewDialog(pdfFile, 'pdf');
 
           if (confirmed) {
+            // استخراج النص من PDF
+            final extractedText = await _extractTextFromPDF(pdfFile);
+
             setState(() {
               _selectedFile = pdfFile;
               _fileType = 'pdf';
+              _extractedText = extractedText;
             });
-          }
-        } else if (file.bytes != null) {
-          // حل بديل إذا لم يكن هناك مسار
-          final tempDir = await getTemporaryDirectory();
-          final tempFile = File('${tempDir.path}/${file.name}');
-          await tempFile.writeAsBytes(file.bytes!);
 
-          final confirmed = await _showPreviewDialog(tempFile, 'pdf');
-
-          if (confirmed) {
-            setState(() {
-              _selectedFile = tempFile;
-              _fileType = 'pdf';
-            });
+            // عرض النص المستخرج
+            _showExtractedText(extractedText);
           }
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('حدث خطأ: ${e.toString()}')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: ${e.toString()}')));
     }
   }
 
   Future<bool> _showPreviewDialog(File file, String type) async {
     return await showDialog<bool>(
-          context: context,
-          builder: (context) => Dialog(
-            child: PreviewScreen(
-              file: file,
-              fileType: type,
-              onConfirm: () => Navigator.pop(context, true),
-              onCancel: () => Navigator.pop(context, false),
-            ),
-          ),
-        ) ??
+      context: context,
+      builder: (context) => Dialog(
+        child: PreviewScreen(
+          file: file,
+          fileType: type,
+          onConfirm: () => Navigator.pop(context, true),
+          onCancel: () => Navigator.pop(context, false),
+        ),
+      ),
+    ) ??
         false;
   }
 
@@ -221,6 +226,24 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _showExtractedText(String text) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('النص المستخرج'),
+        content: SingleChildScrollView(
+          child: Text(text.isNotEmpty ? text : 'لم يتم العثور على نص'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('موافق'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void updateCurrentIndex(int index) {
     setState(() {
       currentSelectedIndex = index;
@@ -246,7 +269,7 @@ class _HomePageState extends State<HomePage> {
       ),
       body: Stack(children: [pages[currentSelectedIndex]]),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showImageSourceDialog, // تم التعديل هنا
+        onPressed: _showImageSourceDialog,
         backgroundColor: Theme.of(context).primaryColor,
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -331,7 +354,37 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// باقي الكود (أجزاء _HomeTabContent و _MapTab والرموز SVG) يبقى كما هو بدون تغيير
+Future<String> _extractTextFromImage(File imageFile) async {
+  try {
+    final inputImage = InputImage.fromFile(imageFile);
+    final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+
+    final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
+    await textRecognizer.close();
+
+    return recognizedText.text;
+  } catch (e) {
+    return 'فشل في استخراج النص من الصورة: ${e.toString()}';
+  }
+}
+
+Future<String> _extractTextFromPDF(File pdfFile) async {
+  try {
+    final bytes = await pdfFile.readAsBytes();
+    final PdfDocument document = PdfDocument(inputBytes: bytes);
+
+    String extractedText = '';
+    for (int i = 0; i < document.pages.count; i++) {
+      extractedText += PdfTextExtractor(document).extractText(startPageIndex: i, endPageIndex: i);
+    }
+
+    document.dispose();
+    return extractedText.isNotEmpty ? extractedText : 'لم يتم العثور على نص في ملف PDF';
+  } catch (e) {
+    return 'فشل في استخراج النص من PDF: ${e.toString()}';
+  }
+}
+
 class _HomeTabContent extends StatelessWidget {
   const _HomeTabContent();
 
@@ -399,6 +452,117 @@ class _HomeTabContent extends StatelessWidget {
   }
 }
 
+// class PreviewScreen extends StatelessWidget {
+//   final File file;
+//   final String fileType;
+//   final VoidCallback onConfirm;
+//   final VoidCallback onCancel;
+//
+//   const PreviewScreen({
+//     super.key,
+//     required this.file,
+//     required this.fileType,
+//     required this.onConfirm,
+//     required this.onCancel,
+//   });
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       backgroundColor: Colors.grey[100],
+//       appBar: AppBar(
+//         title: const Text(
+//           'معاينة الملف',
+//           style: TextStyle(fontWeight: FontWeight.bold),
+//         ),
+//         centerTitle: true,
+//         shape: const RoundedRectangleBorder(
+//           borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+//         ),
+//         elevation: 4,
+//       ),
+//       body: Column(
+//         children: [
+//           Expanded(
+//             child: Padding(
+//               padding: const EdgeInsets.all(16.0),
+//               child: ClipRRect(
+//                 borderRadius: BorderRadius.circular(20),
+//                 child: Container(
+//                   decoration: BoxDecoration(
+//                     color: Colors.white,
+//                     borderRadius: BorderRadius.circular(20),
+//                     boxShadow: [
+//                       BoxShadow(
+//                         color: Colors.grey.withOpacity(0.2),
+//                         spreadRadius: 2,
+//                         blurRadius: 10,
+//                         offset: const Offset(0, 3),
+//                       ),
+//                     ],
+//                   ),
+//                   child: fileType == 'image'
+//                       ? Image.file(file, fit: BoxFit.contain)
+//                       : SfPdfViewer.file(file),
+//                 ),
+//               ),
+//             ),
+//           ),
+//           Padding(
+//             padding: const EdgeInsets.all(16.0),
+//             child: Row(
+//               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//               children: [
+//                 ElevatedButton(
+//                   onPressed: onCancel,
+//                   style: ElevatedButton.styleFrom(
+//                     backgroundColor: Colors.red[400],
+//                     shape: RoundedRectangleBorder(
+//                       borderRadius: BorderRadius.circular(12),
+//                     ),
+//                     padding: const EdgeInsets.symmetric(
+//                       horizontal: 24,
+//                       vertical: 12,
+//                     ),
+//                   ),
+//                   child: const Row(
+//                     mainAxisSize: MainAxisSize.min,
+//                     children: [
+//                       Icon(Icons.close, color: Colors.white),
+//                       SizedBox(width: 8),
+//                       Text('إلغاء', style: TextStyle(color: Colors.white)),
+//                     ],
+//                   ),
+//                 ),
+//                 ElevatedButton(
+//                   onPressed: onConfirm,
+//                   style: ElevatedButton.styleFrom(
+//                     backgroundColor: Colors.green,
+//                     shape: RoundedRectangleBorder(
+//                       borderRadius: BorderRadius.circular(12),
+//                     ),
+//                     padding: const EdgeInsets.symmetric(
+//                       horizontal: 24,
+//                       vertical: 12,
+//                     ),
+//                   ),
+//                   child: const Row(
+//                     mainAxisSize: MainAxisSize.min,
+//                     children: [
+//                       Text('تأكيد', style: TextStyle(color: Colors.white)),
+//                       SizedBox(width: 8),
+//                       Icon(Icons.check, color: Colors.white),
+//                     ],
+//                   ),
+//                 ),
+//               ],
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+// }
 class PreviewScreen extends StatelessWidget {
   final File file;
   final String fileType;
@@ -415,105 +579,29 @@ class PreviewScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: const Text(
-          'معاينة الملف',
-          style: TextStyle(fontWeight: FontWeight.bold),
+    return Column(
+      mainAxisSize: MainAxisSize.min, // <-- مهم باش الديالوغ ما ياخذش الشاشة كاملة
+      children: [
+        SizedBox(
+          height: 400,
+          child: fileType == 'image'
+              ? Image.file(file, fit: BoxFit.contain)
+              : SfPdfViewer.file(file),
         ),
-        centerTitle: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            ElevatedButton(onPressed: onCancel, child: const Text("إلغاء")),
+            ElevatedButton(onPressed: onConfirm, child: const Text("تأكيد")),
+          ],
         ),
-        elevation: 4,
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.2),
-                        spreadRadius: 2,
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: fileType == 'image'
-                      ? Image.file(file, fit: BoxFit.contain)
-                      : SfPdfViewer.file(file),
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // زر الإلغاء (يسار)
-                ElevatedButton(
-                  onPressed: onCancel,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red[400],
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.close, color: Colors.white),
-                      SizedBox(width: 8),
-                      Text('إلغاء', style: TextStyle(color: Colors.white)),
-                    ],
-                  ),
-                ),
-
-                // زر التأكيد (يمين)
-                ElevatedButton(
-                  onPressed: onConfirm,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('تأكيد', style: TextStyle(color: Colors.white)),
-                      SizedBox(width: 8),
-                      Icon(Icons.check, color: Colors.white),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
 
+////////////////////////////////////
 class _MapTab extends StatelessWidget {
   final LatLng? currentPosition;
   final List<LatLng> pharmacies;
@@ -528,23 +616,22 @@ class _MapTab extends StatelessWidget {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
-      // يمكنك تغيير القيمة حسب الشكل المطلوب
       child: FlutterMap(
         options: MapOptions(center: currentPosition, zoom: 15.0),
         children: [
           TileLayer(
             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.example.app',
+            userAgentPackageName: 'com.example.user_application',
           ),
           MarkerLayer(
             markers: [
               Marker(
                 point: currentPosition!,
                 builder: (ctx) =>
-                    const Icon(Icons.location_on, color: Colors.blue, size: 40),
+                const Icon(Icons.location_on, color: Colors.blue, size: 40),
               ),
               ...pharmacies.map(
-                (pharmacy) => Marker(
+                    (pharmacy) => Marker(
                   point: pharmacy,
                   builder: (ctx) => const Icon(
                     Icons.local_pharmacy,
@@ -562,12 +649,12 @@ class _MapTab extends StatelessWidget {
 }
 
 const heartIcon =
-    '''<svg width="22" height="20" viewBox="0 0 22 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+'''<svg width="22" height="20" viewBox="0 0 22 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path fill-rule="evenodd" clip-rule="evenodd" d="M19.1585 10.6702L11.2942 18.6186C11.1323 18.7822 10.8687 18.7822 10.7058 18.6186L2.84145 10.6702C1.81197 9.62861 1.2443 8.24408 1.2443 6.77039C1.2443 5.29671 1.81197 3.91218 2.84145 2.87063C3.90622 1.79552 5.30308 1.25744 6.70098 1.25744C8.09887 1.25744 9.49573 1.79552 10.5605 2.87063C10.8033 3.11607 11.1967 3.11607 11.4405 2.87063C13.568 0.720415 17.03 0.720415 19.1585 2.87063C20.188 3.91113 20.7557 5.29566 20.7557 6.77039C20.7557 8.24408 20.188 9.62966 19.1585 10.6702ZM20.0386 1.98013C17.5687 -0.516223 13.6313 -0.652578 11.0005 1.57316C8.36973 -0.652578 4.43342 -0.516223 1.96245 1.98013C0.696354 3.25977 0 4.96001 0 6.77039C0 8.57972 0.696354 10.281 1.96245 11.5607L9.82678 19.5091C10.1495 19.8364 10.575 20 11.0005 20C11.426 20 11.8505 19.8364 12.1743 19.5091L20.0386 11.5607C21.3036 10.2821 22 8.58077 22 6.77039C22 4.96001 21.3036 3.25872 20.0386 1.98013Z" fill="#B6B6B6"/>
 </svg>''';
 
 const chatIcon =
-    '''<svg width="22" height="18" viewBox="0 0 22 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+'''<svg width="22" height="18" viewBox="0 0 22 18" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path fill-rule="evenodd" clip-rule="evenodd" d="M18.4524 16.6669C18.4524 17.403 17.8608 18 17.1302 18C16.3985 18 15.807 17.403 15.807 16.6669C15.807 15.9308 16.3985 15.3337 17.1302 15.3337C17.8608 15.3337 18.4524 15.9308 18.4524 16.6669ZM11.9556 16.6669C11.9556 17.403 11.3631 18 10.6324 18C9.90181 18 9.30921 17.403 9.30921 16.6669C9.30921 15.9308 9.90181 15.3337 10.6324 15.3337C11.3631 15.3337 11.9556 15.9308 11.9556 16.6669ZM20.7325 5.7508L18.9547 11.0865C18.6413 12.0275 17.7685 12.6591 16.7846 12.6591H10.512C9.53753 12.6591 8.66784 12.0369 8.34923 11.1095L6.30162 5.17154H20.3194C20.4616 5.17154 20.5903 5.23741 20.6733 5.35347C20.7563 5.47058 20.7771 5.61487 20.7325 5.7508ZM21.6831 4.62051C21.3697 4.18031 20.858 3.91682 20.3194 3.91682H5.86885L5.0002 1.40529C4.70961 0.564624 3.92087 0 3.03769 0H0.621652C0.278135 0 0 0.281266 0 0.62736C0 0.974499 0.278135 1.25472 0.621652 1.25472H3.03769C3.39158 1.25472 3.70812 1.48161 3.82435 1.8183L4.83311 4.73657C4.83622 4.74598 4.83934 4.75434 4.84245 4.76375L7.17339 11.5215C7.66531 12.9518 9.00721 13.9138 10.512 13.9138H16.7846C18.304 13.9138 19.6511 12.9383 20.1347 11.4859L21.9135 6.14917C22.0847 5.63369 21.9986 5.06175 21.6831 4.62051Z" fill="#7C7C7C"/>
 </svg>''';
 
