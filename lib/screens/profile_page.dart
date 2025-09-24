@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -7,61 +6,126 @@ class ProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[100],
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 16),
-              Text(
-                "إعدادات الحساب",
-                style: Theme.of(context).textTheme.headlineMedium,
+
+              // ---------- صورة شخصية مع أيقونة تعديل ----------
+              Center(
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundColor: Colors.grey[300],
+                      child: const Icon(
+                        Icons.person,
+                        size: 60,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 4,
+                      right: 4,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFFFF7643), // نفس اللون الأساسي
+                        ),
+                        child: const Icon(
+                          Icons.edit,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(height: 12),
               Text(
-                "قم بتعديل معلوماتك الصحية والإشعارات والتفضيلات",
-                style: Theme.of(context).textTheme.bodyMedium,
+                "اسم المستخدم",
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "example@email.com",
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.black.withOpacity(0.6),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // ---------- العناوين ----------
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "إعدادات الحساب",
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "قم بتعديل معلوماتك الصحية والإشعارات والتفضيلات",
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.black.withOpacity(0.6),
+                  ),
+                ),
               ),
               const SizedBox(height: 24),
+
+              // ---------- الكروت ----------
               ProfileMenuCard(
-                svgSrc: "assets / icons / profile.svg",
+                icon: Icons.person_outline,
                 title: "معلومات الحساب",
                 subTitle: "تعديل بياناتك الشخصية والطبية",
                 press: () {},
               ),
               ProfileMenuCard(
-                svgSrc: "assets/icons/prescription.svg",
+                icon: Icons.description_outlined,
                 title: "الوصفات الطبية",
                 subTitle: "عرض وإدارة وصفاتك الطبية",
                 press: () {},
               ),
               ProfileMenuCard(
-                svgSrc: "assets/icons/meds.svg",
+                icon: Icons.favorite_border,
                 title: "الأدوية المفضلة",
                 subTitle: "عرض قائمة الأدوية التي تفضلها",
                 press: () {},
               ),
               ProfileMenuCard(
-                svgSrc: "assets/icons/reminder.svg",
+                icon: Icons.notifications_outlined,
                 title: "تنبيهات الأدوية",
                 subTitle: "إعداد مواعيد التنبيه لتناول الأدوية",
                 press: () {},
               ),
               ProfileMenuCard(
-                svgSrc: "assets/icons/ history.svg",
+                icon: Icons.show_chart_outlined,
                 title: "السجل الصحي",
                 subTitle: "تصفح بياناتك الصحية السابقة",
                 press: () {},
               ),
               ProfileMenuCard(
-                svgSrc: "assets/icons/privacy.svg",
+                icon: Icons.security_outlined,
                 title: "إعدادات الخصوصية",
                 subTitle: "تحكم بمن يرى بياناتك الصحية",
                 press: () {},
               ),
               ProfileMenuCard(
-                svgSrc: "assets/icons/share.svg",
+                icon: Icons.share_outlined,
                 title: "شارك التطبيق",
                 subTitle: "انشر التطبيق لأصدقائك وادعمهم صحيًا",
                 press: () {},
@@ -79,34 +143,51 @@ class ProfileMenuCard extends StatelessWidget {
     super.key,
     required this.title,
     required this.subTitle,
-    required this.svgSrc,
+    required this.icon,
     required this.press,
   });
 
-  final String title, subTitle, svgSrc;
+  final String title, subTitle;
+  final IconData icon;
   final VoidCallback press;
 
   @override
   Widget build(BuildContext context) {
+    const primaryColor = Color(0xFFFF7643);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: InkWell(
-        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        borderRadius: BorderRadius.circular(16),
         onTap: press,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
           child: Row(
             children: [
-              SvgPicture.asset(
-                svgSrc,
-                height: 24,
-                width: 24,
-                colorFilter: ColorFilter.mode(
-                  const Color(0xFF010F07).withOpacity(0.64),
-                  BlendMode.srcIn,
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: primaryColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  size: 24,
+                  color: primaryColor,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,22 +195,29 @@ class ProfileMenuCard extends StatelessWidget {
                     Text(
                       title,
                       maxLines: 1,
-                      style: Theme.of(context).textTheme.labelLarge,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     Text(
                       subTitle,
-                      maxLines: 1,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: const Color(0xFF010F07).withOpacity(0.54),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.black.withOpacity(0.6),
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              const Icon(Icons.arrow_forward_ios_outlined, size: 20),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 18,
+                color: Colors.black.withOpacity(0.4),
+              ),
             ],
           ),
         ),

@@ -1,17 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:geolocator/geolocator.dart';
 import 'profile_page.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'preview_screen.dart';
+import 'map_tab.dart';
+import '../widgets/custom_bottom_navigation_bar.dart';
+import '../utils/image_source_dialog.dart';
+import '../utils/file_utils.dart';
+import '../utils/location_utils.dart'; // Add this import
 
 const Color inActiveIconColor = Color(0xFFB6B6B6);
 
@@ -29,6 +25,7 @@ class _HomePageState extends State<HomePage> {
   String _extractedText = ''; // نص المستخرج
 
   bool _isLoading = false;
+  bool _isLocationLoading = true; // Add loading state for location
   LatLng? _currentPosition;
   List<LatLng> _pharmacies = [];
 
@@ -38,210 +35,35 @@ class _HomePageState extends State<HomePage> {
     _getCurrentLocation();
   }
 
-  Future<void> _requestPermissions() async {
-    final status = await Permission.storage.request();
-    final manageExternalStatus = await Permission.manageExternalStorage.request();
-
-    if (!status.isGranted || !manageExternalStatus.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يجب منح صلاحيات الوصول للملفات')),
-      );
-      await openAppSettings();
-    }
-  }
-
   Future<void> _getCurrentLocation() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return;
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      return;
-    }
-
-    Position position = await Geolocator.getCurrentPosition();
-    setState(() {
-      _currentPosition = LatLng(position.latitude, position.longitude);
-      _generateNearbyPharmacies();
-    });
-  }
-
-  void _generateNearbyPharmacies() {
-    if (_currentPosition == null) return;
-
-    setState(() {
-      _pharmacies = [
-        LatLng(
-          _currentPosition!.latitude + 0.005,
-          _currentPosition!.longitude + 0.005,
-        ),
-        LatLng(
-          _currentPosition!.latitude - 0.003,
-          _currentPosition!.longitude + 0.002,
-        ),
-        LatLng(
-          _currentPosition!.latitude + 0.001,
-          _currentPosition!.longitude - 0.004,
-        ),
-      ];
-    });
-  }
-
-  Future<void> _pickImage(ImageSource source) async {
-    setState(() => _isLoading = true);
     try {
-      final pickedFile = await ImagePicker().pickImage(source: source);
-      if (pickedFile != null) {
-        final imageFile = File(pickedFile.path);
-
-        // عرض شاشة المعاينة
-        final confirmed = await _showPreviewDialog(imageFile, 'image');
-
-        if (confirmed) {
-          // استخراج النص من الصورة
-          final extractedText = await _extractTextFromImage(imageFile);
-
-          setState(() {
-            _selectedFile = imageFile;
-            _fileType = 'image';
-            _extractedText = extractedText;
-          });
-
-          // عرض النص المستخرج
-          _showExtractedText(extractedText);
-        }
-      }
+      final position = await LocationUtils.getCurrentPosition();
+      setState(() {
+        _currentPosition = position;
+        _pharmacies = LocationUtils.generateNearbyPharmacies(position);
+        _isLocationLoading = false; // Update loading state when done
+      });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _pickPDF() async {
-    await _requestPermissions();
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-        withData: true,
-        withReadStream: true,
-      );
-
-      if (result != null) {
-        PlatformFile file = result.files.first;
-        File? pdfFile;
-
-        if (file.path != null) {
-          pdfFile = File(file.path!);
-        } else if (file.bytes != null) {
-          final tempDir = await getTemporaryDirectory();
-          pdfFile = File('${tempDir.path}/${file.name}');
-          await pdfFile.writeAsBytes(file.bytes!);
-        }
-
-        if (pdfFile != null) {
-          // معاينة الملف
-          final confirmed = await _showPreviewDialog(pdfFile, 'pdf');
-
-          if (confirmed) {
-            // استخراج النص من PDF
-            final extractedText = await _extractTextFromPDF(pdfFile);
-
-            setState(() {
-              _selectedFile = pdfFile;
-              _fileType = 'pdf';
-              _extractedText = extractedText;
-            });
-
-            // عرض النص المستخرج
-            _showExtractedText(extractedText);
-          }
-        }
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('حدث خطأ: ${e.toString()}')));
+      setState(() {
+        _isLocationLoading = false; // Update loading state even on error
+      });
+      print('Location error: $e');
     }
   }
 
   Future<bool> _showPreviewDialog(File file, String type) async {
     return await showDialog<bool>(
-      context: context,
-      builder: (context) => Dialog(
-        child: PreviewScreen(
-          file: file,
-          fileType: type,
-          onConfirm: () => Navigator.pop(context, true),
-          onCancel: () => Navigator.pop(context, false),
-        ),
-      ),
-    ) ??
-        false;
-  }
-
-  void _showImageSourceDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('إضافة وصفة طبية'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt, color: Colors.blue),
-              title: const Text('التقاط صورة'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(ImageSource.camera);
-              },
+          context: context,
+          builder: (context) => Dialog(
+            child: PreviewScreen(
+              file: file,
+              fileType: type,
+              onConfirm: () => Navigator.pop(context, true),
+              onCancel: () => Navigator.pop(context, false),
             ),
-            ListTile(
-              leading: const Icon(Icons.photo_library, color: Colors.green),
-              title: const Text('اختيار من المعرض'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(ImageSource.gallery);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
-              title: const Text('رفع ملف PDF'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickPDF();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showExtractedText(String text) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('النص المستخرج'),
-        content: SingleChildScrollView(
-          child: Text(text.isNotEmpty ? text : 'لم يتم العثور على نص'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('موافق'),
           ),
-        ],
-      ),
-    );
+        ) ??
+        false;
   }
 
   void updateCurrentIndex(int index) {
@@ -250,8 +72,13 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  final pages = [
-    const _HomeTabContent(),
+  // Update pages to pass the loading state and location data
+  List<Widget> get pages => [
+    _HomeTabContent(
+      currentPosition: _currentPosition,
+      pharmacies: _pharmacies,
+      isLoading: _isLocationLoading,
+    ),
     const Center(child: Text("My Recipes Tab Content")),
     const Center(child: Text("Favorites Tab Content")),
     const Center(child: ProfilePage()),
@@ -261,7 +88,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pharmacy*'),
+        title: const Text('Pharmacy'),
         centerTitle: true,
         actions: [
           IconButton(icon: const Icon(Icons.notifications), onPressed: () {}),
@@ -269,129 +96,93 @@ class _HomePageState extends State<HomePage> {
       ),
       body: Stack(children: [pages[currentSelectedIndex]]),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showImageSourceDialog,
-        backgroundColor: Theme.of(context).primaryColor,
+        onPressed: () => showImageSourceDialog(
+          context: context,
+          onPickImage: (source) async {
+            setState(() => _isLoading = true);
+            try {
+              final imageFile = await FileUtils.pickImage(source);
+              if (imageFile != null) {
+                final confirmed = await _showPreviewDialog(imageFile, 'image');
+                if (confirmed) {
+                  final extractedText = await FileUtils.extractTextFromImage(
+                    imageFile,
+                  );
+                  setState(() {
+                    _selectedFile = imageFile;
+                    _fileType = 'image';
+                    _extractedText = extractedText;
+                  });
+                  FileUtils.showExtractedTextDialog(context, extractedText);
+                }
+              }
+            } catch (e) {
+              if (e.toString().contains('صلاحيات')) {
+                FileUtils.showPermissionError(context, e.toString());
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: ${e.toString()}')),
+                );
+              }
+            } finally {
+              setState(() => _isLoading = false);
+            }
+          },
+          onPickPDF: () async {
+            setState(() => _isLoading = true);
+            try {
+              final pdfFile = await FileUtils.pickPDF();
+              if (pdfFile != null) {
+                final confirmed = await _showPreviewDialog(pdfFile, 'pdf');
+                if (confirmed) {
+                  final extractedText = await FileUtils.extractTextFromPDF(
+                    pdfFile,
+                  );
+                  setState(() {
+                    _selectedFile = pdfFile;
+                    _fileType = 'pdf';
+                    _extractedText = extractedText;
+                  });
+                  FileUtils.showExtractedTextDialog(context, extractedText);
+                }
+              }
+            } catch (e) {
+              if (e.toString().contains('صلاحيات')) {
+                FileUtils.showPermissionError(context, e.toString());
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('حدث خطأ: ${e.toString()}')),
+                );
+              }
+            } finally {
+              setState(() => _isLoading = false);
+            }
+          },
+        ),
+        backgroundColor: Color(0xFFFF7643),
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        onTap: updateCurrentIndex,
+      bottomNavigationBar: CustomBottomNavigationBar(
         currentIndex: currentSelectedIndex,
-        showSelectedLabels: false,
-        showUnselectedLabels: false,
-        type: BottomNavigationBarType.fixed,
-        items: [
-          BottomNavigationBarItem(
-            icon: SvgPicture.string(
-              homeIconSvg,
-              colorFilter: const ColorFilter.mode(
-                inActiveIconColor,
-                BlendMode.srcIn,
-              ),
-            ),
-            activeIcon: SvgPicture.string(
-              homeIconSvg,
-              colorFilter: const ColorFilter.mode(
-                Color(0xFFFF7643),
-                BlendMode.srcIn,
-              ),
-            ),
-            label: "الرئيسية",
-          ),
-          BottomNavigationBarItem(
-            icon: SvgPicture.string(
-              chatIcon,
-              colorFilter: const ColorFilter.mode(
-                inActiveIconColor,
-                BlendMode.srcIn,
-              ),
-            ),
-            activeIcon: SvgPicture.string(
-              chatIcon,
-              colorFilter: const ColorFilter.mode(
-                Color(0xFFFF7643),
-                BlendMode.srcIn,
-              ),
-            ),
-            label: "وصفاتي",
-          ),
-          BottomNavigationBarItem(
-            icon: SvgPicture.string(
-              heartIcon,
-              colorFilter: const ColorFilter.mode(
-                inActiveIconColor,
-                BlendMode.srcIn,
-              ),
-            ),
-            activeIcon: SvgPicture.string(
-              heartIcon,
-              colorFilter: const ColorFilter.mode(
-                Color(0xFFFF7643),
-                BlendMode.srcIn,
-              ),
-            ),
-            label: "المفضلة",
-          ),
-          BottomNavigationBarItem(
-            icon: SvgPicture.string(
-              userIcon,
-              colorFilter: const ColorFilter.mode(
-                inActiveIconColor,
-                BlendMode.srcIn,
-              ),
-            ),
-            activeIcon: SvgPicture.string(
-              userIcon,
-              colorFilter: const ColorFilter.mode(
-                Color(0xFFFF7643),
-                BlendMode.srcIn,
-              ),
-            ),
-            label: "الملف الشخصي",
-          ),
-        ],
+        onTap: updateCurrentIndex,
       ),
     );
   }
 }
 
-Future<String> _extractTextFromImage(File imageFile) async {
-  try {
-    final inputImage = InputImage.fromFile(imageFile);
-    final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-
-    final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
-    await textRecognizer.close();
-
-    return recognizedText.text;
-  } catch (e) {
-    return 'فشل في استخراج النص من الصورة: ${e.toString()}';
-  }
-}
-
-Future<String> _extractTextFromPDF(File pdfFile) async {
-  try {
-    final bytes = await pdfFile.readAsBytes();
-    final PdfDocument document = PdfDocument(inputBytes: bytes);
-
-    String extractedText = '';
-    for (int i = 0; i < document.pages.count; i++) {
-      extractedText += PdfTextExtractor(document).extractText(startPageIndex: i, endPageIndex: i);
-    }
-
-    document.dispose();
-    return extractedText.isNotEmpty ? extractedText : 'لم يتم العثور على نص في ملف PDF';
-  } catch (e) {
-    return 'فشل في استخراج النص من PDF: ${e.toString()}';
-  }
-}
-
 class _HomeTabContent extends StatelessWidget {
-  const _HomeTabContent();
+  final LatLng? currentPosition;
+  final List<LatLng> pharmacies;
+  final bool isLoading;
+
+  const _HomeTabContent({
+    required this.currentPosition,
+    required this.pharmacies,
+    required this.isLoading,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final homeState = context.findAncestorStateOfType<_HomePageState>();
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -427,10 +218,14 @@ class _HomeTabContent extends StatelessWidget {
           ),
           SizedBox(
             height: 300,
-            child: _MapTab(
-              currentPosition: homeState?._currentPosition,
-              pharmacies: homeState?._pharmacies ?? [],
-            ),
+            child: isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(),
+                  ) // Show loader while loading
+                : MapTab(
+                    currentPosition: currentPosition,
+                    pharmacies: pharmacies,
+                  ),
           ),
         ],
       ),
@@ -451,222 +246,3 @@ class _HomeTabContent extends StatelessWidget {
     );
   }
 }
-
-// class PreviewScreen extends StatelessWidget {
-//   final File file;
-//   final String fileType;
-//   final VoidCallback onConfirm;
-//   final VoidCallback onCancel;
-//
-//   const PreviewScreen({
-//     super.key,
-//     required this.file,
-//     required this.fileType,
-//     required this.onConfirm,
-//     required this.onCancel,
-//   });
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       backgroundColor: Colors.grey[100],
-//       appBar: AppBar(
-//         title: const Text(
-//           'معاينة الملف',
-//           style: TextStyle(fontWeight: FontWeight.bold),
-//         ),
-//         centerTitle: true,
-//         shape: const RoundedRectangleBorder(
-//           borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
-//         ),
-//         elevation: 4,
-//       ),
-//       body: Column(
-//         children: [
-//           Expanded(
-//             child: Padding(
-//               padding: const EdgeInsets.all(16.0),
-//               child: ClipRRect(
-//                 borderRadius: BorderRadius.circular(20),
-//                 child: Container(
-//                   decoration: BoxDecoration(
-//                     color: Colors.white,
-//                     borderRadius: BorderRadius.circular(20),
-//                     boxShadow: [
-//                       BoxShadow(
-//                         color: Colors.grey.withOpacity(0.2),
-//                         spreadRadius: 2,
-//                         blurRadius: 10,
-//                         offset: const Offset(0, 3),
-//                       ),
-//                     ],
-//                   ),
-//                   child: fileType == 'image'
-//                       ? Image.file(file, fit: BoxFit.contain)
-//                       : SfPdfViewer.file(file),
-//                 ),
-//               ),
-//             ),
-//           ),
-//           Padding(
-//             padding: const EdgeInsets.all(16.0),
-//             child: Row(
-//               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//               children: [
-//                 ElevatedButton(
-//                   onPressed: onCancel,
-//                   style: ElevatedButton.styleFrom(
-//                     backgroundColor: Colors.red[400],
-//                     shape: RoundedRectangleBorder(
-//                       borderRadius: BorderRadius.circular(12),
-//                     ),
-//                     padding: const EdgeInsets.symmetric(
-//                       horizontal: 24,
-//                       vertical: 12,
-//                     ),
-//                   ),
-//                   child: const Row(
-//                     mainAxisSize: MainAxisSize.min,
-//                     children: [
-//                       Icon(Icons.close, color: Colors.white),
-//                       SizedBox(width: 8),
-//                       Text('إلغاء', style: TextStyle(color: Colors.white)),
-//                     ],
-//                   ),
-//                 ),
-//                 ElevatedButton(
-//                   onPressed: onConfirm,
-//                   style: ElevatedButton.styleFrom(
-//                     backgroundColor: Colors.green,
-//                     shape: RoundedRectangleBorder(
-//                       borderRadius: BorderRadius.circular(12),
-//                     ),
-//                     padding: const EdgeInsets.symmetric(
-//                       horizontal: 24,
-//                       vertical: 12,
-//                     ),
-//                   ),
-//                   child: const Row(
-//                     mainAxisSize: MainAxisSize.min,
-//                     children: [
-//                       Text('تأكيد', style: TextStyle(color: Colors.white)),
-//                       SizedBox(width: 8),
-//                       Icon(Icons.check, color: Colors.white),
-//                     ],
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-// }
-class PreviewScreen extends StatelessWidget {
-  final File file;
-  final String fileType;
-  final VoidCallback onConfirm;
-  final VoidCallback onCancel;
-
-  const PreviewScreen({
-    super.key,
-    required this.file,
-    required this.fileType,
-    required this.onConfirm,
-    required this.onCancel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min, // <-- مهم باش الديالوغ ما ياخذش الشاشة كاملة
-      children: [
-        SizedBox(
-          height: 400,
-          child: fileType == 'image'
-              ? Image.file(file, fit: BoxFit.contain)
-              : SfPdfViewer.file(file),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            ElevatedButton(onPressed: onCancel, child: const Text("إلغاء")),
-            ElevatedButton(onPressed: onConfirm, child: const Text("تأكيد")),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-////////////////////////////////////
-class _MapTab extends StatelessWidget {
-  final LatLng? currentPosition;
-  final List<LatLng> pharmacies;
-
-  const _MapTab({this.currentPosition, required this.pharmacies});
-
-  @override
-  Widget build(BuildContext context) {
-    if (currentPosition == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: FlutterMap(
-        options: MapOptions(center: currentPosition, zoom: 15.0),
-        children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.example.user_application',
-          ),
-          MarkerLayer(
-            markers: [
-              Marker(
-                point: currentPosition!,
-                builder: (ctx) =>
-                const Icon(Icons.location_on, color: Colors.blue, size: 40),
-              ),
-              ...pharmacies.map(
-                    (pharmacy) => Marker(
-                  point: pharmacy,
-                  builder: (ctx) => const Icon(
-                    Icons.local_pharmacy,
-                    color: Colors.red,
-                    size: 40,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-const heartIcon =
-'''<svg width="22" height="20" viewBox="0 0 22 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path fill-rule="evenodd" clip-rule="evenodd" d="M19.1585 10.6702L11.2942 18.6186C11.1323 18.7822 10.8687 18.7822 10.7058 18.6186L2.84145 10.6702C1.81197 9.62861 1.2443 8.24408 1.2443 6.77039C1.2443 5.29671 1.81197 3.91218 2.84145 2.87063C3.90622 1.79552 5.30308 1.25744 6.70098 1.25744C8.09887 1.25744 9.49573 1.79552 10.5605 2.87063C10.8033 3.11607 11.1967 3.11607 11.4405 2.87063C13.568 0.720415 17.03 0.720415 19.1585 2.87063C20.188 3.91113 20.7557 5.29566 20.7557 6.77039C20.7557 8.24408 20.188 9.62966 19.1585 10.6702ZM20.0386 1.98013C17.5687 -0.516223 13.6313 -0.652578 11.0005 1.57316C8.36973 -0.652578 4.43342 -0.516223 1.96245 1.98013C0.696354 3.25977 0 4.96001 0 6.77039C0 8.57972 0.696354 10.281 1.96245 11.5607L9.82678 19.5091C10.1495 19.8364 10.575 20 11.0005 20C11.426 20 11.8505 19.8364 12.1743 19.5091L20.0386 11.5607C21.3036 10.2821 22 8.58077 22 6.77039C22 4.96001 21.3036 3.25872 20.0386 1.98013Z" fill="#B6B6B6"/>
-</svg>''';
-
-const chatIcon =
-'''<svg width="22" height="18" viewBox="0 0 22 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path fill-rule="evenodd" clip-rule="evenodd" d="M18.4524 16.6669C18.4524 17.403 17.8608 18 17.1302 18C16.3985 18 15.807 17.403 15.807 16.6669C15.807 15.9308 16.3985 15.3337 17.1302 15.3337C17.8608 15.3337 18.4524 15.9308 18.4524 16.6669ZM11.9556 16.6669C11.9556 17.403 11.3631 18 10.6324 18C9.90181 18 9.30921 17.403 9.30921 16.6669C9.30921 15.9308 9.90181 15.3337 10.6324 15.3337C11.3631 15.3337 11.9556 15.9308 11.9556 16.6669ZM20.7325 5.7508L18.9547 11.0865C18.6413 12.0275 17.7685 12.6591 16.7846 12.6591H10.512C9.53753 12.6591 8.66784 12.0369 8.34923 11.1095L6.30162 5.17154H20.3194C20.4616 5.17154 20.5903 5.23741 20.6733 5.35347C20.7563 5.47058 20.7771 5.61487 20.7325 5.7508ZM21.6831 4.62051C21.3697 4.18031 20.858 3.91682 20.3194 3.91682H5.86885L5.0002 1.40529C4.70961 0.564624 3.92087 0 3.03769 0H0.621652C0.278135 0 0 0.281266 0 0.62736C0 0.974499 0.278135 1.25472 0.621652 1.25472H3.03769C3.39158 1.25472 3.70812 1.48161 3.82435 1.8183L4.83311 4.73657C4.83622 4.74598 4.83934 4.75434 4.84245 4.76375L7.17339 11.5215C7.66531 12.9518 9.00721 13.9138 10.512 13.9138H16.7846C18.304 13.9138 19.6511 12.9383 20.1347 11.4859L21.9135 6.14917C22.0847 5.63369 21.9986 5.06175 21.6831 4.62051Z" fill="#7C7C7C"/>
-</svg>''';
-
-const userIcon = '''
-<svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path fill-rule="evenodd" clip-rule="evenodd" d="M20.3955 20.1586C20.1123 20.5122 19.6701 20.723 19.2127 20.723H2.78733C2.32989 20.723 1.8877 20.5122 1.60452 20.1586C1.33768 19.8263 1.24619 19.4248 1.3453 19.0275C2.44207 14.678 6.41199 11.6395 11.0005 11.6395C15.588 11.6395 19.5579 14.678 20.6547 19.0275C20.7538 19.4248 20.6623 19.8263 20.3955 20.1586ZM6.35536 5.8203C6.35536 3.31645 8.43888 1.27802 11.0005 1.27802C13.5611 1.27802 15.6446 3.31645 15.6446 5.8203C15.6446 8.32522 13.5611 10.3615 11.0005 10.3615C8.43888 10.3615 6.35536 8.32522 6.35536 5.8203ZM21.9235 18.7219C20.939 14.8154 17.9068 11.8451 14.1035 10.7843C15.8102 9.75979 16.9516 7.91838 16.9516 5.8203C16.9516 2.61141 14.2821 0 11.0005 0C7.71787 0 5.04839 2.61141 5.04839 5.8203C5.04839 7.91838 6.18981 9.75979 7.89649 10.7843C4.09321 11.8451 1.06104 14.8154 0.0764552 18.7219C-0.118501 19.4962 0.0633855 20.3077 0.576371 20.9456C1.11223 21.6166 1.91928 22 2.78733 22H19.2127C20.0807 22 20.8878 21.6166 21.4236 20.9456C21.9366 20.3077 22.1185 19.4962 21.9235 18.7219Z" fill="#B6B6B6"/>
-</svg>
-''';
-
-const homeIconSvg = '''
-<?xml version="1.0"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24px" height="24px">
-    <path d="M 12 2 A 1 1 0 0 0 11.289062 2.296875 L 1.203125 11.097656 A 0.5 0.5 0 0 0 1 11.5 A 0.5 0.5 0 0 0 1.5 12 L 4 12 L 4 20 C 4 20.552 4.448 21 5 21 L 9 21 C 9.552 21 10 20.552 10 20 L 10 14 L 14 14 L 14 20 C 14 20.552 14.448 21 15 21 L 19 21 C 19.552 21 20 20.552 20 20 L 20 12 L 22.5 12 A 0.5 0.5 0 0 0 23 11.5 A 0.5 0.5 0 0 0 22.796875 11.097656 L 12.716797 2.3027344 A 1 1 0 0 0 12.710938 2.296875 A 1 1 0 0 0 12 2 z"/>
-</svg>
-''';
