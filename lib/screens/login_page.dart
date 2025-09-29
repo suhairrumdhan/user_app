@@ -1,26 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:icons_plus/icons_plus.dart';
 import 'package:user_application/widgets/custom_scaffold.dart';
 import 'package:user_application/widgets/custom_text_field.dart';
 import 'package:user_application/widgets/social_sign_in_button.dart';
 import 'package:user_application/auth/auth_services.dart';
-import 'signup_page.dart';
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+// Controller للـ Login
+class LoginController extends GetxController {
+  final email = ''.obs;
+  final password = ''.obs;
+  final rememberMe = false.obs;
+  final isLoading = false.obs;
 
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
-
-class _LoginPageState extends State<LoginPage> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  bool _isLoading = false;
 
-  //bool _obscurePassword = true;
   final authService = AuthService();
+}
+
+class LoginPage extends StatelessWidget {
+  LoginPage({super.key});
+
+  final _formKey = GlobalKey<FormState>();
+  final LoginController controller = Get.put(LoginController());
 
   @override
   Widget build(BuildContext context) {
@@ -37,93 +40,107 @@ class _LoginPageState extends State<LoginPage> {
             alignment: Alignment.bottomCenter,
             child: Container(
               height: height * 0.75,
-              padding: const EdgeInsets.all(24),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
               ),
+              padding: const EdgeInsets.all(24),
               child: SingleChildScrollView(
                 child: Form(
                   key: _formKey,
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   child: Column(
                     children: [
-                      CustomTextField(
-                        controller: emailController,
-                        label: "البريد الإلكتروني",
-                        inputType: TextInputType.emailAddress,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return "يرجى إدخال البريد الإلكتروني";
-                          }
-                          if (!value.contains("@")) {
-                            return "بريد إلكتروني غير صالح";
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 24),
-                      CustomTextField(
-                        controller: passwordController,
-                        label: "كلمة المرور",
-                      ),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton(
-                          onPressed: () {
-                            // TODO: إضافة صفحة استعادة كلمة المرور
-                          },
-                          child: const Text("نسيت كلمة المرور؟"),
-                        ),
+                      const SizedBox(height: 16),
+                      Text(
+                        "تسجيل الدخول",
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 24),
 
-                      SizedBox(
+                      // البريد الإلكتروني
+                      CustomTextField(
+                        controller: controller.emailController,
+                        label: "البريد الإلكتروني",
+                        inputType: TextInputType.emailAddress,
+                        onChanged: (value) => controller.email.value = value,
+                        validator: (value) =>
+                        value == null || !value.contains("@")
+                            ? "بريد إلكتروني غير صالح"
+                            : null,
+                      ),
+                      // كلمة المرور
+                      Obx(() => CustomTextField(
+                        controller: controller.passwordController,
+                        label: "كلمة المرور",
+                        obscure: true,
+                        onChanged: (value) => controller.password.value = value,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return "يرجى إدخال كلمة المرور";
+                          } else if (value.length < 6) {
+                            return "كلمة المرور يجب أن تكون 6 أحرف على الأقل";
+                          }
+                          return null;
+                        },
+                      )),
+
+                      // تذكر كلمة المرور
+                      Obx(() => Row(
+                        children: [
+                          Checkbox(
+                              value: controller.rememberMe.value,
+                              onChanged: (value) =>
+                              controller.rememberMe.value = value!),
+                          const Text("تذكر كلمة المرور"),
+                        ],
+                      )),
+                      const SizedBox(height: 24),
+
+                      // زر تسجيل الدخول
+                      // زر تسجيل الدخول
+                      Obx(() => SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _isLoading
+                          onPressed: controller.isLoading.value
                               ? null
                               : () {
-                                  if (_formKey.currentState!.validate()) {
-                                    authService.loginWithEmail(
-                                      context: context,
-                                      email: emailController.text,
-                                      password: passwordController.text,
-                                      setLoading: (isLoading) {
-                                        setState(() {
-                                          _isLoading = isLoading;
-                                        });
-                                      },
-                                    );
-                                  }
-                                },
-                          child: _isLoading
+                            if (_formKey.currentState!.validate()) {
+                              controller.authService.loginWithEmail(
+                                context: context,
+                                email: controller.email.value,
+                                password: controller.password.value,
+                                setLoading: (loading) =>
+                                controller.isLoading.value = loading,
+                              );
+                            }
+                          },
+                          child: controller.isLoading.value
                               ? const CircularProgressIndicator()
                               : const Text("تسجيل الدخول"),
                         ),
-                      ),
+                      )),
+
 
                       const SizedBox(height: 20),
                       const Divider(),
                       const SizedBox(height: 12),
 
                       Text(
-                        "أو يمكنك تسجيل الدخول باستخدام:",
+                        "أو تسجيل الدخول باستخدام:",
                         style: Theme.of(context).textTheme.bodyLarge,
                       ),
                       const SizedBox(height: 12),
+
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           SocialSignInButton(
                             icon: Icon(Bootstrap.google),
-                            onPressed: () => authService.signInWithGoogle(
+                            onPressed: () => controller.authService.signInWithGoogle(
                               context,
-                              (isLoading) {
-                                setState(() {
-                                  _isLoading = isLoading;
-                                });
-                              },
+                                  (isLoading) =>
+                              controller.isLoading.value = isLoading,
                             ),
                             color: Colors.white,
                           ),
@@ -133,34 +150,26 @@ class _LoginPageState extends State<LoginPage> {
                             onPressed: () {},
                             color: const Color(0xFF4267B2),
                           ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text("ليس لديك حساب؟"),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const FullSignUpPage(),
-                                ),
-                              );
-                            },
-                            child: const Text("إنشاء حساب جديد"),
+                          const SizedBox(width: 16),
+                          SocialSignInButton(
+                            icon: Icon(Bootstrap.facebook),
+                            onPressed: () {},
+                            color: const Color(0xFF1DA1F2),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
               ),
             ),
           ),
-          if (_isLoading) const Center(child: CircularProgressIndicator()),
+
+          // مؤشر التحميل
+          Obx(() => controller.isLoading.value
+              ? const Center(child: CircularProgressIndicator())
+              : const SizedBox()),
         ],
       ),
     );

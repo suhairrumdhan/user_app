@@ -1,23 +1,21 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-User? user = FirebaseAuth.instance.currentUser;
-
 class UserModel {
   final String id;
-  final String name;
-  final String? email;
-  final String? phone;
-  final int? age;
-  final String? gender;
-  final String? bloodType;
-  final List<String> healthConditions;
-  final List<String> allergies;
-  final List<String> currentMedications;
-  final double? weight;
-  final double? height;
-  final DateTime createdAt;
-  final bool healthInfoCompleted;
+  String name;
+  String? email;
+  String? phone;
+  int? age;
+  String? gender;
+  String? bloodType;
+  List<String> healthConditions;
+  List<String> allergies;
+  List<String> currentMedications;
+  double? weight;
+  double? height;
+  DateTime createdAt;
+  bool healthInfoCompleted;
 
   UserModel({
     required this.id,
@@ -46,9 +44,9 @@ class UserModel {
     );
   }
 
-  factory UserModel.fromJson(Map<String, dynamic> json) {
+  factory UserModel.fromJson(Map<String, dynamic> json, String docId) {
     return UserModel(
-      id: json['id'] ?? '',
+      id: docId,
       name: json['name'] ?? 'مستخدم جديد',
       email: json['email'],
       phone: json['phone'],
@@ -58,11 +56,29 @@ class UserModel {
       healthConditions: List<String>.from(json['healthConditions'] ?? []),
       allergies: List<String>.from(json['allergies'] ?? []),
       currentMedications: List<String>.from(json['currentMedications'] ?? []),
-      weight: (json['weight'] as num?)?.toDouble(),
-      height: (json['height'] as num?)?.toDouble(),
-      createdAt: (json['createdAt'] as Timestamp).toDate(),
+      weight: _safeDoubleConvert(json['weight']),
+      height: _safeDoubleConvert(json['height']),
+      createdAt: _safeTimestampConvert(json['createdAt']),
       healthInfoCompleted: json['healthInfoCompleted'] ?? false,
     );
+  }
+
+  static double? _safeDoubleConvert(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static DateTime _safeTimestampConvert(dynamic value) {
+    if (value is Timestamp) {
+      return value.toDate();
+    } else if (value is DateTime) {
+      return value;
+    } else {
+      return DateTime.now();
+    }
   }
 
   Map<String, dynamic> toJson() {
@@ -82,5 +98,43 @@ class UserModel {
       'createdAt': Timestamp.fromDate(createdAt),
       'healthInfoCompleted': healthInfoCompleted,
     };
+  }
+
+  // Copy with method for easy updates
+  UserModel copyWith({
+    String? name,
+    String? email,
+    String? phone,
+    int? age,
+    String? gender,
+    String? bloodType,
+    List<String>? healthConditions,
+    List<String>? allergies,
+    List<String>? currentMedications,
+    double? weight,
+    double? height,
+    bool? healthInfoCompleted,
+  }) {
+    return UserModel(
+      id: id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      age: age ?? this.age,
+      gender: gender ?? this.gender,
+      bloodType: bloodType ?? this.bloodType,
+      healthConditions: healthConditions ?? this.healthConditions,
+      allergies: allergies ?? this.allergies,
+      currentMedications: currentMedications ?? this.currentMedications,
+      weight: weight ?? this.weight,
+      height: height ?? this.height,
+      createdAt: createdAt,
+      healthInfoCompleted: healthInfoCompleted ?? this.healthInfoCompleted,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'UserModel(id: $id, name: $name, email: $email, healthInfoCompleted: $healthInfoCompleted)';
   }
 }

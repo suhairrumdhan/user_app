@@ -22,13 +22,18 @@ class UserRepository extends GetxController {
     }
   }
 
+  Future<void> saveUser(UserModel user) async {
+    await _db.collection("users").doc(user.id).set(user.toJson());
+  }
+
   // جلب بيانات المستخدم من Firestore
   Future<UserModel?> getUser(String uid) async {
     try {
       final doc = await _db.collection("users").doc(uid).get();
-      return doc.exists ? UserModel.fromJson(doc.data()!) : null;
+      return doc.exists ? UserModel.fromJson(doc.data()!, doc.id) : null;
     } catch (e) {
       throw "فشل في جلب بيانات المستخدم: ${e.toString()}";
     }
   }
+
 }

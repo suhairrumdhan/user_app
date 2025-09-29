@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:user_application/nlp/drug_parser.dart';
+import 'package:user_application/nlp/text_preprocessor.dart';
 
 class FileUtils {
   // Request storage permissions with platform-specific handling
@@ -16,7 +18,6 @@ class FileUtils {
       // No permissions needed on web
       return;
     }
-
     // Request storage permission
     final status = await Permission.storage.request();
 
@@ -138,14 +139,57 @@ class FileUtils {
     }
   }
 
+//   // Show extracted text dialog
+//   static void showExtractedTextDialog(BuildContext context, String text) {
+//     showDialog(
+//       context: context,
+//       builder: (context) => AlertDialog(
+//         title: const Text('النص المستخرج'),
+//         content: SingleChildScrollView(
+//           child: Text(text.isNotEmpty ? text : 'لم يتم العثور على نص'),
+//         ),
+//         actions: [
+//           TextButton(
+//             onPressed: () => Navigator.pop(context),
+//             child: const Text('موافق'),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
   // Show extracted text dialog
   static void showExtractedTextDialog(BuildContext context, String text) {
+    // تنظيف النص
+    final cleaned = TextPreprocessor.normalize(text);
+
+    // استخراج الأدوية
+    final drugs = DrugParser.parse(cleaned);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('النص المستخرج'),
-        content: SingleChildScrollView(
-          child: Text(text.isNotEmpty ? text : 'لم يتم العثور على نص'),
+        title: const Text('الأدوية المستخرجة'),
+        content: drugs.isEmpty
+            ? const Text("لم يتم العثور على أدوية")
+            : SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            columns: const [
+              DataColumn(label: Text("اسم الدواء")),
+              DataColumn(label: Text("الجرعة")),
+              DataColumn(label: Text("التكرار")),
+            ],
+            rows: drugs
+                .map(
+                  (drug) => DataRow(cells: [
+                DataCell(Text(drug.name)),
+                DataCell(Text(drug.dosage)),
+                DataCell(Text(drug.frequency ?? "-")),
+              ]),
+            )
+                .toList(),
+          ),
         ),
         actions: [
           TextButton(
@@ -156,7 +200,6 @@ class FileUtils {
       ),
     );
   }
-
   // Helper method to show permission error snackbar
   static void showPermissionError(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(

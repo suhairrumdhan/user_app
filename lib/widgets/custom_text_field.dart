@@ -10,6 +10,7 @@ class CustomTextField extends StatelessWidget {
   final bool isPasswordField;
   final VoidCallback? onVisibilityToggle;
   final bool? showPassword;
+  final void Function(String)? onChanged; // <- هنا
 
   const CustomTextField({
     super.key,
@@ -22,6 +23,8 @@ class CustomTextField extends StatelessWidget {
     this.isPasswordField = false,
     this.onVisibilityToggle,
     this.showPassword,
+    this.onChanged, // <- أضف هنا
+
   });
 
   @override
@@ -33,6 +36,8 @@ class CustomTextField extends StatelessWidget {
         obscureText: obscure,
         keyboardType: inputType,
         validator: validator,
+        onChanged: onChanged, // <- وصلها
+
         decoration: InputDecoration(
           labelText: label,
           hintText: hintText,

@@ -1,31 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:icons_plus/icons_plus.dart';
 import 'package:user_application/widgets/custom_scaffold.dart';
 import 'package:user_application/widgets/custom_text_field.dart';
 import 'package:user_application/widgets/social_sign_in_button.dart';
 import 'package:user_application/auth/auth_services.dart';
 
-class FullSignUpPage extends StatefulWidget {
-  const FullSignUpPage({super.key});
+// إنشاء Controller خاص بالصفحة
+class SignUpController extends GetxController {
+  final name = ''.obs;
+  final email = ''.obs;
+  final password = ''.obs;
+  final confirmPassword = ''.obs;
+  final phone = ''.obs;
+  final age = ''.obs;
+  final gender = Rxn<String>();
+  final rememberMe = false.obs;
+  final isLoading = false.obs;
 
-  @override
-  State<FullSignUpPage> createState() => _FullSignUpPageState();
-}
-
-class _FullSignUpPageState extends State<FullSignUpPage> {
   final nameController = TextEditingController();
-  final phoneController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
-  final TextEditingController ageController = TextEditingController();
-  String? selectedGender;
-  final _formKey = GlobalKey<FormState>();
-  bool rememberMe = false;
-  bool _isLoading = false;
-  bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
+  final phoneController = TextEditingController();
+  final ageController = TextEditingController();
+
   final authService = AuthService();
+}
+
+class SignUpPage extends StatelessWidget {
+  SignUpPage({super.key});
+
+  final _formKey = GlobalKey<FormState>();
+  final SignUpController controller = Get.put(SignUpController());
 
   @override
   Widget build(BuildContext context) {
@@ -60,17 +67,21 @@ class _FullSignUpPageState extends State<FullSignUpPage> {
                       ),
                       const SizedBox(height: 24),
 
+                      // الاسم الكامل
                       CustomTextField(
-                        controller: nameController,
+                        controller: controller.nameController,
                         label: "الاسم الكامل",
+                        onChanged: (value) => controller.name.value = value,
                         validator: (value) => value == null || value.isEmpty
                             ? "يرجى إدخال الاسم"
                             : null,
                       ),
+                      // العمر (اختياري)
                       CustomTextField(
-                        controller: ageController,
+                        controller: controller.ageController,
                         label: 'العمر (اختياري)',
                         inputType: TextInputType.number,
+                        onChanged: (value) => controller.age.value = value,
                         validator: (value) {
                           if (value != null && value.isNotEmpty) {
                             final age = int.tryParse(value);
@@ -81,31 +92,29 @@ class _FullSignUpPageState extends State<FullSignUpPage> {
                           return null;
                         },
                       ),
-                      DropdownButtonFormField<String>(
-                        value: selectedGender,
+                      // الجنس (اختياري)
+                      Obx(() => DropdownButtonFormField<String>(
+                        value: controller.gender.value,
                         decoration: const InputDecoration(
                           labelText: 'الجنس (اختياري)',
                           prefixIcon: Icon(Icons.wc),
                         ),
                         items: ['ذكر', 'أنثى']
-                            .map(
-                              (gender) => DropdownMenuItem(
-                                value: gender,
-                                child: Text(gender),
-                              ),
-                            )
+                            .map((gender) => DropdownMenuItem(
+                          value: gender,
+                          child: Text(gender),
+                        ))
                             .toList(),
                         onChanged: (value) {
-                          setState(() {
-                            selectedGender = value;
-                          });
+                          controller.gender.value = value;
                         },
-                      ),
-
+                      )),
+                      // رقم الهاتف
                       CustomTextField(
-                        controller: phoneController,
+                        controller: controller.phoneController,
                         label: "رقم الهاتف (اختياري)",
                         inputType: TextInputType.phone,
+                        onChanged: (value) => controller.phone.value = value,
                         validator: (value) {
                           if (value != null && value.isNotEmpty) {
                             if (value.length < 8) {
@@ -115,20 +124,23 @@ class _FullSignUpPageState extends State<FullSignUpPage> {
                           return null;
                         },
                       ),
-
+                      // البريد الإلكتروني
                       CustomTextField(
-                        controller: emailController,
+                        controller: controller.emailController,
                         label: "البريد الإلكتروني",
                         inputType: TextInputType.emailAddress,
+                        onChanged: (value) => controller.email.value = value,
                         validator: (value) =>
-                            value == null || !value.contains("@")
+                        value == null || !value.contains("@")
                             ? "بريد إلكتروني غير صالح"
                             : null,
                       ),
-                      CustomTextField(
-                        controller: passwordController,
+                      // كلمة المرور
+                      Obx(() => CustomTextField(
+                        controller: controller.passwordController,
                         label: "كلمة المرور",
-                        obscure: _obscurePassword,
+                        obscure: true,
+                        onChanged: (value) => controller.password.value = value,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return "يرجى إدخال كلمة المرور";
@@ -137,93 +149,68 @@ class _FullSignUpPageState extends State<FullSignUpPage> {
                           }
                           return null;
                         },
-                        hintText: "6 أحرف على الأقل",
-                        isPasswordField: true,
-                        showPassword: !_obscurePassword,
-                        onVisibilityToggle: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
-                      ),
-                      CustomTextField(
-                        controller: confirmPasswordController,
+                      )),
+                      // تأكيد كلمة المرور
+                      Obx(() => CustomTextField(
+                        controller: controller.confirmPasswordController,
                         label: "تأكيد كلمة المرور",
-                        obscure: _obscureConfirmPassword,
+                        obscure: true,
+                        onChanged: (value) => controller.confirmPassword.value = value,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return "يرجى تأكيد كلمة المرور";
-                          } else if (value != passwordController.text) {
+                          } else if (value != controller.password.value) {
                             return "كلمة المرور غير متطابقة";
                           }
                           return null;
                         },
-                        isPasswordField: true,
-                        showPassword: !_obscureConfirmPassword,
-                        onVisibilityToggle: () {
-                          setState(() {
-                            _obscureConfirmPassword = !_obscureConfirmPassword;
-                          });
-                        },
-                      ),
+                      )),
 
-                      // Remember Me Checkbox
-                      Row(
+                      // تذكر كلمة المرور
+                      Obx(() => Row(
                         children: [
                           Checkbox(
-                            value: rememberMe,
-                            onChanged: (value) {
-                              setState(() {
-                                rememberMe = value!;
-                              });
-                            },
-                          ),
+                              value: controller.rememberMe.value,
+                              onChanged: (value) =>
+                              controller.rememberMe.value = value!),
                           const Text("تذكر كلمة المرور"),
                         ],
-                      ),
+                      )),
                       const SizedBox(height: 24),
 
-                      SizedBox(
+                      // زر إنشاء الحساب
+                      Obx(() => SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _isLoading
+                          onPressed: controller.isLoading.value
                               ? null
                               : () {
-                                  if (_formKey.currentState!.validate()) {
-                                    // تحويل العمر إن وُجد إلى int
-                                    final int? age =
-                                        ageController.text.isNotEmpty
-                                        ? int.tryParse(ageController.text)
-                                        : null;
-
-                                    authService.registerWithEmail(
-                                      context: context,
-                                      email: emailController.text,
-                                      password: passwordController.text,
-                                      confirmPassword:
-                                          confirmPasswordController.text,
-                                      name: nameController.text,
-                                      gender: selectedGender,
-                                      age: age,
-                                      phoneNumber: phoneController.text,
-
-                                      // تم تمرير رقم الهاتف
-                                      setLoading: (isLoading) {
-                                        setState(() {
-                                          _isLoading = isLoading;
-                                        });
-                                      },
-                                    );
-                                  }
-                                },
-                          child: _isLoading
+                            if (_formKey.currentState!.validate()) {
+                              final int? age = controller.age.value.isNotEmpty
+                                  ? int.tryParse(controller.age.value)
+                                  : null;
+                              controller.authService.registerWithEmail(
+                                context: context,
+                                email: controller.email.value,
+                                password: controller.password.value,
+                                confirmPassword:
+                                controller.confirmPassword.value,
+                                name: controller.name.value,
+                                gender: controller.gender.value,
+                                age: age,
+                                phoneNumber: controller.phone.value,
+                                setLoading: (loading) =>
+                                controller.isLoading.value = loading,
+                              );
+                            }
+                          },
+                          child: controller.isLoading.value
                               ? const CircularProgressIndicator()
                               : const Text("إنشاء حساب"),
                         ),
-                      ),
+                      )),
 
                       const SizedBox(height: 20),
-
                       const Divider(),
                       const SizedBox(height: 12),
 
@@ -238,13 +225,10 @@ class _FullSignUpPageState extends State<FullSignUpPage> {
                         children: [
                           SocialSignInButton(
                             icon: Icon(Bootstrap.google),
-                            onPressed: () => authService.signInWithGoogle(
+                            onPressed: () => controller.authService.signInWithGoogle(
                               context,
-                              (isLoading) {
-                                setState(() {
-                                  _isLoading = isLoading;
-                                });
-                              },
+                                  (isLoading) =>
+                              controller.isLoading.value = isLoading,
                             ),
                             color: Colors.white,
                           ),
@@ -262,7 +246,6 @@ class _FullSignUpPageState extends State<FullSignUpPage> {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 20),
                     ],
                   ),
@@ -271,7 +254,10 @@ class _FullSignUpPageState extends State<FullSignUpPage> {
             ),
           ),
 
-          if (_isLoading) const Center(child: CircularProgressIndicator()),
+          // مؤشر التحميل
+          Obx(() => controller.isLoading.value
+              ? const Center(child: CircularProgressIndicator())
+              : const SizedBox()),
         ],
       ),
     );

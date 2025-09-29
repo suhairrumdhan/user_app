@@ -48,7 +48,7 @@ class WelcomeScreen extends StatelessWidget {
               alignment: Alignment.bottomRight,
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: WelcomeButton(
                       buttonText: 'تسجيل الدخول',
                       onTap: LoginPage(),
@@ -59,7 +59,7 @@ class WelcomeScreen extends StatelessWidget {
                   Expanded(
                     child: WelcomeButton(
                       buttonText: 'إنشاء حساب جديد',
-                      onTap: const FullSignUpPage(),
+                      onTap:  SignUpPage(),
                       color: Color(0xFFE0F7FA),
                       textColor: Color(0xFF006064),
                     ),
