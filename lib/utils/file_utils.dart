@@ -9,7 +9,9 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:user_application/nlp/drug_parser.dart';
-import 'package:user_application/nlp/text_preprocessor.dart';
+//import 'package:user_application/nlp/text_preprocessor.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class FileUtils {
   // Request storage permissions with platform-specific handling
@@ -21,27 +23,9 @@ class FileUtils {
     // Request storage permission
     final status = await Permission.storage.request();
 
-    // For Android 10 and below, storage permission is sufficient
-    // For Android 11+ (API 30+), we may need to request manage external storage
-    // but this is a dangerous permission and might be rejected by Google Play
     if (!status.isGranted) {
       throw Exception('يجب منح صلاحيات الوصول للملفات');
     }
-
-    // Optional: Check if we need manage external storage (for Android 11+)
-    // This is a dangerous permission and should be used sparingly
-
-    // if (await Permission.manageExternalStorage.isRestricted) {
-    //   // The manageExternalStorage permission is restricted on this device
-    //   return;
-    // }
-    //
-    // final manageExternalStatus = await Permission.manageExternalStorage.request();
-    // if (!manageExternalStatus.isGranted) {
-    //   // Fall back to using the storage permission only
-    //   // You might want to handle this case differently
-    // }
-
   }
 
   // Pick an image from camera or gallery
@@ -51,7 +35,6 @@ class FileUtils {
         var status = await Permission.camera.status;
 
         if (status.isDenied) {
-          // يفتح نافذة الطلب
           status = await Permission.camera.request();
         }
 
@@ -74,7 +57,6 @@ class FileUtils {
     }
     return null;
   }
-
 
   // Pick a PDF file
   static Future<File?> pickPDF() async {
@@ -139,33 +121,151 @@ class FileUtils {
     }
   }
 
-//   // Show extracted text dialog
-//   static void showExtractedTextDialog(BuildContext context, String text) {
-//     showDialog(
-//       context: context,
-//       builder: (context) => AlertDialog(
-//         title: const Text('النص المستخرج'),
-//         content: SingleChildScrollView(
-//           child: Text(text.isNotEmpty ? text : 'لم يتم العثور على نص'),
-//         ),
-//         actions: [
-//           TextButton(
-//             onPressed: () => Navigator.pop(context),
-//             child: const Text('موافق'),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
+  static Future<List<dynamic>> analyzeTextWithAPI(String text) async {
+    final url = Uri.parse("http://172.20.10.3:5000/analyze");
 
-  // Show extracted text dialog
-  static void showExtractedTextDialog(BuildContext context, String text) {
-    // تنظيف النص
-    final cleaned = TextPreprocessor.normalize(text);
+    try {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"text": text}),
+      );
 
-    // استخراج الأدوية
-    final drugs = DrugParser.parse(cleaned);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['medicines'];
+      } else {
+        throw Exception("خطأ في الاتصال: ${response.statusCode}");
+      }
+    } catch (e) {
+      throw Exception("فشل الاتصال بالـ API: $e");
+    }
+  }
 
+  // Show extracted text dialog with loading indicator
+  static Future<void> showExtractedTextDialog(BuildContext context, String text) async {
+    // Show loading dialog immediately
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Prevent user from dismissing while loading
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('جاري استخراج الأدوية...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Clean the text
+      //final cleaned = TextPreprocessor.normalize(text);
+
+      // Send text to Flask API
+      final drugs = await analyzeTextWithAPI(text);
+
+      // Close the loading dialog
+      Navigator.of(context).pop();
+
+      // Show the results dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('الأدوية المستخرجة'),
+          content: drugs.isEmpty
+              ? const Text("لم يتم العثور على أدوية")
+              : SingleChildScrollView(
+            scrollDirection: Axis.vertical,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columns: const [
+                  DataColumn(label: Text("اسم الدواء")),
+                  DataColumn(label: Text("الجرعة")),
+                  DataColumn(label: Text("التكرار")),
+                  DataColumn(label: Text("المدة")),
+                  DataColumn(label: Text("الطريقة")),
+                ],
+                rows: drugs
+                    .map((drug) => DataRow(cells: [
+                  DataCell(Text(drug['name']?.toString() ?? "-")),
+                  DataCell(Text(drug['dosage']?.toString() ?? "-")),
+                  DataCell(Text(drug['frequency']?.toString() ?? "-")),
+                  DataCell(Text(drug['duration']?.toString() ?? "-")),
+                  DataCell(Text(drug['route']?.toString() ?? "-")),
+                ]))
+                    .toList(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('موافق'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      // Close the loading dialog in case of error
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("فشل استخراج الأدوية: $e")),
+      );
+    }
+  }
+
+  // Alternative method with better loading handling
+  static Future<void> showExtractedTextDialogWithLoading(BuildContext context, String text) async {
+    bool isLoading = true;
+
+    // Show the dialog
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        // Start the analysis immediately
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          try {
+          // final cleaned = TextPreprocessor.normalize(text);
+            final drugs = await analyzeTextWithAPI(text);
+
+            // Close current dialog and show results
+            Navigator.of(context).pop();
+
+            _showResultsDialog(context, drugs);
+          } catch (e) {
+            Navigator.of(context).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("فشل استخراج الأدوية: $e")),
+            );
+          }
+        });
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              content: isLoading
+                  ? const Row(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(width: 16),
+                  Text('جاري استخراج الأدوية...'),
+                ],
+              )
+                  : const SizedBox.shrink(),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Helper method to show results dialog
+  static void _showResultsDialog(BuildContext context, List<dynamic> drugs) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -173,22 +273,27 @@ class FileUtils {
         content: drugs.isEmpty
             ? const Text("لم يتم العثور على أدوية")
             : SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            columns: const [
-              DataColumn(label: Text("اسم الدواء")),
-              DataColumn(label: Text("الجرعة")),
-              DataColumn(label: Text("التكرار")),
-            ],
-            rows: drugs
-                .map(
-                  (drug) => DataRow(cells: [
-                DataCell(Text(drug.name)),
-                DataCell(Text(drug.dosage)),
-                DataCell(Text(drug.frequency ?? "-")),
-              ]),
-            )
-                .toList(),
+          scrollDirection: Axis.vertical,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columns: const [
+                DataColumn(label: Text("اسم الدواء")),
+                DataColumn(label: Text("الجرعة")),
+                DataColumn(label: Text("التكرار")),
+                DataColumn(label: Text("المدة")),
+                DataColumn(label: Text("الطريقة")),
+              ],
+              rows: drugs
+                  .map((drug) => DataRow(cells: [
+                DataCell(Text(drug['name']?.toString() ?? "-")),
+                DataCell(Text(drug['dosage']?.toString() ?? "-")),
+                DataCell(Text(drug['frequency']?.toString() ?? "-")),
+                DataCell(Text(drug['duration']?.toString() ?? "-")),
+                DataCell(Text(drug['route']?.toString() ?? "-")),
+              ]))
+                  .toList(),
+            ),
           ),
         ),
         actions: [
@@ -200,6 +305,7 @@ class FileUtils {
       ),
     );
   }
+
   // Helper method to show permission error snackbar
   static void showPermissionError(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(

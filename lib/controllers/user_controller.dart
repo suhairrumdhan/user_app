@@ -1,7 +1,12 @@
+import 'dart:io';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:user_application/auth/models/user_model.dart';
 import 'package:user_application/auth/user_repository.dart';
+
+import '../services/image_upload_service.dart';
 
 class UserController extends GetxController {
   // المتغير اللي يحفظ بيانات المستخدم
@@ -9,6 +14,22 @@ class UserController extends GetxController {
 
   // instance للـ Repository
   final UserRepository _userRepo = UserRepository.instance;
+
+
+  @override
+  void onInit() {
+    super.onInit();
+    // تحميل تلقائي عند فتح التطبيق إذا كان هناك مستخدم مسجل دخوله
+    _loadCurrentUser();
+  }
+
+  // تحميل المستخدم الحالي تلقائياً
+  void _loadCurrentUser() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      await loadUser(currentUser.uid);
+    }
+  }
 
   // جلب بيانات المستخدم من Firestore وتخزينها في الـ Controller
   Future<void> loadUser(String uid) async {
@@ -48,75 +69,206 @@ class UserController extends GetxController {
 }
 
 // ------------------- Extension لتحديث البيانات -------------------
-
 extension UserControllerExtensions on UserController {
-  // تحديث الاسم
-  Future<void> updateName(String newName) async {
-    if (user.value == null) return; // نتأكد أن user مش null
-
-    // ناخذ نسخة آمنة
-    final currentUser = user.value!;
-
-    final updatedUser = UserModel(
-      id: currentUser.id,
-      name: newName,
-      email: currentUser.email,
-      phone: currentUser.phone,
-      age: currentUser.age,
-      gender: currentUser.gender,
-      bloodType: currentUser.bloodType,
-      healthConditions: currentUser.healthConditions,
-      allergies: currentUser.allergies,
-      currentMedications: currentUser.currentMedications,
-      weight: currentUser.weight,
-      height: currentUser.height,
-      createdAt: currentUser.createdAt,
-      healthInfoCompleted: currentUser.healthInfoCompleted,
-    );
-
-    user.value = updatedUser; // نحدث الـ Rx
-    await UserRepository.instance.saveUser(updatedUser);
-
-    Get.snackbar('نجاح', 'تم تحديث الاسم بنجاح');
-  }
-
-
-  // تحديث البريد الإلكتروني
-  Future<void> updateEmail(String newEmail) async {
-    if (user.value == null) return;
-
-    final currentUser = user.value!;
+  Future<void> updateHealthInfo({
+    String? bloodType,
+    String? gender,
+    DateTime? dateOfBirth,
+    String? phone,
+    List<String>? healthConditions,
+    List<String>? allergies,
+    List<String>? currentMedications,
+  }) async {
+    if (user.value == null) {
+      print('❌ لا يوجد مستخدم محمل في الـ Controller');
+      throw Exception('لم يتم تحميل بيانات المستخدم في الـ Controller');
+    }
 
     try {
-      final firebaseUser = FirebaseAuth.instance.currentUser;
-      if (firebaseUser != null) {
-        await firebaseUser.updateEmail(newEmail);
-      }
+      final currentUser = user.value!;
 
-      final updatedUser = UserModel(
-        id: currentUser.id,
-        name: currentUser.name,
-        email: newEmail,
-        phone: currentUser.phone,
-        age: currentUser.age,
-        gender: currentUser.gender,
-        bloodType: currentUser.bloodType,
-        healthConditions: currentUser.healthConditions,
-        allergies: currentUser.allergies,
-        currentMedications: currentUser.currentMedications,
-        weight: currentUser.weight,
-        height: currentUser.height,
-        createdAt: currentUser.createdAt,
-        healthInfoCompleted: currentUser.healthInfoCompleted,
+      // 1. تحديث البيانات محلياً
+      final updatedUser = currentUser.copyWith(
+        bloodType: bloodType,
+        gender: gender,
+        dateOfBirth: dateOfBirth,
+        phone: phone,
+        healthConditions: healthConditions,
+        allergies: allergies,
+        currentMedications: currentMedications,
+        healthInfoCompleted: true,
       );
 
-      user.value = updatedUser;
-      await UserRepository.instance.saveUser(updatedUser);
+      print('🔄 جاري حفظ البيانات الصحية في Firestore...');
+      print('📊 البيانات: ${updatedUser.toJson()}');
 
-      Get.snackbar('نجاح', 'تم تحديث البريد الإلكتروني بنجاح');
+      // 2. حفظ في Firestore
+      await _userRepo.saveUser(updatedUser);
+
+      // 3. تحديث الـ Controller بالبيانات الجديدة
+      user.value = updatedUser;
+
+      print('✅ تم حفظ البيانات الصحية بنجاح في Firestore');
+
     } catch (e) {
-      Get.snackbar('خطأ', 'فشل تحديث البريد الإلكتروني: ${e.toString()}');
+      print('❌ خطأ في حفظ البيانات الصحية: $e');
+      rethrow;
+    }
+  }
+  Future<void> updateProfileImage(File imageFile) async {
+    if (user.value == null) {
+      throw Exception('لم يتم تحميل بيانات المستخدم');
+    }
+
+    try {
+      final userId = user.value!.id;
+
+      // رفع الصورة
+      final String? imageUrl = await ImageUploadService().uploadProfileImage(imageFile, userId);
+
+      if (imageUrl != null) {
+        // تحديث بيانات المستخدم
+        final updatedUser = user.value!.copyWith(profileImageUrl: imageUrl);
+        await _userRepo.saveUser(updatedUser);
+        user.value = updatedUser;
+
+        print('✅ تم تحديث صورة الملف الشخصي بنجاح');
+      }
+    } catch (e) {
+      print('❌ خطأ في تحديث صورة الملف الشخصي: $e');
+      rethrow;
     }
   }
 
+  Future<void> removeProfileImage() async {
+    if (user.value == null) return;
+
+    try {
+      final userId = user.value!.id;
+
+      // حذف الصورة من Storage
+      await ImageUploadService().deleteProfileImage(userId);
+
+      // تحديث بيانات المستخدم
+      final updatedUser = user.value!.copyWith(profileImageUrl: null);
+      await _userRepo.saveUser(updatedUser);
+      user.value = updatedUser;
+
+      print('✅ تم حذف صورة الملف الشخصي بنجاح');
+    } catch (e) {
+      print('❌ خطأ في حذف صورة الملف الشخصي: $e');
+      rethrow;
+    }
+  }
+  Future<bool> updateUserProfileImage() async {
+    if (user.value == null) {
+      print('❌ لا يوجد مستخدم محمل في الـ Controller');
+      return false;
+    }
+
+    try {
+      final userId = user.value!.id;
+      print('🔄 جاري تحديث صورة الملف الشخصي...');
+
+      // اختيار صورة جديدة من المعرض
+      final File? newImage = await ImageUploadService().pickImage();
+      if (newImage == null) {
+        print('⚠️ لم يتم اختيار أي صورة');
+        return false;
+      }
+
+      // رفع الصورة إلى Firebase Storage
+      final String? imageUrl = await ImageUploadService().uploadProfileImage(newImage, userId);
+
+      if (imageUrl != null) {
+        // تحديث بيانات المستخدم في Firestore
+        await UserRepository.instance.updateUserFields(userId, {
+          'profileImageUrl': imageUrl,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // تحديث الـ Controller محلياً
+        final updatedUser = user.value!.copyWith(profileImageUrl: imageUrl);
+        user.value = updatedUser;
+
+        print('✅ تم تحديث صورة الملف الشخصي بنجاح');
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      print('❌ خطأ في تحديث صورة الملف الشخصي: $e');
+      return false;
+    }
+  }
+
+  Future<bool> captureProfileImage() async {
+    if (user.value == null) {
+      print('❌ لا يوجد مستخدم محمل في الـ Controller');
+      return false;
+    }
+
+    try {
+      final userId = user.value!.id;
+      print('🔄 جاري التقاط صورة جديدة...');
+
+      // التقاط صورة بالكاميرا
+      final File? capturedImage = await ImageUploadService().captureImage();
+      if (capturedImage == null) {
+        print('⚠️ لم يتم التقاط أي صورة');
+        return false;
+      }
+
+      // رفع الصورة إلى Firebase Storage
+      final String? imageUrl = await ImageUploadService().uploadProfileImage(capturedImage, userId);
+
+      if (imageUrl != null) {
+        // تحديث بيانات المستخدم في Firestore
+        await UserRepository.instance.updateUserFields(userId, {
+          'profileImageUrl': imageUrl,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // تحديث الـ Controller محلياً
+        final updatedUser = user.value!.copyWith(profileImageUrl: imageUrl);
+        user.value = updatedUser;
+
+        print('✅ تم تحديث صورة الملف الشخصي بنجاح');
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      print('❌ خطأ في التقاط صورة الملف الشخصي: $e');
+      return false;
+    }
+  }
+
+  Future<bool> removeUserProfileImage() async {
+    if (user.value == null) return false;
+
+    try {
+      final userId = user.value!.id;
+
+      // حذف الصورة من Storage
+      await ImageUploadService().deleteProfileImage(userId);
+
+      // تحديث بيانات المستخدم في Firestore
+      await UserRepository.instance.updateUserFields(userId, {
+        'profileImageUrl': null,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // تحديث الـ Controller محلياً
+      final updatedUser = user.value!.copyWith(profileImageUrl: null);
+      user.value = updatedUser;
+
+      print('✅ تم حذف صورة الملف الشخصي بنجاح');
+      return true;
+    } catch (e) {
+      print('❌ خطأ في حذف صورة الملف الشخصي: $e');
+      return false;
+    }
+  }
 }
+

@@ -18,7 +18,7 @@ class DrugParser {
   static List<DrugInfo> parse(String text) {
     final List<DrugInfo> drugs = [];
 
-    // تقسيم النص لأسطر
+    // تقسيم النص لأسطرغ
     final lines = text.split('\n');
 
     // Regex شامل: اسم دواء + جرعة + وحدة + route + frequency + duration

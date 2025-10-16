@@ -6,32 +6,30 @@ class UserModel {
   String name;
   String? email;
   String? phone;
-  int? age;
+  DateTime? dateOfBirth;
   String? gender;
   String? bloodType;
   List<String> healthConditions;
   List<String> allergies;
   List<String> currentMedications;
-  double? weight;
-  double? height;
   DateTime createdAt;
   bool healthInfoCompleted;
+  String? profileImageUrl;
 
   UserModel({
     required this.id,
     required this.name,
     this.email,
     this.phone,
-    this.age,
+    this.dateOfBirth,
     this.gender,
     this.bloodType,
     this.healthConditions = const [],
     this.allergies = const [],
     this.currentMedications = const [],
-    this.weight,
-    this.height,
     required this.createdAt,
     this.healthInfoCompleted = false,
+    this.profileImageUrl,
   });
 
   factory UserModel.fromFirebaseUser(User user) {
@@ -45,29 +43,50 @@ class UserModel {
   }
 
   factory UserModel.fromJson(Map<String, dynamic> json, String docId) {
-    return UserModel(
-      id: docId,
-      name: json['name'] ?? 'مستخدم جديد',
-      email: json['email'],
-      phone: json['phone'],
-      age: json['age'],
-      gender: json['gender'],
-      bloodType: json['bloodType'],
-      healthConditions: List<String>.from(json['healthConditions'] ?? []),
-      allergies: List<String>.from(json['allergies'] ?? []),
-      currentMedications: List<String>.from(json['currentMedications'] ?? []),
-      weight: _safeDoubleConvert(json['weight']),
-      height: _safeDoubleConvert(json['height']),
-      createdAt: _safeTimestampConvert(json['createdAt']),
-      healthInfoCompleted: json['healthInfoCompleted'] ?? false,
-    );
+    try {
+      return UserModel(
+        id: docId,
+        name: json['name']?.toString() ?? 'مستخدم جديد',
+        email: json['email']?.toString(),
+        phone: json['phone']?.toString(),
+        dateOfBirth: _safeDateConvert(json['dateOfBirth']),
+        gender: json['gender']?.toString(),
+        bloodType: json['bloodType']?.toString(),
+        healthConditions: _safeListConvert(json['healthConditions']),
+        allergies: _safeListConvert(json['allergies']),
+        currentMedications: _safeListConvert(json['currentMedications']),
+        createdAt: _safeTimestampConvert(json['createdAt']),
+        healthInfoCompleted: json['healthInfoCompleted'] == true,
+        profileImageUrl: json['profileImageUrl']?.toString(),
+      );
+    } catch (e) {
+      print('❌ خطأ في تحويل JSON إلى UserModel: $e');
+      print('📊 البيانات المستلمة: $json');
+      rethrow;
+    }
   }
 
-  static double? _safeDoubleConvert(dynamic value) {
+  // Helper: يحول أي بيانات إلى List<String> بشكل آمن
+  static List<String> _safeListConvert(dynamic value) {
+    if (value == null) return [];
+    if (value is List) {
+      return value.whereType<String>().toList();
+    }
+    return [];
+  }
+
+  // Helper: يحول أي شكل ممكن لتاريخ إلى DateTime?
+  static DateTime? _safeDateConvert(dynamic value) {
     if (value == null) return null;
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value);
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) {
+      try {
+        return DateTime.parse(value);
+      } catch (_) {
+        return null;
+      }
+    }
     return null;
   }
 
@@ -87,16 +106,15 @@ class UserModel {
       'name': name,
       'email': email,
       'phone': phone,
-      'age': age,
+      'dateOfBirth': dateOfBirth != null ? Timestamp.fromDate(dateOfBirth!) : null,
       'gender': gender,
       'bloodType': bloodType,
       'healthConditions': healthConditions,
       'allergies': allergies,
       'currentMedications': currentMedications,
-      'weight': weight,
-      'height': height,
       'createdAt': Timestamp.fromDate(createdAt),
       'healthInfoCompleted': healthInfoCompleted,
+      'profileImageUrl': profileImageUrl,
     };
   }
 
@@ -105,31 +123,29 @@ class UserModel {
     String? name,
     String? email,
     String? phone,
-    int? age,
+    DateTime? dateOfBirth,
     String? gender,
     String? bloodType,
     List<String>? healthConditions,
     List<String>? allergies,
     List<String>? currentMedications,
-    double? weight,
-    double? height,
     bool? healthInfoCompleted,
+    String? profileImageUrl,
   }) {
     return UserModel(
       id: id,
       name: name ?? this.name,
       email: email ?? this.email,
       phone: phone ?? this.phone,
-      age: age ?? this.age,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       gender: gender ?? this.gender,
       bloodType: bloodType ?? this.bloodType,
       healthConditions: healthConditions ?? this.healthConditions,
       allergies: allergies ?? this.allergies,
       currentMedications: currentMedications ?? this.currentMedications,
-      weight: weight ?? this.weight,
-      height: height ?? this.height,
       createdAt: createdAt,
       healthInfoCompleted: healthInfoCompleted ?? this.healthInfoCompleted,
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
     );
   }
 

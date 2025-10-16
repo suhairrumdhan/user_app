@@ -3,13 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:user_application/auth/user_repository.dart' show UserRepository;
+import '../controllers/user_controller.dart' show UserController;
 import '../screens/health_info.dart';
 import '../screens/home_page.dart';
 import '../screens/welcome_page.dart';
+import 'models/user_model.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // ---------- تسجيل مستخدم جديد ----------
   // ---------- تسجيل مستخدم جديد ----------
   Future<void> registerWithEmail({
     required BuildContext context,
@@ -19,8 +23,6 @@ class AuthService {
     required String name,
     required String phoneNumber,
     required Function(bool) setLoading,
-    String? gender,
-    int? age,
   }) async {
     if (password != confirmPassword) {
       if (!context.mounted) return;
@@ -32,24 +34,44 @@ class AuthService {
 
     setLoading(true);
     try {
+      print('🔄 جاري إنشاء مستخدم جديد في Authentication...');
+
+      // 1. إنشاء المستخدم في Firebase Auth
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password.trim(),
       );
 
       final uid = credential.user!.uid;
+      print('✅ تم إنشاء المستخدم في Authentication: $uid');
+
+      // 2. تحديث الاسم في Auth
       await credential.user!.updateDisplayName(name.trim());
 
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
-        'uid': uid,
-        'email': email.trim(),
-        'name': name.trim(),
-        'phone': phoneNumber.trim(),
-        'gender': gender,
-        'age': age,
-        'createdAt': Timestamp.now(),
-      }, SetOptions(merge: true));
+      // 3. إنشاء UserModel
+      final newUser = UserModel(
+        id: uid,
+        name: name.trim(),
+        email: email.trim(),
+        phone: phoneNumber.trim(),
+        createdAt: DateTime.now(),
+        healthInfoCompleted: false,
+      );
 
+      print('🔄 جاري حفظ المستخدم في Firestore...');
+
+      // 4. حفظ المستخدم في Firestore
+      await FirebaseFirestore.instance.collection('users').doc(uid).set(newUser.toJson());
+
+      print('✅ تم حفظ المستخدم في Firestore بنجاح');
+
+      // 5. تحميل بيانات المستخدم في الـ Controller
+      final userController = Get.find<UserController>();
+      await userController.loadUser(uid);
+
+      print('✅ تم تحميل بيانات المستخدم في الـ Controller');
+
+      // 6. الانتقال إلى شاشة المعلومات الصحية
       if (!context.mounted) return;
       Get.offAll(() => const HealthInfoScreen());
 
@@ -62,10 +84,12 @@ class AuthService {
       } else if (e.code == 'invalid-email') {
         message = "بريد إلكتروني غير صالح";
       }
+      print('❌ خطأ في التسجيل: $message');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }
     } catch (e) {
+      print('❌ خطأ غير متوقع في التسجيل: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("حدث خطأ غير متوقع: ${e.toString()}")),

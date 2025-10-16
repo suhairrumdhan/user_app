@@ -8,16 +8,27 @@ import 'package:user_application/auth/auth_services.dart';
 
 // Controller للـ Login
 class LoginController extends GetxController {
-  final email = ''.obs;
-  final password = ''.obs;
-  final rememberMe = false.obs;
-  final isLoading = false.obs;
+  String email = '';
+  String password = '';
+  bool rememberMe = false; // <-- هنا bool عادي
+  bool isLoading = false;  // <-- هنا bool عادي
 
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
   final authService = AuthService();
+
+  void setLoading(bool value) {
+    isLoading = value;
+    update();
+  }
+
+  void toggleRemember(bool value) {
+    rememberMe = value;
+    update();
+  }
 }
+
 
 class LoginPage extends StatelessWidget {
   LoginPage({super.key});
@@ -32,10 +43,13 @@ class LoginPage extends StatelessWidget {
     return CustomScaffold(
       child: Stack(
         children: [
+          // الجزء العلوي الشفاف
           Align(
             alignment: Alignment.topCenter,
             child: Container(height: height * 0.25, color: Colors.transparent),
           ),
+
+          // الجزء السفلي الأبيض
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -48,118 +62,119 @@ class LoginPage extends StatelessWidget {
               child: SingleChildScrollView(
                 child: Form(
                   key: _formKey,
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 16),
-                      Text(
-                        "تسجيل الدخول",
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // البريد الإلكتروني
-                      CustomTextField(
-                        controller: controller.emailController,
-                        label: "البريد الإلكتروني",
-                        inputType: TextInputType.emailAddress,
-                        onChanged: (value) => controller.email.value = value,
-                        validator: (value) =>
-                        value == null || !value.contains("@")
-                            ? "بريد إلكتروني غير صالح"
-                            : null,
-                      ),
-                      // كلمة المرور
-                      Obx(() => CustomTextField(
-                        controller: controller.passwordController,
-                        label: "كلمة المرور",
-                        obscure: true,
-                        onChanged: (value) => controller.password.value = value,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return "يرجى إدخال كلمة المرور";
-                          } else if (value.length < 6) {
-                            return "كلمة المرور يجب أن تكون 6 أحرف على الأقل";
-                          }
-                          return null;
-                        },
-                      )),
-
-                      // تذكر كلمة المرور
-                      Obx(() => Row(
-                        children: [
-                          Checkbox(
-                              value: controller.rememberMe.value,
-                              onChanged: (value) =>
-                              controller.rememberMe.value = value!),
-                          const Text("تذكر كلمة المرور"),
-                        ],
-                      )),
-                      const SizedBox(height: 24),
-
-                      // زر تسجيل الدخول
-                      // زر تسجيل الدخول
-                      Obx(() => SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: controller.isLoading.value
-                              ? null
-                              : () {
-                            if (_formKey.currentState!.validate()) {
-                              controller.authService.loginWithEmail(
-                                context: context,
-                                email: controller.email.value,
-                                password: controller.password.value,
-                                setLoading: (loading) =>
-                                controller.isLoading.value = loading,
-                              );
-                            }
-                          },
-                          child: controller.isLoading.value
-                              ? const CircularProgressIndicator()
-                              : const Text("تسجيل الدخول"),
+                  child: GetBuilder<LoginController>(
+                    builder: (controller) => Column(
+                      children: [
+                        const SizedBox(height: 16),
+                        Text(
+                          "تسجيل الدخول",
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                      )),
+                        const SizedBox(height: 24),
 
+                        // البريد الإلكتروني
+                        CustomTextField(
+                          controller: controller.emailController,
+                          label: "البريد الإلكتروني",
+                          inputType: TextInputType.emailAddress,
+                          onChanged: (value) => controller.email = value,
+                          validator: (value) => value == null || !value.contains("@")
+                              ? "بريد إلكتروني غير صالح"
+                              : null,
+                        ),
 
-                      const SizedBox(height: 20),
-                      const Divider(),
-                      const SizedBox(height: 12),
+                        // كلمة المرور
+                        CustomTextField(
+                          controller: controller.passwordController,
+                          label: "كلمة المرور",
+                          obscure: true,
+                          onChanged: (value) => controller.password = value,
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return "يرجى إدخال كلمة المرور";
+                            } else if (value.length < 6) {
+                              return "كلمة المرور يجب أن تكون 6 أحرف على الأقل";
+                            }
+                            return null;
+                          },
+                        ),
 
-                      Text(
-                        "أو تسجيل الدخول باستخدام:",
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 12),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SocialSignInButton(
-                            icon: Icon(Bootstrap.google),
-                            onPressed: () => controller.authService.signInWithGoogle(
-                              context,
-                                  (isLoading) =>
-                              controller.isLoading.value = isLoading,
+                        // تذكر كلمة المرور
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: controller.rememberMe,
+                              onChanged: (value) =>
+                                  controller.toggleRemember(value ?? false),
                             ),
-                            color: Colors.white,
+                            const Text("تذكر كلمة المرور"),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+
+                        // زر تسجيل الدخول
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: controller.isLoading
+                                ? null
+                                : () {
+                              if (_formKey.currentState!.validate()) {
+                                controller.authService.loginWithEmail(
+                                  context: context,
+                                  email: controller.email,
+                                  password: controller.password,
+                                  setLoading: controller.setLoading,
+                                );
+                              }
+                            },
+                            child: controller.isLoading
+                                ? const CircularProgressIndicator()
+                                : const Text("تسجيل الدخول"),
                           ),
-                          const SizedBox(width: 16),
-                          SocialSignInButton(
-                            icon: Icon(Bootstrap.github),
-                            onPressed: () {},
-                            color: const Color(0xFF4267B2),
-                          ),
-                          const SizedBox(width: 16),
-                          SocialSignInButton(
-                            icon: Icon(Bootstrap.facebook),
-                            onPressed: () {},
-                            color: const Color(0xFF1DA1F2),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                    ],
+                        ),
+
+                        const SizedBox(height: 20),
+                        const Divider(),
+                        const SizedBox(height: 12),
+
+                        Text(
+                          "أو تسجيل الدخول باستخدام:",
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                        const SizedBox(height: 12),
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SocialSignInButton(
+                              icon: const Icon(Bootstrap.google),
+                              onPressed: () => controller.authService.signInWithGoogle(
+                                context,
+                                controller.setLoading,
+                              ),
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 16),
+                            SocialSignInButton(
+                              icon: const Icon(Bootstrap.github),
+                              onPressed: () {},
+                              color: const Color(0xFF333333),
+                            ),
+                            const SizedBox(width: 16),
+                            SocialSignInButton(
+                              icon: const Icon(Bootstrap.facebook),
+                              onPressed: () {},
+                              color: const Color(0xFF1877F2),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -167,9 +182,16 @@ class LoginPage extends StatelessWidget {
           ),
 
           // مؤشر التحميل
-          Obx(() => controller.isLoading.value
-              ? const Center(child: CircularProgressIndicator())
-              : const SizedBox()),
+          GetBuilder<LoginController>(
+            builder: (controller) => controller.isLoading
+                ? Container(
+              color: Colors.black54,
+              child: const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            )
+                : const SizedBox(),
+          ),
         ],
       ),
     );

@@ -50,7 +50,7 @@ Now extract from this text (do not add extra commentary):
                 "prompt": prompt,
                 "stream": False
             },
-            timeout=20
+            timeout=100
         )
         resp.raise_for_status()
         data = resp.json()

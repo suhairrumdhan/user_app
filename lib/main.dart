@@ -41,22 +41,20 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Widget جديد لإدارة حالة المصادقة
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
   @override
   Widget build(BuildContext context) {
     final authController = Get.find<AuthController>();
-
     return Obx(() {
       if (authController.isLoading.value) {
         return const SplashScreen(); // شاشة تحميل
       }
 
       if (authController.user.value != null) {
-        // المستخدم مسجل دخول - نتحقق من المعلومات الصحية
-        return const HealthCheckWrapper();
+        // المستخدم مسجل دخول - انتقل مباشرة إلى HomePage
+        return const HomePage();
       } else {
         // المستخدم غير مسجل دخول
         return const WelcomeScreen();
@@ -65,58 +63,76 @@ class AuthWrapper extends StatelessWidget {
   }
 }
 
-// Widget للتحقق من اكتمال المعلومات الصحية
-class HealthCheckWrapper extends StatelessWidget {
-  const HealthCheckWrapper({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final authController = Get.find<AuthController>();
-
-    return FutureBuilder<bool>(
-      future: authController.isHealthInfoComplete(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SplashScreen();
-        }
-
-        if (snapshot.hasData && snapshot.data == true) {
-          return const HomePage(); // المعلومات الصحية مكتملة
-        } else {
-          return const HealthInfoScreen(); // يحتاج إكمال المعلومات الصحية
-        }
-      },
-    );
-  }
-}
-
 // شاشة تحميل بسيطة
+
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue.shade700,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.medical_services, size: 80, color: Colors.white),
-            SizedBox(height: 20),
-            Text(
-              'PHARMACY',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Cairo',
+      body: Stack(
+        children: [
+          // الصورة كخلفية
+          Container(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/images/Quran.jpg'),
+                fit: BoxFit.fill, // لتغطية الشاشة كاملة
               ),
             ),
-            SizedBox(height: 20),
-            CircularProgressIndicator(color: Colors.white),
-          ],
-        ),
+          ),
+          // طبقة تدرج لوني فوق الصورة لتحسين قراءة النص
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withOpacity(0.3),
+                  Colors.white.withOpacity(0.6),
+                  Colors.black.withOpacity(0.3),
+                ],
+              ),
+            ),
+          ),
+          // المحتوى
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 300),
+                // نص فرعي
+                Text(
+                  'صيدليتك بين يديك',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 18,
+                    fontFamily: 'Cairo',
+                    shadows: [
+                      Shadow(
+                        blurRadius: 10,
+                        color: Colors.black.withOpacity(0.5),
+                        offset: const Offset(2, 2),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 30),
+                // مؤشر تحميل
+                SizedBox(
+                  width: 30,
+                  height: 30,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: Colors.white,
+                    backgroundColor: Colors.white.withOpacity(0.3),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

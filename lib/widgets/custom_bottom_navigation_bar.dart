@@ -35,7 +35,7 @@ class CustomBottomNavigationBar extends StatelessWidget {
           activeIcon: SvgPicture.string(
             homeIconSvg,
             colorFilter: const ColorFilter.mode(
-              Color(0xFFFF7643),
+              Color(0xFF5EABD6),
               BlendMode.srcIn,
             ),
           ),
@@ -52,11 +52,11 @@ class CustomBottomNavigationBar extends StatelessWidget {
           activeIcon: SvgPicture.string(
             chatIcon,
             colorFilter: const ColorFilter.mode(
-              Color(0xFFFF7643),
+              Color(0xFF5EABD6),
               BlendMode.srcIn,
             ),
           ),
-          label: "وصفاتي",
+          label: "الدردشات",
         ),
         BottomNavigationBarItem(
           icon: SvgPicture.string(
@@ -69,12 +69,30 @@ class CustomBottomNavigationBar extends StatelessWidget {
           activeIcon: SvgPicture.string(
             heartIcon,
             colorFilter: const ColorFilter.mode(
-              Color(0xFFFF7643),
+              Color(0xFF5EABD6),
               BlendMode.srcIn,
             ),
           ),
           label: "المفضلة",
         ),
+        // إضافة عنصر الإشعارات الجديد
+        BottomNavigationBarItem(
+          icon: SvgPicture.string(
+            notificationIcon,
+            colorFilter: const ColorFilter.mode(
+              inActiveIconColor,
+              BlendMode.srcIn,
+            ),
+          ),
+          activeIcon: SvgPicture.string(
+            notificationIcon,
+            colorFilter: const ColorFilter.mode(
+              Color(0xFF5EABD6),
+              BlendMode.srcIn,
+            ),
+          ),
+          label: "الإشعارات",
+        ),
         BottomNavigationBarItem(
           icon: SvgPicture.string(
             userIcon,
@@ -86,7 +104,7 @@ class CustomBottomNavigationBar extends StatelessWidget {
           activeIcon: SvgPicture.string(
             userIcon,
             colorFilter: const ColorFilter.mode(
-              Color(0xFFFF7643),
+              Color(0xFF5EABD6),
               BlendMode.srcIn,
             ),
           ),
