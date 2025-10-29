@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:user_application/nlp/drug_parser.dart';
 //import 'package:user_application/nlp/text_preprocessor.dart';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 
 class FileUtils {
@@ -93,9 +94,13 @@ class FileUtils {
       final inputImage = InputImage.fromFile(imageFile);
       final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
 
+///////////////////////////////
       final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
       await textRecognizer.close();
 
+      String rawText = recognizedText.text;
+      return cleanExtractedText(rawText);
+//////////////////////////////
       return recognizedText.text;
     } catch (e) {
       return 'فشل في استخراج النص من الصورة: ${e.toString()}';
@@ -113,16 +118,49 @@ class FileUtils {
         final pageText = PdfTextExtractor(document).extractText(startPageIndex: i, endPageIndex: i);
         extractedText += pageText + '\n';
       }
+    document.dispose();
 
-      document.dispose();
-      return extractedText.trim().isNotEmpty ? extractedText : 'لم يتم العثور على نص في ملف PDF';
+    String rawText = extractedText.trim();
+    return rawText.isNotEmpty ? cleanExtractedText(rawText) : 'لم يتم العثور على نص في ملف PDF';
+
     } catch (e) {
       return 'فشل في استخراج النص من PDF: ${e.toString()}';
     }
   }
 
+  static String cleanExtractedText(String text) {
+    // إزالة الرموز غير الضرورية
+    text = text.replaceAll(RegExp(r'[^\w\s,.()%\-\/]'), ' ');
+
+    // استبدال التكرارات والفراغات الكبيرة
+    text = text.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+
+    // تقسيم النص إلى أسطر بناءً على "فواصل واضحة"
+    final lines = text.split(RegExp(r'\n+'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+
+    // نحاول ترتيب الأسطر اللي فيها كلمات مثل Medicine, Route, Frequency, إلخ.
+    final organized = <String>[];
+    for (var line in lines) {
+      if (RegExp(r'(medicine|drug|route|dose|frequency)', caseSensitive: false).hasMatch(line)) {
+        organized.add('\n--- ${line.toUpperCase()} ---');
+      } else {
+        organized.add(line);
+      }
+    }
+
+    return organized.join('\n');
+  }
+
+
   static Future<List<dynamic>> analyzeTextWithAPI(String text) async {
-    final url = Uri.parse("http://172.20.10.3:5000/analyze");
+    // هنا يا بعد قلبي يا سهير غيريه كل ما تغيري الشبكة اللي عالقة عليها وخوذي الip من امر التيرمنال ipconfig
+    //final url = Uri.parse("http://172.20.10.3:5000/analyze");
+    final url = Uri.parse("http://192.168.42.131:5000/analyze");
+
+    print("=== النص قبل الإرسال ===\n$text");
 
     try {
       final response = await http.post(
@@ -133,6 +171,10 @@ class FileUtils {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+
+        // اطبع النص بعد التحليل
+        print("=== النص يعد الإرسال ===\n$data");
+
         return data['medicines'];
       } else {
         throw Exception("خطأ في الاتصال: ${response.statusCode}");
@@ -141,6 +183,7 @@ class FileUtils {
       throw Exception("فشل الاتصال بالـ API: $e");
     }
   }
+
 
   // Show extracted text dialog with loading indicator
   static Future<void> showExtractedTextDialog(BuildContext context, String text) async {

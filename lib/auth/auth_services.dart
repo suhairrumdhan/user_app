@@ -8,7 +8,7 @@ import '../controllers/user_controller.dart' show UserController;
 import '../screens/health_info.dart';
 import '../screens/home_page.dart';
 import '../screens/welcome_page.dart';
-import 'models/user_model.dart';
+import '../models/user_model.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;

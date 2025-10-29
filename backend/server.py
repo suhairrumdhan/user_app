@@ -1,25 +1,60 @@
-# server.py
 from flask import Flask, request, jsonify
 import requests
 import json
 import re
+import sqlite3
 
 app = Flask(__name__)
 
-OLLAMA_URL = "http://localhost:11434/api/generate"  # Ollama local
-OLLAMA_MODEL = "llama3"  # غيّر لاسم الموديل اللي نازله عندك
+# -------------------------------------------
+# إعدادات Ollama
+# -------------------------------------------
+OLLAMA_URL = "http://localhost:11434/api/generate"  # رابط السيرفر المحلي لـ Ollama
+OLLAMA_MODEL = "llama3:latest"
 
-def fallback_parse(text):
-    """Simple regex fallback (لو الـ Ollama مش شغّال)"""
-    results = []
-    # نبحث عن أنماط: Name ... number unit
-    pattern = re.compile(r'([A-Za-z][A-Za-z0-9\s\-]{1,40}?)\s+(\d+)\s*(mg|ml|g|tab|cap|cream|drop)', re.I)
-    for m in pattern.finditer(text):
-        name = m.group(1).strip()
-        dosage = f"{m.group(2)} {m.group(3)}".lower()
-        results.append({"name": name, "dosage": dosage, "route": None, "frequency": None, "duration": None})
-    return results
 
+# -------------------------------------------
+# دالة الاتصال بالمودل
+# -------------------------------------------
+def call_ollama(prompt, timeout=120):
+    """يتصل بـ Ollama ويعيد الناتج كنص"""
+    resp = requests.post(
+        OLLAMA_URL,
+        json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+        timeout=timeout
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+# -------------------------------------------
+# جلب أسماء الأدوية من قاعدة البيانات
+# -------------------------------------------
+def get_known_drug_names(limit=300):
+    """ترجع قائمة بأسماء الأدوية المعروفة (اسم علمي + تجاري)"""
+    conn = sqlite3.connect('medicines.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT drug_name, trade_name FROM drugs LIMIT ?", (limit,))
+    names = []
+    for row in cursor.fetchall():
+        for n in row:
+            if n:
+                names.append(n.strip())
+    conn.close()
+    return list(set(names))  # إزالة التكرار
+
+
+# -------------------------------------------
+# صفحة اختبار بسيطة للتأكد أن السيرفر شغال
+# -------------------------------------------
+@app.route("/", methods=["GET"])
+def home():
+    return "✅ PharmaConnect Flask server is running"
+
+
+# -------------------------------------------
+# نقطة تحليل النصوص الطبية
+# -------------------------------------------
 @app.route("/analyze", methods=["POST"])
 def analyze_text():
     payload = request.get_json(force=True)
@@ -27,61 +62,65 @@ def analyze_text():
     if not text:
         return jsonify({"medicines": []})
 
+    # تحميل أسماء الأدوية من قاعدة البيانات
+    known_drugs = get_known_drug_names()
+    drug_list_text = ", ".join(known_drugs)
+
+    # بناء الـ prompt
     prompt = f"""
-You are an assistant that extracts medication information from a prescription text.
-Return ONLY a JSON array of objects, each object must have these keys:
-name (string), dosage (string), route (string or null), frequency (string or null), duration (string or null).
+You are a medical text analyzer that extracts medication information from prescription text.
 
-Example output:
-[
-  {{"name": "Suprax Cap", "dosage": "400 mg", "route": "oral", "frequency": "1 daily", "duration": "5 days"}},
-  {{"name": "Nipcare Cream", "dosage": "40 ml", "route": "local", "frequency": "1 daily", "duration": "10 days"}}
-]
+Here is a list of known medicines from the database:
+{drug_list_text}
+if you didnt get the medicines from the list just extract wjhat ever you think that a medicine
 
-Now extract from this text (do not add extra commentary):
+When analyzing the text, use this list to identify any medicine names (even if spelled slightly differently).
+Return ONLY a JSON array of objects with these keys:
+- name (string)
+- dosage (string or null)
+- route (string or null)
+- frequency (string or null)
+- duration (string or null)
+
+Text:
 \"\"\"{text}\"\"\"
 """
 
     try:
-        resp = requests.post(
-            OLLAMA_URL,
-            json={
-                "model": OLLAMA_MODEL,
-                "prompt": prompt,
-                "stream": False
-            },
-            timeout=100
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        # استدعاء المودل
+        data = call_ollama(prompt)
         raw_output = data.get("response", "") or data.get("output", "") or ""
         raw_output = raw_output.strip()
 
-        # try parse raw output as JSON
+        # محاولة تحويل الناتج إلى JSON
         try:
             medicines = json.loads(raw_output)
         except json.JSONDecodeError:
-            # حاول نقتطع مصفوفة JSON من النص
             m = re.search(r'\[.*\]', raw_output, re.S)
             if m:
                 try:
                     medicines = json.loads(m.group(0))
-                except:
+                except Exception:
                     medicines = []
             else:
                 medicines = []
 
-        # تأكد من تنسيق الناتج
         if not isinstance(medicines, list):
             medicines = []
 
         return jsonify({"medicines": medicines})
+
     except Exception as e:
-        # لو فشلت الـ Ollama أو اتصلت غلط -> استخدم fallback بسيط
-        print("OLLAMA ERROR:", e)
-        medicines = fallback_parse(text)
-        return jsonify({"medicines": medicines, "note": "fallback used, ollama failed", "error": str(e)})
+        print("❌ OLLAMA ERROR:", e)
+        return jsonify({"error": str(e)}), 500
 
 
+# -------------------------------------------
+# تشغيل السيرفر
+# -------------------------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    try:
+        print("🚀 Flask server running on http://192.168.42.131:5000")
+        app.run(host="192.168.42.131", port=5000, debug=True)
+    except Exception as e:
+        print(f"[ERROR] Cannot start server: {e}")

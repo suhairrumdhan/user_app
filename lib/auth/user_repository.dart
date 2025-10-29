@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:user_application/auth/models/user_model.dart';
+import 'package:user_application/models/user_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserRepository extends GetxController {

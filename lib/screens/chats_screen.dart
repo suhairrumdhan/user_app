@@ -1,4 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../services/chat_service.dart';
+import '../models/chat_models.dart';
+import 'chat_detail_screen.dart';
+import '../widgets/pharmacy_search.dart';
 
 class ChatsScreen extends StatefulWidget {
   const ChatsScreen({Key? key}) : super(key: key);
@@ -8,292 +13,463 @@ class ChatsScreen extends StatefulWidget {
 }
 
 class _ChatsScreenState extends State<ChatsScreen> {
-  final List<Map<String, dynamic>> _pharmacies = [
-    {
-      'id': '1',
-      'name': 'صيدلية النور',
-      'image': 'assets/pharmacy1.jpg',
-      'lastMessage': 'الدواء متوفر الآن',
-      'time': '10:30 ص',
-      'unread': 2,
-      'isOnline': true,
-      'isActive': true,
-    },
-    {
-      'id': '2',
-      'name': 'صيدلية الحياة',
-      'image': 'assets/pharmacy2.jpg',
-      'lastMessage': 'تم توصيل طلبك',
-      'time': 'أمس',
-      'unread': 0,
-      'isOnline': true,
-      'isActive': true,
-    },
-    {
-      'id': '3',
-      'name': 'صيدلية الشفاء',
-      'image': 'assets/pharmacy3.jpg',
-      'lastMessage': 'هل تحتاج مساعدة؟',
-      'time': 'الثلاثاء',
-      'unread': 1,
-      'isOnline': false,
-      'isActive': false,
-    },
-  ];
+  final ChatService _chatService = ChatService();
+  final Color _primaryColor = Color(0xFF5EABD6);
+  List<Chat> _chats = [];
+  List<Pharmacy> _pharmacies = []; // Fixed: Added this variable
+  bool _isLoading = true;
 
-  final List<Map<String, dynamic>> _favorites = [
-    {
-      'id': '1',
-      'name': 'صيدلية النور',
-      'image': 'assets/pharmacy1.jpg',
-      'isOnline': true,
-    },
-    {
-      'id': '2',
-      'name': 'صيدلية الحياة',
-      'image': 'assets/pharmacy2.jpg',
-      'isOnline': true,
-    },
-    {
-      'id': '4',
-      'name': 'صيدلية الأمل',
-      'image': 'assets/pharmacy4.jpg',
-      'isOnline': true,
-    },
-    {
-      'id': '5',
-      'name': 'صيدلية المدينة',
-      'image': 'assets/pharmacy5.jpg',
-      'isOnline': false,
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
 
-  // Colors matching the original design
-  final Color pPrimaryColor = Color(0xFF5EABD6);
-  final Color pSecondaryColor = Color(0xFF4CAF50);
-  final Color pMedColor = Color(0xFF757575);
-  final double pDefaultPadding = 16.0;
+  Future<void> _loadData() async {
+    try {
+      // Load chats from Firebase
+      final chats = await _chatService.getUserChats();
+
+      setState(() {
+        _chats = chats;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading data: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Fixed: Changed to proper method instead of property
+  Stream<List<Pharmacy>> getAllPharmacies() {
+    return FirebaseFirestore.instance
+        .collection('pharmacies')
+        .snapshots()
+        .map((snapshot) {
+      print('Received ${snapshot.docs.length} pharmacy documents'); // Debug line
+      return snapshot.docs.map((doc) {
+        try {
+          final data = doc.data() as Map<String, dynamic>;
+          print('Pharmacy data: ${doc.id} - $data'); // Debug line
+
+          return Pharmacy(
+            id: doc.id,
+            name: data['name'] ?? 'صيدلية',
+            isOnline: data['isOnline'] ?? false,
+            imageUrl: data['imageUrl'],
+            address: data['address'],
+            distance: (data['distance'] != null) ? data['distance'].toDouble() : null,
+          );
+        } catch (e) {
+          print('Error parsing pharmacy ${doc.id}: $e');
+          // Return a default pharmacy in case of error
+          return Pharmacy(
+            id: doc.id,
+            name: 'صيدلية',
+            isOnline: false,
+            imageUrl: null,
+            address: null,
+            distance: null,
+          );
+        }
+      }).toList();
+    })
+        .handleError((error) {
+      print('Firestore error: $error');
+      throw error;
+    });
+  }
+
+  void _navigateToChat(Chat chat) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatDetailScreen(chat: chat),
+      ),
+    );
+  }
+
+  void _showSearch(BuildContext context) {
+    showSearch(
+      context: context,
+      delegate: PharmacySearch(chatService: _chatService),
+    ).then((value) {
+      // When returning from search, update the list if needed
+      _loadData();
+    });
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays == 0) {
+      return '${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+    } else if (difference.inDays == 1) {
+      return 'أمس';
+    } else if (difference.inDays < 7) {
+      final days = ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
+      return days[dateTime.weekday - 1];
+    } else {
+      return '${dateTime.day}/${dateTime.month}';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final Size screenSize = MediaQuery.of(context).size;
+    final double screenWidth = screenSize.width;
+    final double screenHeight = screenSize.height;
+    final bool isTablet = screenWidth > 600;
+    final bool isSmallScreen = screenWidth < 350;
+
+    // Calculate dynamic sizes based on screen size
+    final double defaultPadding = screenWidth * 0.04;
+    final double avatarRadius = isTablet ? 35 : (isSmallScreen ? 22 : 25);
+    final double favoriteAvatarRadius = isTablet ? 35 : (isSmallScreen ? 25 : 28);
+    final double sectionHeight = screenHeight * (isTablet ? 0.16 : 0.14);
+    final double iconSize = isTablet ? 28 : (isSmallScreen ? 18 : 22);
+    final double titleFontSize = isTablet ? 18 : (isSmallScreen ? 13 : 15);
+    final double subtitleFontSize = isTablet ? 14 : (isSmallScreen ? 10 : 12);
+
     return Scaffold(
-      backgroundColor: pPrimaryColor,
+      backgroundColor: _primaryColor,
       appBar: AppBar(
-        backgroundColor: pPrimaryColor,
+        backgroundColor: _primaryColor,
         title: Text(
           'الدردشات',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
+            fontSize: isTablet ? 22 : 18,
           ),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.search, color: Colors.white),
-            onPressed: () {
-              _showSearch(context);
-            },
+            icon: Icon(Icons.search,
+                color: Colors.white,
+                size: isTablet ? 28 : 24),
+            onPressed: () => _showSearch(context),
           ),
         ],
+        toolbarHeight: isTablet ? 70 : kToolbarHeight,
       ),
-      body: Column(
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator(color: Colors.white))
+          : Column(
         children: [
+          // Header spacer
           Container(
-            color: pPrimaryColor,
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-            ),
+            color: _primaryColor,
+            height: screenHeight * 0.02,
           ),
-
           Expanded(
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(40),
-                  topRight: Radius.circular(40),
+                  topLeft: Radius.circular(isTablet ? 50 : 40),
+                  topRight: Radius.circular(isTablet ? 50 : 40),
                 ),
               ),
               child: Column(
                 children: [
-                  // Favourite Contacts Section
+                  // Nearby Pharmacies Section
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 36.0, vertical: 8),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: screenWidth * 0.08,
+                      vertical: screenHeight * 0.012,
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.start,
                       children: [
-                        Icon(Icons.near_me_rounded, color: pPrimaryColor),
+                        Icon(Icons.near_me_rounded,
+                            color: _primaryColor,
+                            size: isTablet ? 26 : 22),
+                        SizedBox(width: screenWidth * 0.02),
                         Text(
-                          '    الصيدليات القريبة',
+                          'الصيدليات القريبة',
                           style: TextStyle(
-                              color: Colors.grey[800],
-                              fontWeight: FontWeight.w800
+                            color: Colors.grey[800],
+                            fontWeight: FontWeight.w800,
+                            fontSize: isTablet ? 18 : 15,
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                  // Horizontal list of favorite pharmacies
+                  // Fixed: Using StreamBuilder for pharmacies
                   Container(
-                    height: 110.0,
-                    child: ListView.builder(
-                      padding: EdgeInsets.only(left: 10.0, right: 10.0),
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _favorites.length,
-                      itemBuilder: (BuildContext context, int index) {
-                        return Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Column(
-                            children: [
-                              Stack(
+                    height: sectionHeight,
+                    child: StreamBuilder<List<Pharmacy>>(
+                      stream: getAllPharmacies(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Center(child: CircularProgressIndicator(color: _primaryColor));
+                        }
+
+                        // In the StreamBuilder section, replace the error part with:
+                        if (snapshot.hasError) {
+                          print('Stream error: ${snapshot.error}');
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.error, color: Colors.red, size: 40),
+                                SizedBox(height: 8),
+                                Text(
+                                  'خطأ في تحميل الصيدليات',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                                Text(
+                                  '${snapshot.error}',
+                                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                          return Center(child: Text('No pharmacies found'));
+                        }
+
+                        final pharmacies = snapshot.data!;
+
+                        return ListView.builder(
+                          padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.02),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: pharmacies.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            final pharmacy = pharmacies[index];
+                            return Container(
+                              constraints: BoxConstraints(
+                                maxWidth: favoriteAvatarRadius * 2.5,
+                                maxHeight: sectionHeight * 0.9,
+                              ),
+                              margin: EdgeInsets.symmetric(horizontal: screenWidth * 0.012),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  CircleAvatar(
-                                    radius: 30.0,
-                                    backgroundColor: pPrimaryColor.withOpacity(0.2),
-                                    child: Icon(Icons.local_pharmacy, color: pPrimaryColor, size: 24),
-                                  ),
-                                  if (_favorites[index]['isOnline'])
-                                    Positioned(
-                                      right: 0,
-                                      bottom: 0,
-                                      child: Container(
-                                        width: 15,
-                                        height: 15,
-                                        decoration: BoxDecoration(
-                                          color: Colors.green,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: Theme.of(context).scaffoldBackgroundColor,
-                                            width: 3,
+                                  Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: favoriteAvatarRadius * 0.9,
+                                        backgroundColor: _primaryColor.withOpacity(0.2),
+                                        child: Icon(Icons.local_pharmacy,
+                                            color: _primaryColor,
+                                            size: iconSize * 0.9),
+                                      ),
+                                      if (pharmacy.isOnline)
+                                        Positioned(
+                                          right: 2,
+                                          bottom: 2,
+                                          child: Container(
+                                            width: isTablet ? 14 : (isSmallScreen ? 8 : 12),
+                                            height: isTablet ? 14 : (isSmallScreen ? 8 : 12),
+                                            decoration: BoxDecoration(
+                                              color: Colors.green,
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.white,
+                                                width: 1.5,
+                                              ),
+                                            ),
                                           ),
+                                        )
+                                    ],
+                                  ),
+                                  SizedBox(height: screenHeight * 0.004),
+                                  Flexible(
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 4),
+                                      child: Text(
+                                        pharmacy.name,
+                                        textAlign: TextAlign.center,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.grey[850],
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: isTablet ? 12 : (isSmallScreen ? 8 : 10),
                                         ),
                                       ),
-                                    )
+                                    ),
+                                  ),
                                 ],
                               ),
-                              SizedBox(height: 6.0),
-                              Text(
-                                _favorites[index]['name'],
-                                style: TextStyle(
-                                    color: Colors.grey[850],
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12.0
-                                ),
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         );
                       },
+                    ),
+                  ),
+
+                  // Chat List Section Title
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: screenWidth * 0.08,
+                      vertical: screenHeight * 0.012,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        Icon(Icons.chat_rounded,
+                            color: _primaryColor,
+                            size: isTablet ? 26 : 22),
+                        SizedBox(width: screenWidth * 0.02),
+                        Text(
+                          'المحادثات',
+                          style: TextStyle(
+                            color: Colors.grey[800],
+                            fontWeight: FontWeight.w800,
+                            fontSize: isTablet ? 18 : 15,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
                   // Chat List
                   Expanded(
                     child: Container(
-                      child: ListView.builder(
-                        itemCount: _pharmacies.length,
+                      padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.02),
+                      child: _chats.isEmpty
+                          ? Center(
+                        child: Text(
+                          'لا توجد محادثات',
+                          style: TextStyle(
+                            fontSize: titleFontSize,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      )
+                          : ListView.builder(
+                        itemCount: _chats.length,
                         itemBuilder: (BuildContext context, int index) {
-                          return Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: pDefaultPadding,
-                                vertical: pDefaultPadding * 0.75
-                            ),
-                            child: Row(
-                              children: [
-                                Stack(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 25,
-                                      backgroundColor: pPrimaryColor.withOpacity(0.2),
-                                      child: Icon(Icons.local_pharmacy, color: pPrimaryColor),
-                                    ),
-                                    if (_pharmacies[index]['isActive'])
-                                      Positioned(
-                                        right: 0,
-                                        bottom: 0,
-                                        child: Container(
-                                          width: 15,
-                                          height: 15,
-                                          decoration: BoxDecoration(
-                                            color: Colors.green,
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: Theme.of(context).scaffoldBackgroundColor,
-                                              width: 3,
+                          final chat = _chats[index];
+                          return GestureDetector(
+                            onTap: () => _navigateToChat(chat),
+                            child: Container(
+                              margin: EdgeInsets.symmetric(
+                                horizontal: defaultPadding * 0.5,
+                                vertical: defaultPadding * 0.3,
+                              ),
+                              padding: EdgeInsets.all(defaultPadding * 0.6),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(isTablet ? 18 : 12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black12,
+                                    blurRadius: 4,
+                                    offset: Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Stack(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: avatarRadius * 0.9,
+                                        backgroundColor: _primaryColor.withOpacity(0.2),
+                                        child: Icon(Icons.local_pharmacy,
+                                            color: _primaryColor,
+                                            size: iconSize * 0.9),
+                                      ),
+                                      if (chat.pharmacy.isOnline)
+                                        Positioned(
+                                          right: 1,
+                                          bottom: 1,
+                                          child: Container(
+                                            width: isTablet ? 16 : (isSmallScreen ? 10 : 12),
+                                            height: isTablet ? 16 : (isSmallScreen ? 10 : 12),
+                                            decoration: BoxDecoration(
+                                              color: Colors.green,
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.white,
+                                                width: isTablet ? 2 : 1.5,
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                      )
-                                  ],
-                                ),
-                                Expanded(
-                                  child: Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: pDefaultPadding),
+                                        )
+                                    ],
+                                  ),
+                                  SizedBox(width: defaultPadding * 0.8),
+                                  Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          _pharmacies[index]['name'],
+                                          chat.pharmacy.name,
                                           style: TextStyle(
-                                            fontSize: 15,
+                                            fontSize: titleFontSize * 0.9,
                                             fontWeight: FontWeight.w600,
                                             color: Colors.black,
                                           ),
                                         ),
-                                        SizedBox(height: 8),
+                                        SizedBox(height: screenHeight * 0.004),
                                         Opacity(
                                           opacity: 0.7,
                                           child: Text(
-                                            _pharmacies[index]['lastMessage'],
+                                            chat.lastMessage,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               color: Colors.grey[700],
+                                              fontSize: subtitleFontSize * 0.9,
                                             ),
                                           ),
                                         )
                                       ],
                                     ),
                                   ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Opacity(
-                                      opacity: 0.7,
-                                      child: Text(
-                                        _pharmacies[index]['time'],
-                                        style: TextStyle(
-                                          color: Colors.grey[700],
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                    if (_pharmacies[index]['unread'] > 0) ...[
-                                      SizedBox(height: 4),
-                                      Container(
-                                        width: 20,
-                                        height: 20,
-                                        decoration: BoxDecoration(
-                                          color: pPrimaryColor,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Center(
-                                          child: Text(
-                                            _pharmacies[index]['unread'].toString(),
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Opacity(
+                                        opacity: 0.7,
+                                        child: Text(
+                                          _formatTime(chat.lastMessageTime),
+                                          style: TextStyle(
+                                            color: Colors.grey[700],
+                                            fontSize: isTablet ? 12 : (isSmallScreen ? 8 : 10),
                                           ),
                                         ),
                                       ),
+                                      if (chat.unreadCount > 0) ...[
+                                        SizedBox(height: screenHeight * 0.003),
+                                        Container(
+                                          width: isTablet ? 22 : (isSmallScreen ? 14 : 18),
+                                          height: isTablet ? 22 : (isSmallScreen ? 14 : 18),
+                                          decoration: BoxDecoration(
+                                            color: _primaryColor,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              chat.unreadCount.toString(),
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: isTablet ? 11 : (isSmallScreen ? 7 : 9),
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ],
-                                  ],
-                                ),
-                              ],
+                                  ),
+                                ],
+                              ),
                             ),
                           );
                         },
@@ -307,280 +483,17 @@ class _ChatsScreenState extends State<ChatsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        backgroundColor: pPrimaryColor,
+        onPressed: () {
+          // TODO: Add functionality for adding new contacts
+        },
+        backgroundColor: _primaryColor,
         child: Icon(
           Icons.person_add_alt_1_rounded,
           color: Colors.white,
+          size: isTablet ? 28 : 20,
         ),
-      ),
-    );
-  }
-
-  void _showSearch(BuildContext context) {
-    showSearch(
-      context: context,
-      delegate: PharmacySearch(),
-    );
-  }
-}
-
-class PharmacySearch extends SearchDelegate<String> {
-  final pharmacies = [
-    'صيدلية النور',
-    'صيدلية الحياة',
-    'صيدلية الشفاء',
-    'صيدلية الأمل',
-    'صيدلية المدينة',
-    'صيدلية النهضة',
-    'صيدلية التعاون',
-  ];
-
-  final recentSearches = [
-    'صيدلية النور',
-    'صيدلية الحياة',
-    'صيدلية الشفاء',
-  ];
-
-  @override
-  List<Widget> buildActions(BuildContext context) {
-    return [
-      IconButton(
-        icon: Icon(Icons.mic),
-        onPressed: () {},
-      )
-    ];
-  }
-
-  @override
-  Widget buildLeading(BuildContext context) {
-    return IconButton(
-      icon: AnimatedIcon(
-        icon: AnimatedIcons.menu_arrow,
-        progress: transitionAnimation,
-      ),
-      onPressed: () {
-        close(context, '');
-      },
-    );
-  }
-
-  @override
-  Widget buildResults(BuildContext context) {
-    return Center(
-      child: Text('نتائج البحث لـ "$query"'),
-    );
-  }
-
-  @override
-  Widget buildSuggestions(BuildContext context) {
-    final suggestionList = query.isEmpty
-        ? recentSearches
-        : pharmacies.where((element) => element.contains(query)).toList();
-
-    return ListView.builder(
-      itemBuilder: (context, index) => ListTile(
-        leading: Icon(Icons.local_pharmacy, color: Color(0xFF5EABD6)),
-        title: RichText(
-          text: TextSpan(
-            text: suggestionList[index].substring(0, query.length),
-            style: TextStyle(
-              color: Colors.black,
-              fontWeight: FontWeight.bold,
-            ),
-            children: [
-              TextSpan(
-                  text: suggestionList[index].substring(query.length),
-                  style: TextStyle(color: Colors.grey)
-              )
-            ],
-          ),
-        ),
-        onTap: () {
-          query = suggestionList[index];
-          showResults(context);
-        },
-      ),
-      itemCount: suggestionList.length,
-    );
-  }
-}
-
-// Chat Detail Screen remains the same as in your original code
-class ChatDetailScreen extends StatefulWidget {
-  final Map<String, dynamic> pharmacy;
-
-  const ChatDetailScreen({Key? key, required this.pharmacy}) : super(key: key);
-
-  @override
-  _ChatDetailScreenState createState() => _ChatDetailScreenState();
-}
-
-class _ChatDetailScreenState extends State<ChatDetailScreen> {
-  final TextEditingController _messageController = TextEditingController();
-  final List<Map<String, dynamic>> _messages = [
-    {'text': 'مرحباً! الدواء الذي طلبته متوفر الآن', 'isMe': false, 'time': '10:25 ص'},
-    {'text': 'شكراً! سآتي اليوم المساء', 'isMe': true, 'time': '10:26 ص'},
-  ];
-
-  final Color pPrimaryColor = Color(0xFF5EABD6);
-  final double pDefaultPadding = 16.0;
-
-  void _sendMessage() {
-    if (_messageController.text.trim().isNotEmpty) {
-      setState(() {
-        _messages.insert(0, {
-          'text': _messageController.text,
-          'isMe': true,
-          'time': 'الآن',
-        });
-        _messageController.clear();
-      });
-    }
-  }
-
-  Widget _buildMessageBubble(Map<String, dynamic> message) {
-    return Container(
-      margin: EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-      child: Row(
-        mainAxisAlignment: message['isMe'] ? MainAxisAlignment.end : MainAxisAlignment.start,
-        children: [
-          Container(
-            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
-            padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-            decoration: BoxDecoration(
-              color: message['isMe'] ? pPrimaryColor : Colors.grey[200],
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  message['text'],
-                  style: TextStyle(
-                    color: message['isMe'] ? Colors.white : Colors.black87,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  message['time'],
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: message['isMe'] ? Colors.white70 : Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: pPrimaryColor,
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            Stack(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: Colors.white,
-                  child: Icon(Icons.local_pharmacy, color: pPrimaryColor),
-                ),
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle
-                    ),
-                  ),
-                )
-              ],
-            ),
-            SizedBox(width: pDefaultPadding * 0.7),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.pharmacy['name'],
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-                SizedBox(height: 1),
-                Opacity(
-                    opacity: 0.9,
-                    child: Text(
-                        'متصل الآن',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w400)
-                    )
-                )
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.call, color: Colors.white),
-            onPressed: (){},
-          ),
-          IconButton(
-            icon: Icon(Icons.videocam, color: Colors.white),
-            onPressed: (){},
-          ),
-          SizedBox(width: pDefaultPadding * 0.2)
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              reverse: true,
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                return _buildMessageBubble(_messages[index]);
-              },
-            ),
-          ),
-          Container(
-            padding: EdgeInsets.all(16),
-            color: Colors.white,
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
-                      hintText: 'اكتب رسالة...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: pPrimaryColor,
-                  child: IconButton(
-                    icon: Icon(Icons.send, color: Colors.white),
-                    onPressed: _sendMessage,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        mini: isSmallScreen,
+        elevation: 2,
       ),
     );
   }
