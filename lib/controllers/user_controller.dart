@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart' show Colors;
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:user_application/models/user_model.dart';
@@ -70,6 +71,83 @@ class UserController extends GetxController {
 
 // ------------------- Extension لتحديث البيانات -------------------
 extension UserControllerExtensions on UserController {
+
+  Future<void> updateHealthRecords({
+    List<String>? healthConditions,
+    List<String>? allergies,
+    List<String>? currentMedications,
+  }) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
+      final Map<String, dynamic> updateData = {};
+
+      if (healthConditions != null) {
+        updateData['healthConditions'] = healthConditions;
+      }
+      if (allergies != null) {
+        updateData['allergies'] = allergies;
+      }
+      if (currentMedications != null) {
+        updateData['currentMedications'] = currentMedications;
+      }
+
+      await _userRepo.updateUserFields(currentUser.uid, updateData);
+      await loadUser(currentUser.uid);
+
+      Get.snackbar(
+        'نجاح',
+        'تم تحديث السجل الصحي بنجاح',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } catch (e) {
+      Get.snackbar(
+        'خطأ',
+        'فشل في تحديث السجل الصحي: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<void> updateAdditionalHealthInfo({
+    String? bloodType,
+    String? gender,
+    DateTime? dateOfBirth,
+    String? phone,
+  }) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
+      final Map<String, dynamic> updateData = {};
+
+      if (bloodType != null) updateData['bloodType'] = bloodType;
+      if (gender != null) updateData['gender'] = gender;
+      if (dateOfBirth != null) updateData['dateOfBirth'] = Timestamp.fromDate(dateOfBirth);
+      if (phone != null) updateData['phone'] = phone;
+
+      await _userRepo.updateUserFields(currentUser.uid, updateData);
+      await loadUser(currentUser.uid);
+
+      Get.snackbar(
+        'نجاح',
+        'تم تحديث المعلومات الإضافية بنجاح',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } catch (e) {
+      Get.snackbar(
+        'خطأ',
+        'فشل في تحديث المعلومات: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
   Future<void> updateHealthInfo({
     String? bloodType,
     String? gender,

@@ -217,33 +217,123 @@ class ChatService {
       throw e;
     }
   }
+  /// 📩 الحصول على دردشة موجودة مع صيدلية أو إنشاء جديدة إذا لم تكن موجودة
+  Future<Chat> getOrCreateChatWithPharmacy(Pharmacy pharmacy) async {
+    final currentUser = _userController.user.value;
+    if (currentUser == null) throw Exception('يجب تسجيل الدخول أولاً');
+
+    final chats = await getUserChatsOnce();
+
+    // البحث عن الدردشة الحالية أو إنشاء دردشة افتراضية
+    final existingChat = chats.firstWhere(
+          (c) => c.pharmacy.id == pharmacy.id,
+      orElse: () => Chat(
+        id: '', // سيتم إنشاؤها لاحقاً
+        pharmacy: pharmacy,
+        lastMessage: '',
+        lastMessageTime: DateTime.now(),
+        unreadCount: 0,
+      ),
+    );
+
+    if (existingChat.id.isNotEmpty) {
+      return existingChat;
+    }
+
+    // إنشاء الدردشة الجديدة في Firestore
+    final newChatDoc = await _firestore.collection('chats').add({
+      'userId': currentUser.id,
+      'userName': currentUser.name,
+      'pharmacyId': pharmacy.id,
+      'pharmacyName': pharmacy.name,
+      'pharmacyIsOnline': pharmacy.isOnline,
+      'pharmacyImageUrl': pharmacy.imageUrl,
+      'lastMessage': '',
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'unreadCount': 0,
+    });
+
+    return Chat(
+      id: newChatDoc.id,
+      pharmacy: pharmacy,
+      lastMessage: '',
+      lastMessageTime: DateTime.now(),
+      unreadCount: 0,
+    );
+  }
 
   /// 📥 جلب محادثات المستخدم الحالي
-  Future<List<Chat>> getUserChats() async {
-    try {
-      // ✅ الحصول على المستخدم الحالي من الـ Controller
-      final currentUser = _userController.user.value;
-      if (currentUser == null) {
-        return [];
-      }
+  // Future<List<Chat>> getUserChats() async {
+  //   try {
+  //     // ✅ الحصول على المستخدم الحالي من الـ Controller
+  //     final currentUser = _userController.user.value;
+  //     if (currentUser == null) {
+  //       return [];
+  //     }
+  //
+  //     final userId = currentUser.id;
+  //
+  //     final chatsSnapshot = await _firestore
+  //         .collection('chats')
+  //         .where('userId', isEqualTo: userId)
+  //         .orderBy('lastMessageTime', descending: true)
+  //         .get();
+  //
+  //     List<Chat> chats = [];
+  //
+  //     for (final doc in chatsSnapshot.docs) {
+  //       final data = doc.data();
+  //       final pharmacy = await _getPharmacyInfo(data['pharmacyId']);
+  //
+  //       chats.add(Chat(
+  //         id: doc.id,
+  //         pharmacy: pharmacy,
+  //         lastMessage: data['lastMessage'] ?? '',
+  //         lastMessageTime: (data['lastMessageTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
+  //         unreadCount: data['unreadCount'] ?? 0,
+  //       ));
+  //     }
+  //
+  //     return chats;
+  //   } catch (e) {
+  //     print('Error getting user chats: $e');
+  //     return [];
+  //   }
+  // }
+  Stream<List<Chat>> getUserChatsStream() {
+    final userId = _userController.user.value?.id;
 
-      final userId = currentUser.id;
+    if (userId == null) return Stream.value([]);
 
-      final chatsSnapshot = await _firestore
-          .collection('chats')
-          .where('userId', isEqualTo: userId)
-          .orderBy('lastMessageTime', descending: true)
-          .get();
-
+    return FirebaseFirestore.instance
+        .collection('chats')
+        .where('userId', isEqualTo: userId)
+        .orderBy('lastMessageTime', descending: true)
+        .snapshots()
+        .asyncMap((snapshot) async {
       List<Chat> chats = [];
 
-      for (final doc in chatsSnapshot.docs) {
+      for (var doc in snapshot.docs) {
         final data = doc.data();
-        final pharmacy = await _getPharmacyInfo(data['pharmacyId']);
+        final pharmacyId = data['pharmacyId'] ?? '';
+
+        // جلب بيانات الصيدلية
+        final pharmacyDoc = await FirebaseFirestore.instance
+            .collection('pharmacies')
+            .doc(pharmacyId)
+            .get();
+
+        final pharmacyData = pharmacyDoc.data();
 
         chats.add(Chat(
           id: doc.id,
-          pharmacy: pharmacy,
+          pharmacy: Pharmacy(
+            id: pharmacyId,
+            name: pharmacyData?['name'] ?? 'صيدلية',
+            isOnline: pharmacyData?['isOnline'] ?? false,
+            imageUrl: pharmacyData?['imageUrl'],
+            address: pharmacyData?['address'],
+          ),
           lastMessage: data['lastMessage'] ?? '',
           lastMessageTime: (data['lastMessageTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
           unreadCount: data['unreadCount'] ?? 0,
@@ -251,10 +341,31 @@ class ChatService {
       }
 
       return chats;
-    } catch (e) {
-      print('Error getting user chats: $e');
-      return [];
-    }
+    });
+  }
+  Future<List<Chat>> getUserChatsOnce() async {
+    final userId = _userController.user.value?.id;
+    if (userId == null) return [];
+    final snapshot = await FirebaseFirestore.instance
+        .collection('chats')
+        .where('userId', isEqualTo: userId)
+        .get();
+
+    return snapshot.docs.map((doc) {
+      final data = doc.data();
+      return Chat(
+        id: doc.id,
+        pharmacy: Pharmacy(
+          id: data['pharmacyId'] ?? '',
+          name: data['pharmacyName'] ?? '',
+          isOnline: data['pharmacyIsOnline'] ?? false,
+          imageUrl: data['pharmacyImageUrl'],
+        ),
+        lastMessage: data['lastMessage'] ?? '',
+        lastMessageTime: (data['lastMessageTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
+        unreadCount: data['unreadCount'] ?? 0,
+      );
+    }).toList();
   }
 
   Future<Pharmacy> _getPharmacyInfo(String pharmacyId) async {
@@ -332,5 +443,12 @@ class ChatService {
       }).toList();
     });
   }
-
+  // ===== دالة حذف الدردشة =====
+  Future<void> deleteChat(String chatId) async {
+    try {
+      await _firestore.collection('chats').doc(chatId).delete();
+    } catch (e) {
+      throw e;
+    }
+  }
 }

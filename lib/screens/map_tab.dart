@@ -4,7 +4,7 @@ import 'package:latlong2/latlong.dart';
 
 class MapTab extends StatelessWidget {
   final LatLng? currentPosition;
-  final List<LatLng> pharmacies;
+  final List<Map<String, dynamic>> pharmacies;
 
   const MapTab({
     super.key,
@@ -22,8 +22,8 @@ class MapTab extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       child: FlutterMap(
         options: MapOptions(
-          initialCenter: currentPosition!,
-          initialZoom: 15.0,
+          center: currentPosition!,
+          zoom: 15.0,
         ),
         children: [
           TileLayer(
@@ -44,18 +44,24 @@ class MapTab extends StatelessWidget {
                 ),
               ),
               // الصيدليات
-              ...pharmacies.map(
-                    (pharmacy) => Marker(
-                  point: pharmacy,
+              ...pharmacies.map((pharmacy) {
+                final lat = pharmacy['latitude'] ?? 0.0;
+                final lng = pharmacy['longitude'] ?? 0.0;
+                final name = pharmacy['name'] ?? 'صيدلية';
+                return Marker(
+                  point: LatLng(lat, lng),
                   width: 40,
                   height: 40,
-                  child: const Icon(
-                    Icons.local_pharmacy,
-                    color: Colors.red,
-                    size: 40,
+                  child: Tooltip(
+                    message: name,
+                    child: const Icon(
+                      Icons.local_pharmacy,
+                      color: Colors.red,
+                      size: 40,
+                    ),
                   ),
-                ),
-              ),
+                );
+              }).toList(),
             ],
           ),
         ],

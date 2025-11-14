@@ -23,17 +23,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     super.initState();
     _loadMessages();
   }
-
   void _loadMessages() async {
     try {
       final messages = await _chatService.getMessages(widget.chat.id);
       setState(() {
-        _messages = messages;
+        _messages = messages.reversed.toList(); // عكس ترتيب الرسائل
       });
     } catch (e) {
       print('Error loading messages: $e');
     }
   }
+
+
 
   void _sendMessage() async {
     if (_messageController.text.trim().isNotEmpty) {

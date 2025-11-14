@@ -65,7 +65,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   const SizedBox(width: 8),
                   const Text(
-                    "إعدادات الحساب",
+                    "الصفحة الشخصية",
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -191,11 +191,12 @@ class _ProfilePageState extends State<ProfilePage> {
                             children: [
                               ProfileMenuCard(
                                 icon: Icons.person_outline,
-                                title: "معلومات الحساب",
-                                subTitle: "تعديل بياناتك الشخصية والطبية",
-                                expandableChild: const EditProfilePage(), // الفورم الذي يظهر عند الضغط
+                                title: "إعدادات الحساب",
+                                subTitle: "تعديل بياناتك الشخصية، معلومات الاتصال، كلمة المرور ",
+                                //expandableChild:  // الفورم الذي يظهر عند الضغط
                                 onTap: () {
                                   // أي إجراء إضافي عند الضغط
+                                  Get.to(() => const EditProfilePage());
                                 },
                               ),
                               ProfileMenuCard(
@@ -205,8 +206,8 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                               ProfileMenuCard(
                                 icon: Icons.favorite_border,
-                                title: "الأدوية المفضلة",
-                                subTitle: "عرض قائمة الأدوية التي تفضلها",
+                                title: "الأدوية السابقة",
+                                subTitle: "عرض قائمة الأدوية السابقة",
                               ),
                               ProfileMenuCard(
                                 icon: Icons.notifications_outlined,

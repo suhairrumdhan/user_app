@@ -5,10 +5,11 @@ import 'map_tab.dart';
 import 'preview_screen.dart';
 import '../utils/file_utils.dart';
 import '../utils/image_source_dialog.dart';
+import '../widgets/pharmacy_card.dart';
 
 class HomeTabContent extends StatefulWidget {
   final LatLng? currentPosition;
-  final List<LatLng> pharmacies;
+  final List<Map<String, dynamic>> pharmacies;
   final bool isLoading;
 
   const HomeTabContent({
@@ -45,15 +46,13 @@ class _HomeTabContentState extends State<HomeTabContent> {
 
   @override
   Widget build(BuildContext context) {
-    // 📱 استخدم MediaQuery مرة واحدة لتسهيل الحساب
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
     final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 
-    // 🎯 اجعل ارتفاع الخريطة يتغير حسب الاتجاه وحجم الشاشة
     final mapHeight = isLandscape
-        ? screenHeight * 0.6 // لو الجهاز أفقي — مساحة أكبر
-        : screenHeight * 0.42; // لو عمودي — 42%
+        ? screenHeight * 0.6
+        : screenHeight * 0.42;
 
     return Scaffold(
       body: SingleChildScrollView(
@@ -61,38 +60,9 @@ class _HomeTabContentState extends State<HomeTabContent> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(height: screenHeight * 0.1), // تباعد مرن بدل رقم ثابت
+            SizedBox(height: screenHeight * 0.1),
 
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    const Text(
-                      'إجراءات سريعة',
-                      style:
-                      TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildActionButton(Icons.upload, 'رفع وصفة'),
-                        _buildActionButton(Icons.search, 'بحث'),
-                        _buildActionButton(Icons.history, 'السجل'),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              ),
-            ),
-
-            // ✅ استخدام الميديا كويري للارتفاع
+            // 🔹 خريطة الصيدليات
             SizedBox(
               height: mapHeight,
               width: screenWidth,
@@ -103,11 +73,44 @@ class _HomeTabContentState extends State<HomeTabContent> {
                 pharmacies: widget.pharmacies,
               ),
             ),
+
+            const SizedBox(height: 16),
+
+            // 🔹 بطاقات الصيدليات القريبة
+            if (!widget.isLoading && widget.pharmacies.isNotEmpty) ...[
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.local_pharmacy, color: Color(0xFF5EABD6), size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      "الصيدليات القريبة",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...widget.pharmacies.asMap().entries.map((entry) {
+                final index = entry.key;
+                final pharmacy = entry.value;
+                return PharmacyCard(
+                  pharmacy: pharmacy,
+                  index: index,
+                );
+              }),
+              const SizedBox(height: 80), // مساحة إضافية لتجنب تغطية الزر العائم
+            ],
           ],
         ),
       ),
 
-      // ✅ أزرار عائمة كما هي
+      // 🔹 الأزرار العائمة
       floatingActionButton: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
@@ -116,7 +119,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
             backgroundColor: const Color(0xFFE14434),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Family Button Pressed!')),
+                const SnackBar(content: Text('زر العائلة تم الضغط عليه!')),
               );
             },
             child: const Icon(Icons.family_restroom, color: Colors.white),
@@ -132,11 +135,9 @@ class _HomeTabContentState extends State<HomeTabContent> {
                 try {
                   final imageFile = await FileUtils.pickImage(source);
                   if (imageFile != null) {
-                    final confirmed =
-                    await _showPreviewDialog(imageFile, 'image');
+                    final confirmed = await _showPreviewDialog(imageFile, 'image');
                     if (confirmed) {
-                      final extractedText =
-                      await FileUtils.extractTextFromImage(imageFile);
+                      final extractedText = await FileUtils.extractTextFromImage(imageFile);
                       setState(() {
                         _selectedFile = imageFile;
                         _fileType = 'image';
@@ -150,7 +151,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
                     FileUtils.showPermissionError(context, e.toString());
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error: ${e.toString()}')),
+                      SnackBar(content: Text('حدث خطأ: ${e.toString()}')),
                     );
                   }
                 } finally {
@@ -162,11 +163,9 @@ class _HomeTabContentState extends State<HomeTabContent> {
                 try {
                   final pdfFile = await FileUtils.pickPDF();
                   if (pdfFile != null) {
-                    final confirmed =
-                    await _showPreviewDialog(pdfFile, 'pdf');
+                    final confirmed = await _showPreviewDialog(pdfFile, 'pdf');
                     if (confirmed) {
-                      final extractedText =
-                      await FileUtils.extractTextFromPDF(pdfFile);
+                      final extractedText = await FileUtils.extractTextFromPDF(pdfFile);
                       setState(() {
                         _selectedFile = pdfFile;
                         _fileType = 'pdf';
@@ -195,17 +194,5 @@ class _HomeTabContentState extends State<HomeTabContent> {
     );
   }
 
-  Widget _buildActionButton(IconData icon, String label) {
-    return Column(
-      children: [
-        CircleAvatar(
-          radius: 24,
-          backgroundColor: const Color(0xFF5EABD6).withOpacity(0.2),
-          child: Icon(icon, color: const Color(0xFF5EABD6)),
-        ),
-        const SizedBox(height: 8),
-        Text(label),
-      ],
-    );
-  }
 }
+

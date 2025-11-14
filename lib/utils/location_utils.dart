@@ -1,73 +1,84 @@
-// location_utils.dart
-import 'package:geolocator/geolocator.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:async';
 
 class LocationUtils {
-  // Check and request location permissions
-  static Future<LocationPermission> checkAndRequestLocationPermissions() async {
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  static Future<LatLng> getCurrentPosition() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      throw Exception('خدمة تحديد الموقع غير مفعلة');
-    }
+    if (!serviceEnabled) throw Exception('خدمة تحديد الموقع غير مفعلة');
 
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        throw Exception('تم رفض صلاحيات الموقع');
-      }
+      if (permission == LocationPermission.denied) throw Exception('تم رفض صلاحيات الموقع');
     }
+    if (permission == LocationPermission.deniedForever) throw Exception('صلاحيات الموقع مرفوضة بشكل دائم');
 
-    if (permission == LocationPermission.deniedForever) {
-      throw Exception('صلاحيات الموقع مرفوضة بشكل دائم');
-    }
+    // إنشاء stream للحصول على الموقع بدقة عالية
+    Position? lastPosition;
+    final completer = Completer<LatLng>();
 
-    return permission;
+    final subscription = Geolocator.getPositionStream(
+      locationSettings: LocationSettings(
+        accuracy: LocationAccuracy.bestForNavigation, // أعلى دقة ممكنة
+        distanceFilter: 0, // التحديث لكل تغيير
+      ),
+    ).listen((Position position) {
+      lastPosition = position;
+      // نوقف الاستماع بعد أول تحديث دقيق
+      completer.complete(LatLng(position.latitude, position.longitude));
+    });
+
+    final result = await completer.future;
+    await subscription.cancel(); // نوقف الاستماع بعد الحصول على الموقع
+    return result;
   }
 
-  // Get current position
-  static Future<LatLng> getCurrentPosition() async {
-    await checkAndRequestLocationPermissions();
+  // جلب كل الصيدليات من Firebase
+  static Future<List<Map<String, dynamic>>> fetchAllPharmacies() async {
+    final snapshot = await _firestore.collection('pharmacies').get();
 
-    Position position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
-
-    return LatLng(position.latitude, position.longitude);
+    return snapshot.docs.map((doc) {
+      final data = doc.data();
+      return {
+        'id': doc.id,
+        'name': data['name'] ?? '',
+        'address': data['address'] ?? '',
+        'latitude': double.tryParse(data['latitude'].toString()) ?? 0.0,
+        'longitude': double.tryParse(data['longitude'].toString()) ?? 0.0,
+        'imageUrl': data['imageUrl'] ?? '',
+        'isOnline': data['isOnline'] ?? false,
+      };
+    }).toList(); // فقط الصيدليات الفعالة
   }
 
-  // Generate nearby pharmacies around a given position
-  static List<LatLng> generateNearbyPharmacies(LatLng position, {int count = 3}) {
-    final pharmacies = <LatLng>[];
-
-    for (int i = 0; i < count; i++) {
-      // Generate random offsets within a reasonable distance
-      final latOffset = (0.001 + (i * 0.002)) * (i.isEven ? 1 : -1);
-      final lngOffset = (0.001 + (i * 0.002)) * (i.isOdd ? 1 : -1);
-
-      pharmacies.add(LatLng(
-        position.latitude + latOffset,
-        position.longitude + lngOffset,
-      ));
-    }
-
-    return pharmacies;
-  }
-
-  // Calculate distance between two points in meters
+  // حساب المسافة بين نقطتين بالمتر
   static double calculateDistance(LatLng start, LatLng end) {
     const Distance distance = Distance();
     return distance(start, end);
   }
 
-  // Sort pharmacies by distance from current position
-  static List<LatLng> sortPharmaciesByDistance(LatLng currentPosition, List<LatLng> pharmacies) {
-    pharmacies.sort((a, b) {
-      final distanceA = calculateDistance(currentPosition, a);
-      final distanceB = calculateDistance(currentPosition, b);
-      return distanceA.compareTo(distanceB);
-    });
+  // جلب الصيدليات القريبة (مثلاً ضمن 5 كم)
+  static Future<List<Map<String, dynamic>>> getNearbyPharmacies({
+    required LatLng currentPosition,
+    double radiusInKm = 10,
+  }) async {
+    final allPharmacies = await fetchAllPharmacies();
+    List<Map<String, dynamic>> nearby = [];
 
-    return pharmacies;
+    for (var pharmacy in allPharmacies) {
+      final pos = LatLng(pharmacy['latitude'], pharmacy['longitude']);
+      final distanceMeters = calculateDistance(currentPosition, pos);
+      if (distanceMeters <= radiusInKm * 1000) {
+        pharmacy['distance'] = distanceMeters;
+        nearby.add(pharmacy);
+      }
+    }
+
+    nearby.sort((a, b) => a['distance'].compareTo(b['distance']));
+    return nearby;
   }
 }

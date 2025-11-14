@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ لجلب البيانات من فايربيز
 import 'PharmacyHistoryPage.dart';
 import 'chats_screen.dart';
+import 'notifications_page.dart';
 import 'profile_page.dart';
 import '../widgets/custom_bottom_navigation_bar.dart';
 import '../utils/location_utils.dart';
-import 'home_tab_content.dart'; // ✅ الاستيراد الجديد
+import 'home_tab_content.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,24 +20,70 @@ class _HomePageState extends State<HomePage> {
   int currentSelectedIndex = 0;
   bool _isLocationLoading = true;
   LatLng? _currentPosition;
-  List<LatLng> _pharmacies = [];
+  List<Map<String, dynamic>> _pharmacies = [];
+
+  List<PharmacyHistory> _searchedPharmacies = [];
+  List<PharmacyHistory> _orderedPharmacies = [];
 
   @override
   void initState() {
     super.initState();
     _getCurrentLocation();
+    _fetchPharmacyHistories(); // ✅ جلب البيانات من الفايربيز
   }
 
+  // 🔹 جلب موقع المستخدم والصيدليات القريبة
   Future<void> _getCurrentLocation() async {
+    setState(() => _isLocationLoading = true);
     try {
       final position = await LocationUtils.getCurrentPosition();
+      final nearbyPharmacies = await LocationUtils.getNearbyPharmacies(
+        currentPosition: position,
+        radiusInKm: 5,
+      );
+
       setState(() {
         _currentPosition = position;
-        _pharmacies = LocationUtils.generateNearbyPharmacies(position);
+        _pharmacies = nearbyPharmacies;
         _isLocationLoading = false;
       });
     } catch (e) {
       setState(() => _isLocationLoading = false);
+      print('⚠️ خطأ في تحديد الموقع أو تحميل الصيدليات: $e');
+    }
+  }
+
+  // 🔹 جلب بيانات السجلات من Firebase Firestore
+  Future<void> _fetchPharmacyHistories() async {
+    try {
+      final searchedSnapshot =
+      await FirebaseFirestore.instance.collection('searched_pharmacies').get();
+      final orderedSnapshot =
+      await FirebaseFirestore.instance.collection('ordered_pharmacies').get();
+
+      setState(() {
+        _searchedPharmacies = searchedSnapshot.docs.map((doc) {
+          final data = doc.data();
+          return PharmacyHistory(
+            name: data['name'] ?? 'غير معروف',
+            address: data['address'] ?? 'غير معروف',
+            date: data['date'] ?? '',
+            searchCount: data['searchCount'] ?? 0,
+          );
+        }).toList();
+
+        _orderedPharmacies = orderedSnapshot.docs.map((doc) {
+          final data = doc.data();
+          return PharmacyHistory(
+            name: data['name'] ?? 'غير معروف',
+            address: data['address'] ?? 'غير معروف',
+            date: data['date'] ?? '',
+            searchCount: data['searchCount'] ?? 0,
+          );
+        }).toList();
+      });
+    } catch (e) {
+      print('⚠️ خطأ في جلب بيانات الصيدليات من Firebase: $e');
     }
   }
 
@@ -44,6 +92,7 @@ class _HomePageState extends State<HomePage> {
       currentSelectedIndex = index;
     });
   }
+
   List<Widget> get pages => [
     HomeTabContent(
       currentPosition: _currentPosition,
@@ -51,43 +100,14 @@ class _HomePageState extends State<HomePage> {
       isLoading: _isLocationLoading,
     ),
     const ChatsScreen(),
-    PharmacyHistoryPage( // ✅ الصفحة الجديدة
+    PharmacyHistoryPage(
       orderedPharmacies: _orderedPharmacies,
       searchedPharmacies: _searchedPharmacies,
     ),
-    const Center(child: Text("Notifications Tab Content")),
+    const NotificationsPage(),
     const ProfilePage(),
   ];
-  // Example data for testing
-  final List<PharmacyHistory> _orderedPharmacies = [
-    PharmacyHistory(
-      name: "السناء",
-      address: "ابوسليم",
-      date: "2 hours ago",
-      orderCount: 3,
-    ),
-    PharmacyHistory(
-      name: "دوام الصحة",
-      address: "قرقارش",
-      date: "1 day ago",
-      orderCount: 1,
-    ),
-  ];
 
-  final List<PharmacyHistory> _searchedPharmacies = [
-    PharmacyHistory(
-      name: "القلب",
-      address: "طرابلس",
-      date: " 15 times",
-      searchCount: 15,
-    ),
-    PharmacyHistory(
-      name: "النور",
-      address: "الهضبة",
-      date: " 8 times",
-      searchCount: 8,
-    ),
-  ];
   @override
   Widget build(BuildContext context) {
     return Scaffold(
