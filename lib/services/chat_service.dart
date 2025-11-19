@@ -12,37 +12,6 @@ class ChatService {
 
   // الحصول على instance من UserController
   UserController get _userController => Get.find<UserController>();
-
-  /// 🔍 البحث عن الصيدليات بالاسم
-  // Future<List<Pharmacy>> searchPharmacies(String query) async {
-  //   if (query.isEmpty) {
-  //     return [];
-  //   }
-  //
-  //   try {
-  //     final queryLower = query.toLowerCase();
-  //
-  //     final pharmaciesSnapshot = await _firestore
-  //         .collection('pharmacies')
-  //         .where('name', isGreaterThanOrEqualTo: queryLower)
-  //         .where('name', isLessThan: queryLower + '\uf8ff') // 🔥 هذا أفضل من 'z'
-  //         .get();
-  //
-  //     return pharmaciesSnapshot.docs.map((doc) {
-  //       final data = doc.data();
-  //       return Pharmacy(
-  //         id: doc.id,
-  //         name: data['name'] ?? 'صيدلية',
-  //         isOnline: data['isOnline'] ?? false,
-  //         imageUrl: data['imageUrl'],
-  //         address: data['address'],
-  //       );
-  //     }).toList();
-  //   } catch (e) {
-  //     print('Error searching pharmacies: $e');
-  //     return [];
-  //   }
-  // }
   Future<List<Pharmacy>> searchPharmacies(String query) async {
     if (query.isEmpty) return [];
 

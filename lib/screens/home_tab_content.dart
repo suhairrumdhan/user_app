@@ -5,7 +5,8 @@ import 'map_tab.dart';
 import 'preview_screen.dart';
 import '../utils/file_utils.dart';
 import '../utils/image_source_dialog.dart';
-import '../widgets/pharmacy_card.dart';
+import '../widgets/pharmacy_glass_card.dart';
+import 'dart:ui';
 
 class HomeTabContent extends StatefulWidget {
   final LatLng? currentPosition;
@@ -29,6 +30,9 @@ class _HomeTabContentState extends State<HomeTabContent> {
   String _extractedText = '';
   bool _isLoading = false;
 
+  final PageController _pageController = PageController(viewportFraction: 0.78);
+  int currentIndex = 0;
+
   Future<bool> _showPreviewDialog(File file, String type) async {
     return await showDialog<bool>(
       context: context,
@@ -48,151 +52,289 @@ class _HomeTabContentState extends State<HomeTabContent> {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
-
-    final mapHeight = isLandscape
-        ? screenHeight * 0.6
-        : screenHeight * 0.42;
+    final isSmallScreen = screenHeight < 700;
 
     return Scaffold(
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF5EABD6),
+              Color(0xFF7BC4EA),
+              Color(0xFF9BD8F0),
+            ],
+            stops: [0.1, 0.5, 0.9],
+          ),
+        ),
+        child: Stack(
           children: [
-            SizedBox(height: screenHeight * 0.1),
+            // ------------------ المحتوى الرئيسي ------------------
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 50),
 
-            // 🔹 خريطة الصيدليات
-            SizedBox(
-              height: mapHeight,
-              width: screenWidth,
-              child: widget.isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : MapTab(
-                currentPosition: widget.currentPosition,
-                pharmacies: widget.pharmacies,
-              ),
-            ),
+                // ------------------ القسم العلوي (البطاقات) ------------------
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: const [
+                          SizedBox(width: 8),
+                          Text(
+                            "الصيدليات القريبة",
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          )
+                        ],
+                      ),
+                      const SizedBox(height: 20),
 
-            const SizedBox(height: 16),
+                      if (!widget.isLoading && widget.pharmacies.isNotEmpty)
+                        Column(
+                          children: [
+                            SizedBox(
+                              height: isSmallScreen ? 180 : 200,
+                              child: PageView.builder(
+                                controller: _pageController,
+                                itemCount: widget.pharmacies.length,
+                                onPageChanged: (i) => setState(() => currentIndex = i),
+                                itemBuilder: (context, index) {
+                                  return AnimatedScale(
+                                    scale: currentIndex == index ? 1 : 0.88,
+                                    duration: const Duration(milliseconds: 300),
+                                    child: PharmacyGlassCard(
+                                      pharmacy: widget.pharmacies[index],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(
+                                widget.pharmacies.length,
+                                    (i) => AnimatedContainer(
+                                  duration: const Duration(milliseconds: 250),
+                                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                                  width: currentIndex == i ? 14 : 7,
+                                  height: 7,
+                                  decoration: BoxDecoration(
+                                    color: currentIndex == i
+                                        ? Colors.white
+                                        : Colors.white54,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
 
-            // 🔹 بطاقات الصيدليات القريبة
-            if (!widget.isLoading && widget.pharmacies.isNotEmpty) ...[
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    Icon(Icons.local_pharmacy, color: Color(0xFF5EABD6), size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      "الصيدليات القريبة",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                // ------------------ الجزء السفلي (الخريطة) ------------------
+                Expanded(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(32),
+                        topRight: Radius.circular(32),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 20,
+                          offset: Offset(0, -4),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(32),
+                        topRight: Radius.circular(32),
+                      ),
+                      child: widget.isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : MapTab(
+                        currentPosition: widget.currentPosition,
+                        pharmacies: widget.pharmacies,
                       ),
                     ),
-                  ],
+                  ),
+                ),
+              ],
+            ),
+
+            // ------------------ الأزرار العائمة الزجاجية ------------------
+            Positioned(
+              bottom: 8,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  width: screenWidth * 0.65, // تم تقليل العرض بعد إزالة زر الإعدادات
+                  height: isSmallScreen ? 70 : 80,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(40),
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withOpacity(0.25),
+                        Colors.white.withOpacity(0.15),
+                      ],
+                    ),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 25,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(40),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(40),
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.white.withOpacity(0.2),
+                              Colors.white.withOpacity(0.1),
+                            ],
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            // زر العائلة
+                            _buildGlassFAB(
+                              icon: Icons.family_restroom,
+                              label: "العائلة",
+                              color: const Color(0xFFE14434),
+                              onTap: () {},
+                              isSmallScreen: isSmallScreen,
+                            ),
+
+                            // الخط الفاصل
+                            Container(
+                              width: 1,
+                              height: isSmallScreen ? 30 : 40,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.white.withOpacity(0.5),
+                                    Colors.transparent,
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            // زر الإضافة الرئيسي (بنفس حجم الأزرار الأخرى)
+                            _buildGlassFAB(
+                              icon: Icons.add,
+                              label: "رفع وصفة",
+                              color: const Color(0xFF5EABD6),
+                              onTap: () => showImageSourceDialog(
+                                context: context,
+                                onPickImage: (source) async {
+                                  setState(() => _isLoading = true);
+                                  try {
+                                    final imageFile = await FileUtils.pickImage(source);
+                                    if (imageFile != null) {
+                                      final confirmed = await _showPreviewDialog(imageFile, 'image');
+                                      if (confirmed) {
+                                        final extractedText = await FileUtils.extractTextFromImage(imageFile);
+                                        setState(() {
+                                          _selectedFile = imageFile;
+                                          _fileType = 'image';
+                                          _extractedText = extractedText;
+                                        });
+                                        FileUtils.showExtractedTextDialog(context, extractedText);
+                                      }
+                                    }
+                                  } finally {
+                                    setState(() => _isLoading = false);
+                                  }
+                                },
+                                onPickPDF: () {},
+                              ),
+                              isSmallScreen: isSmallScreen,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 8),
-              ...widget.pharmacies.asMap().entries.map((entry) {
-                final index = entry.key;
-                final pharmacy = entry.value;
-                return PharmacyCard(
-                  pharmacy: pharmacy,
-                  index: index,
-                );
-              }),
-              const SizedBox(height: 80), // مساحة إضافية لتجنب تغطية الزر العائم
-            ],
+            ),
           ],
         ),
       ),
+    );
+  }
 
-      // 🔹 الأزرار العائمة
-      floatingActionButton: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
+  Widget _buildGlassFAB({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+    required bool isSmallScreen,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          FloatingActionButton(
-            heroTag: "familyBtn",
-            backgroundColor: const Color(0xFFE14434),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('زر العائلة تم الضغط عليه!')),
-              );
-            },
-            child: const Icon(Icons.family_restroom, color: Colors.white),
-          ),
-          const SizedBox(width: 16),
-          FloatingActionButton(
-            heroTag: "addBtn",
-            backgroundColor: const Color(0xFF5EABD6),
-            onPressed: () => showImageSourceDialog(
-              context: context,
-              onPickImage: (source) async {
-                setState(() => _isLoading = true);
-                try {
-                  final imageFile = await FileUtils.pickImage(source);
-                  if (imageFile != null) {
-                    final confirmed = await _showPreviewDialog(imageFile, 'image');
-                    if (confirmed) {
-                      final extractedText = await FileUtils.extractTextFromImage(imageFile);
-                      setState(() {
-                        _selectedFile = imageFile;
-                        _fileType = 'image';
-                        _extractedText = extractedText;
-                      });
-                      FileUtils.showExtractedTextDialog(context, extractedText);
-                    }
-                  }
-                } catch (e) {
-                  if (e.toString().contains('صلاحيات')) {
-                    FileUtils.showPermissionError(context, e.toString());
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('حدث خطأ: ${e.toString()}')),
-                    );
-                  }
-                } finally {
-                  setState(() => _isLoading = false);
-                }
-              },
-              onPickPDF: () async {
-                setState(() => _isLoading = true);
-                try {
-                  final pdfFile = await FileUtils.pickPDF();
-                  if (pdfFile != null) {
-                    final confirmed = await _showPreviewDialog(pdfFile, 'pdf');
-                    if (confirmed) {
-                      final extractedText = await FileUtils.extractTextFromPDF(pdfFile);
-                      setState(() {
-                        _selectedFile = pdfFile;
-                        _fileType = 'pdf';
-                        _extractedText = extractedText;
-                      });
-                      FileUtils.showExtractedTextDialog(context, extractedText);
-                    }
-                  }
-                } catch (e) {
-                  if (e.toString().contains('صلاحيات')) {
-                    FileUtils.showPermissionError(context, e.toString());
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('حدث خطأ: ${e.toString()}')),
-                    );
-                  }
-                } finally {
-                  setState(() => _isLoading = false);
-                }
-              },
+          Container(
+            width: isSmallScreen ? 44 : 48, // نفس الحجم لجميع الأزرار
+            height: isSmallScreen ? 44 : 48, // نفس الحجم لجميع الأزرار
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.4),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            child: const Icon(Icons.add, color: Colors.white),
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: isSmallScreen ? 20 : 22, // نفس الحجم لجميع الأيقونات
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: isSmallScreen ? 10 : 11,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),
     );
   }
-
 }
-
