@@ -51,13 +51,6 @@ class FamilyController extends GetxController {
     try {
       isLoading.value = true;
       await familyRef.add(member.toMap());
-      Get.snackbar(
-        'نجاح',
-        'تم إضافة ${member.name} بنجاح',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
     } catch (e) {
       Get.snackbar(
         'خطأ',
@@ -76,13 +69,6 @@ class FamilyController extends GetxController {
     try {
       isLoading.value = true;
       await familyRef.doc(member.id).update(member.toMap());
-      Get.snackbar(
-        'نجاح',
-        'تم تحديث ${member.name} بنجاح',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
     } catch (e) {
       Get.snackbar(
         'خطأ',
@@ -117,13 +103,7 @@ class FamilyController extends GetxController {
         );
       }
 
-      Get.snackbar(
-        'نجاح',
-        'تم تحديث السجل الصحي بنجاح',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
+
     } catch (e) {
       Get.snackbar(
         'خطأ',
@@ -147,14 +127,6 @@ class FamilyController extends GetxController {
 
       // حذف من القائمة المحلية
       members.removeWhere((m) => m.id == id);
-
-      Get.snackbar(
-        'نجاح',
-        'تم حذف الفرد بنجاح',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
     } catch (e) {
       Get.snackbar(
         'خطأ',
@@ -179,12 +151,10 @@ class FamilyController extends GetxController {
         doc.data() as Map<String, dynamic>,
       );
     } catch (e) {
-      print('❌ خطأ في جلب الفرد: $e');
       return null;
     }
   }
 
-  /// 🔹 جلب السجل الصحي لفرد
   Future<Map<String, dynamic>?> getMemberHealthRecords(String memberId) async {
     try {
       final doc = await familyRef.doc(memberId).get();
@@ -197,12 +167,9 @@ class FamilyController extends GetxController {
         'currentMedications': List<String>.from(data['currentMedications'] ?? []),
       };
     } catch (e) {
-      print('❌ خطأ في جلب السجل الصحي: $e');
       return null;
     }
   }
-
-  /// 🔹 تحديث معلومات إضافية للفرد (اختياري)
   Future<void> updateMemberAdditionalInfo({
     required String memberId,
     String? bloodType,

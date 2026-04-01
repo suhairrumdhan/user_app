@@ -227,17 +227,15 @@ class _ProfilePageState extends State<ProfilePage> {
                                 subTitle: "إعداد مواعيد التنبيه لتناول الأدوية",
                               ),
                               ProfileMenuCard(
-                                icon: Icons.show_chart_outlined,
-                                title: "السجل الصحي",
-                                subTitle: "تصفح بياناتك الصحية السابقة",
+                                icon: Icons.monitor_heart,
+                                title: "السجلات الصحية",
+                                subTitle: " تصفح البيانات الصحية لك ولأفراد عائلتك",
                                 onTap: () {
                                   Get.put(FamilyController());         // أول واحد
                                   Get.put(HealthRecordController());   // بعده
                                   Get.to(() => HealthRecordsPage());
                                 },
                               ),
-
-
                               // ===== زر تسجيل الخروج =====
                               InkWell(
                                 borderRadius: BorderRadius.circular(16),

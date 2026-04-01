@@ -61,6 +61,7 @@ class FamilyMemberModel {
 
   /// 🔹 نسخ البيانات مع تحديث بعض الحقول
   FamilyMemberModel copyWith({
+    String? id,
     String? name,
     String? relation,
     String? gender,
@@ -72,7 +73,7 @@ class FamilyMemberModel {
     List<String>? currentMedications,
   }) {
     return FamilyMemberModel(
-      id: id,
+      id: id ?? this.id,
       name: name ?? this.name,
       relation: relation ?? this.relation,
       gender: gender ?? this.gender,
@@ -83,5 +84,59 @@ class FamilyMemberModel {
       healthConditions: healthConditions ?? this.healthConditions,
       currentMedications: currentMedications ?? this.currentMedications,
     );
+  }
+
+  /// 🔹 دالة مساعدة للحصول على فصيلة الدم بشكل نصي
+  String getBloodTypeDisplay() {
+    return bloodType ?? 'غير محدد';
+  }
+
+  /// 🔹 دالة للتحقق من وجود فصيلة دم
+  bool hasBloodType() {
+    return bloodType != null && bloodType!.isNotEmpty;
+  }
+
+  /// 🔹 دالة للحصول على قائمة الأمراض المزمنة (مرادف للحالات الصحية)
+  List<String> getChronicDiseases() {
+    return healthConditions;
+  }
+
+  /// 🔹 دالة للتحقق من وجود حساسية معينة
+  bool hasAllergy(String allergen) {
+    return allergies.contains(allergen);
+  }
+
+  /// 🔹 دالة للتحقق من وجود دواء معين
+  bool isTakingMedication(String medication) {
+    return currentMedications.contains(medication);
+  }
+
+  /// 🔹 دالة للحصول على العمر بشكل نصي
+  String getAgeDisplay() {
+    if (age == null) return 'غير محدد';
+    return '$age سنة';
+  }
+
+  /// 🔹 دالة للحصول على تاريخ الميلاد بشكل نصي
+  String getDateOfBirthDisplay() {
+    if (dateOfBirth == null) return 'غير محدد';
+    return '${dateOfBirth!.year}/${dateOfBirth!.month}/${dateOfBirth!.day}';
+  }
+
+  /// 🔹 دالة للتحقق من صحة البيانات قبل الحفظ
+  bool isValid() {
+    return name.isNotEmpty;
+  }
+
+  /// 🔹 دالة للحصول على ملخص صحي للنموذج
+  Map<String, dynamic> getHealthSummary() {
+    return {
+      'bloodType': bloodType,
+      'allergies': allergies,
+      'healthConditions': healthConditions,
+      'currentMedications': currentMedications,
+      'age': age,
+      'gender': gender,
+    };
   }
 }

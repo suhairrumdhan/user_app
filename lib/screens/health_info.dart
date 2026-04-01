@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:icons_plus/icons_plus.dart';
 import 'package:user_application/screens/home_page.dart';
-
 import '../controllers/user_controller.dart';
+import '../widgets/Custom_dropdown_field.dart';
+import '../widgets/custom_text_field.dart';
 
 class HealthInfoScreen extends StatefulWidget {
   const HealthInfoScreen({super.key});
@@ -33,7 +35,6 @@ class _HealthInfoScreenState extends State<HealthInfoScreen> {
   void initState() {
     super.initState();
 
-    // ملء البيانات السابقة إذا موجودة
     final user = userController.user.value;
     if (user != null) {
       bloodType = user.bloodType;
@@ -124,130 +125,110 @@ class _HealthInfoScreenState extends State<HealthInfoScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          elevation: 5,
-          shadowColor: colorScheme.primary,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text('البيانات الصحية', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  const Text('(اختياري - يمكنك تخطي هذه الخطوة)', style: TextStyle(color: Colors.grey, fontSize: 14)),
-                  const SizedBox(height: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 8),
+            const Text('البيانات الصحية', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            const Text('(اختياري - يمكنك تخطي هذه الخطوة)', style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 20),
 
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'فصيلة الدم (اختياري)', border: OutlineInputBorder()),
-                    items: bloodTypes.map((bt) => DropdownMenuItem(value: bt, child: Text(bt))).toList(),
-                    onChanged: (val) => setState(() => bloodType = val),
-                    value: bloodType,
-                  ),
-                  const SizedBox(height: 16),
+            CustomDropdownField<String>(
+              label: 'فصيلة الدم',
+              value: bloodType,
+              items: bloodTypes.map((bt) => DropdownMenuItem(value: bt, child: Text(bt))).toList(),
+              onChanged: (val) => setState(() => bloodType = val),
+              icon: OctIcons.code_of_conduct, // ✅ Pass IconData directly (no Icon wrapper)
+            ),
 
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'الجنس (اختياري)', border: OutlineInputBorder()),
-                    items: genders.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
-                    onChanged: (val) => setState(() => gender = val),
-                    value: gender,
-                  ),
-                  const SizedBox(height: 16),
+            CustomDropdownField<String>(
+              label: 'الجنس',
+              value: gender,
+              items: genders.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
+              onChanged: (val) => setState(() => gender = val),
+              icon: Iconsax.man_outline, // ✅ Pass IconData directly (no Icon wrapper)
+            ),
+            // تاريخ الميلاد
+            CustomTextField(
+              controller: dateController,
+              label: 'تاريخ الميلاد',
+              inputType: TextInputType.datetime,
+              onChanged: (_) {},
+              onVisibilityToggle: null,
+              showPassword: false,
+              icon: Icons.calendar_month,
+              obscure: false,
+              isPasswordField: false,
+              onTap: _pickDateOfBirth,
+            ),
+            const SizedBox(height: 16),
 
-                  TextFormField(
-                    controller: dateController,
-                    readOnly: true,
-                    decoration: const InputDecoration(
-                      labelText: 'تاريخ الميلاد (اختياري)',
-                      border: OutlineInputBorder(),
-                      suffixIcon: Icon(Icons.calendar_month),
-                    ),
-                    onTap: _pickDateOfBirth,
-                  ),
-                  const SizedBox(height: 16),
+            // الحساسية
+            CustomTextField(
+              controller: TextEditingController(text: allergies),
+              label: 'الحساسية (افصل بين الأنواع بفاصلة)',
+              inputType: TextInputType.text,
+              onChanged: (val) => allergies = val,
+            ),
+            const SizedBox(height: 16),
 
-                  TextFormField(
-                    decoration: const InputDecoration(labelText: 'رقم الهاتف (اختياري)', border: OutlineInputBorder()),
-                    keyboardType: TextInputType.phone,
-                    onChanged: (val) => phone = val,
-                    initialValue: phone,
-                  ),
-                  const SizedBox(height: 16),
+            // الأدوية الحالية
+            CustomTextField(
+              controller: TextEditingController(text: medications),
+              label: 'الأدوية الحالية (افصل بين الأنواع بفاصلة)',
+              inputType: TextInputType.text,
+              onChanged: (val) => medications = val,
+            ),
+            const SizedBox(height: 24),
 
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'الحساسية (اختياري - افصل بين الأنواع بفاصلة)',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (val) => allergies = val,
-                    initialValue: allergies,
-                  ),
-                  const SizedBox(height: 16),
+            const Text('الأمراض المزمنة', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
 
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'الأدوية الحالية (اختياري - افصل بين الأنواع بفاصلة)',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (val) => medications = val,
-                    initialValue: medications,
-                  ),
-                  const SizedBox(height: 24),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: commonDiseases.map((disease) {
+                final selected = chronicDiseases.contains(disease);
+                return FilterChip(
+                  label: Text(disease),
+                  selected: selected,
+                  onSelected: (_) => _toggleDisease(disease),
+                  selectedColor: colorScheme.primary,
+                  checkmarkColor: Colors.white,
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
 
-                  const Text('الأمراض المزمنة (اختياري)', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
+            CustomTextField(
+              controller: otherDiseaseController,
+              label: 'أمراض أخرى',
+              inputType: TextInputType.text,
+            ),
+            const SizedBox(height: 30),
 
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: commonDiseases.map((disease) {
-                      final selected = chronicDiseases.contains(disease);
-                      return FilterChip(
-                        label: Text(disease),
-                        selected: selected,
-                        onSelected: (_) => _toggleDisease(disease),
-                        selectedColor: colorScheme.primary,
-                        checkmarkColor: Colors.white,
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: otherDiseaseController,
-                    decoration: const InputDecoration(
-                      labelText: 'أمراض أخرى (اختياري)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-
-                  ElevatedButton.icon(
-                    onPressed: _saveHealthInfo,
-                    icon: const Icon(Icons.save),
-                    label: const Text('حفظ المعلومات'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6E8CFB),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      textStyle: const TextStyle(fontSize: 16),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  OutlinedButton(
-                    onPressed: _skipHealthInfo,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(color: Colors.grey),
-                    ),
-                    child: const Text('تخطي الآن', style: TextStyle(color: Colors.grey)),
-                  ),
-                ],
+            ElevatedButton.icon(
+              onPressed: _saveHealthInfo,
+              icon: const  Icon(EvaIcons.checkmark),
+              label: const Text('حفظ المعلومات'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF5EABD6),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                textStyle: const TextStyle(fontSize: 16),
               ),
             ),
-          ),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: _skipHealthInfo,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                side: const BorderSide(color: Colors.grey),
+              ),
+              child: const Text('تخطي الآن', style: TextStyle(color: Colors.grey)),
+            ),
+          ],
         ),
       ),
     );

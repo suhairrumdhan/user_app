@@ -10,12 +10,14 @@ import 'package:user_application/auth/user_repository.dart';
 import '../services/image_upload_service.dart';
 
 class UserController extends GetxController {
-  // المتغير اللي يحفظ بيانات المستخدم
-  var user = Rxn<UserModel>();
+  // المتغير اللي يحفظ بيانات المستخدم (Rx للتفاعلية)
+  final Rx<UserModel?> user = Rx<UserModel?>(null);
+
+  // مؤشر التحميل
+  final RxBool isLoading = false.obs;
 
   // instance للـ Repository
   final UserRepository _userRepo = UserRepository.instance;
-
 
   @override
   void onInit() {
@@ -35,14 +37,18 @@ class UserController extends GetxController {
   // جلب بيانات المستخدم من Firestore وتخزينها في الـ Controller
   Future<void> loadUser(String uid) async {
     try {
+      isLoading.value = true;
       UserModel? fetchedUser = await _userRepo.getUser(uid);
       if (fetchedUser != null) {
         user.value = fetchedUser;
+        print('✅ تم تحميل بيانات المستخدم بنجاح');
       } else {
-        print("المستخدم غير موجود في Firestore");
+        print("⚠️ المستخدم غير موجود في Firestore");
       }
     } catch (e) {
-      print("خطأ في تحميل بيانات المستخدم: $e");
+      print("❌ خطأ في تحميل بيانات المستخدم: $e");
+    } finally {
+      isLoading.value = false;
     }
   }
 
@@ -67,20 +73,22 @@ class UserController extends GetxController {
     if (user.value == null) return false;
     return await _userRepo.checkUserExists(user.value!.id);
   }
-}
 
-// ------------------- Extension لتحديث البيانات -------------------
-extension UserControllerExtensions on UserController {
-
+  // تحديث السجلات الصحية (الطريقة الموحدة)
   Future<void> updateHealthRecords({
     List<String>? healthConditions,
     List<String>? allergies,
     List<String>? currentMedications,
   }) async {
-    try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) return;
+    if (user.value == null) {
+      print('❌ لا يوجد مستخدم محمل');
+      throw Exception('لم يتم تحميل بيانات المستخدم');
+    }
 
+    try {
+      isLoading.value = true;
+
+      final currentUserId = user.value!.id;
       final Map<String, dynamic> updateData = {};
 
       if (healthConditions != null) {
@@ -93,61 +101,85 @@ extension UserControllerExtensions on UserController {
         updateData['currentMedications'] = currentMedications;
       }
 
-      await _userRepo.updateUserFields(currentUser.uid, updateData);
-      await loadUser(currentUser.uid);
+      if (updateData.isNotEmpty) {
+        // تحديث في Firestore
+        await _userRepo.updateUserFields(currentUserId, updateData);
 
-      Get.snackbar(
-        'نجاح',
-        'تم تحديث السجل الصحي بنجاح',
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
+        // تحديث البيانات محلياً
+        final updatedUser = user.value!.copyWith(
+          healthConditions: healthConditions ?? user.value!.healthConditions,
+          allergies: allergies ?? user.value!.allergies,
+          currentMedications: currentMedications ?? user.value!.currentMedications,
+        );
+
+        user.value = updatedUser;
+
+        print('✅ تم تحديث السجل الصحي بنجاح');
+      }
     } catch (e) {
-      Get.snackbar(
-        'خطأ',
-        'فشل في تحديث السجل الصحي: $e',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      print('❌ خطأ في تحديث السجل الصحي: $e');
+      rethrow;
+    } finally {
+      isLoading.value = false;
     }
   }
 
+  // تحديث المعلومات الإضافية
   Future<void> updateAdditionalHealthInfo({
     String? bloodType,
     String? gender,
     DateTime? dateOfBirth,
     String? phone,
   }) async {
-    try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) return;
+    if (user.value == null) {
+      print('❌ لا يوجد مستخدم محمل');
+      throw Exception('لم يتم تحميل بيانات المستخدم');
+    }
 
+    try {
+      isLoading.value = true;
+
+      final currentUserId = user.value!.id;
       final Map<String, dynamic> updateData = {};
 
-      if (bloodType != null) updateData['bloodType'] = bloodType;
-      if (gender != null) updateData['gender'] = gender;
-      if (dateOfBirth != null) updateData['dateOfBirth'] = Timestamp.fromDate(dateOfBirth);
-      if (phone != null) updateData['phone'] = phone;
+      if (bloodType != null && bloodType.isNotEmpty) {
+        updateData['bloodType'] = bloodType;
+      }
+      if (gender != null && gender.isNotEmpty) {
+        updateData['gender'] = gender;
+      }
+      if (dateOfBirth != null) {
+        updateData['dateOfBirth'] = Timestamp.fromDate(dateOfBirth);
+      }
+      if (phone != null && phone.isNotEmpty) {
+        updateData['phone'] = phone;
+      }
 
-      await _userRepo.updateUserFields(currentUser.uid, updateData);
-      await loadUser(currentUser.uid);
+      if (updateData.isNotEmpty) {
+        // تحديث في Firestore
+        await _userRepo.updateUserFields(currentUserId, updateData);
 
-      Get.snackbar(
-        'نجاح',
-        'تم تحديث المعلومات الإضافية بنجاح',
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
+        // تحديث البيانات محلياً
+        final updatedUser = user.value!.copyWith(
+          bloodType: bloodType ?? user.value!.bloodType,
+          gender: gender ?? user.value!.gender,
+          dateOfBirth: dateOfBirth ?? user.value!.dateOfBirth,
+          phone: phone ?? user.value!.phone,
+        );
+
+        user.value = updatedUser;
+
+        print('✅ تم تحديث المعلومات الإضافية بنجاح');
+      }
     } catch (e) {
-      Get.snackbar(
-        'خطأ',
-        'فشل في تحديث المعلومات: $e',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      print('❌ خطأ في تحديث المعلومات الإضافية: $e');
+      rethrow;
+    } finally {
+      isLoading.value = false;
     }
   }
 
+  // تحديث جميع المعلومات الصحية دفعة واحدة
   Future<void> updateHealthInfo({
     String? bloodType,
     String? gender,
@@ -163,10 +195,12 @@ extension UserControllerExtensions on UserController {
     }
 
     try {
-      final currentUser = user.value!;
+      isLoading.value = true;
+
+      print('🔄 جاري حفظ البيانات الصحية في Firestore...');
 
       // 1. تحديث البيانات محلياً
-      final updatedUser = currentUser.copyWith(
+      final updatedUser = user.value!.copyWith(
         bloodType: bloodType,
         gender: gender,
         dateOfBirth: dateOfBirth,
@@ -177,9 +211,6 @@ extension UserControllerExtensions on UserController {
         healthInfoCompleted: true,
       );
 
-      print('🔄 جاري حفظ البيانات الصحية في Firestore...');
-      print('📊 البيانات: ${updatedUser.toJson()}');
-
       // 2. حفظ في Firestore
       await _userRepo.saveUser(updatedUser);
 
@@ -187,18 +218,23 @@ extension UserControllerExtensions on UserController {
       user.value = updatedUser;
 
       print('✅ تم حفظ البيانات الصحية بنجاح في Firestore');
-
     } catch (e) {
       print('❌ خطأ في حفظ البيانات الصحية: $e');
       rethrow;
+    } finally {
+      isLoading.value = false;
     }
   }
+
+  // تحديث صورة الملف الشخصي
   Future<void> updateProfileImage(File imageFile) async {
     if (user.value == null) {
       throw Exception('لم يتم تحميل بيانات المستخدم');
     }
 
     try {
+      isLoading.value = true;
+
       final userId = user.value!.id;
 
       // رفع الصورة
@@ -215,13 +251,18 @@ extension UserControllerExtensions on UserController {
     } catch (e) {
       print('❌ خطأ في تحديث صورة الملف الشخصي: $e');
       rethrow;
+    } finally {
+      isLoading.value = false;
     }
   }
 
+  // حذف صورة الملف الشخصي
   Future<void> removeProfileImage() async {
     if (user.value == null) return;
 
     try {
+      isLoading.value = true;
+
       final userId = user.value!.id;
 
       // حذف الصورة من Storage
@@ -236,8 +277,12 @@ extension UserControllerExtensions on UserController {
     } catch (e) {
       print('❌ خطأ في حذف صورة الملف الشخصي: $e');
       rethrow;
+    } finally {
+      isLoading.value = false;
     }
   }
+
+  // اختيار صورة من المعرض
   Future<bool> updateUserProfileImage() async {
     if (user.value == null) {
       print('❌ لا يوجد مستخدم محمل في الـ Controller');
@@ -245,6 +290,8 @@ extension UserControllerExtensions on UserController {
     }
 
     try {
+      isLoading.value = true;
+
       final userId = user.value!.id;
       print('🔄 جاري تحديث صورة الملف الشخصي...');
 
@@ -260,7 +307,7 @@ extension UserControllerExtensions on UserController {
 
       if (imageUrl != null) {
         // تحديث بيانات المستخدم في Firestore
-        await UserRepository.instance.updateUserFields(userId, {
+        await _userRepo.updateUserFields(userId, {
           'profileImageUrl': imageUrl,
           'updatedAt': FieldValue.serverTimestamp(),
         });
@@ -277,9 +324,12 @@ extension UserControllerExtensions on UserController {
     } catch (e) {
       print('❌ خطأ في تحديث صورة الملف الشخصي: $e');
       return false;
+    } finally {
+      isLoading.value = false;
     }
   }
 
+  // التقاط صورة بالكاميرا
   Future<bool> captureProfileImage() async {
     if (user.value == null) {
       print('❌ لا يوجد مستخدم محمل في الـ Controller');
@@ -287,6 +337,8 @@ extension UserControllerExtensions on UserController {
     }
 
     try {
+      isLoading.value = true;
+
       final userId = user.value!.id;
       print('🔄 جاري التقاط صورة جديدة...');
 
@@ -302,7 +354,7 @@ extension UserControllerExtensions on UserController {
 
       if (imageUrl != null) {
         // تحديث بيانات المستخدم في Firestore
-        await UserRepository.instance.updateUserFields(userId, {
+        await _userRepo.updateUserFields(userId, {
           'profileImageUrl': imageUrl,
           'updatedAt': FieldValue.serverTimestamp(),
         });
@@ -319,20 +371,25 @@ extension UserControllerExtensions on UserController {
     } catch (e) {
       print('❌ خطأ في التقاط صورة الملف الشخصي: $e');
       return false;
+    } finally {
+      isLoading.value = false;
     }
   }
 
+  // حذف صورة الملف الشخصي
   Future<bool> removeUserProfileImage() async {
     if (user.value == null) return false;
 
     try {
+      isLoading.value = true;
+
       final userId = user.value!.id;
 
       // حذف الصورة من Storage
       await ImageUploadService().deleteProfileImage(userId);
 
       // تحديث بيانات المستخدم في Firestore
-      await UserRepository.instance.updateUserFields(userId, {
+      await _userRepo.updateUserFields(userId, {
         'profileImageUrl': null,
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -346,7 +403,8 @@ extension UserControllerExtensions on UserController {
     } catch (e) {
       print('❌ خطأ في حذف صورة الملف الشخصي: $e');
       return false;
+    } finally {
+      isLoading.value = false;
     }
   }
 }
-

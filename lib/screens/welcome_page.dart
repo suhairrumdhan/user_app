@@ -25,14 +25,14 @@ class WelcomeScreen extends StatelessWidget {
                     ),
                     children: [
                       TextSpan(
-                        text: 'مرحبا بك هنا\n',
+                        text: 'مرحبا بك \n',
                         style: TextStyle(
                           fontSize: 45.0,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       TextSpan(
-                        text: 'هنا بوابتك الى الصيدليات \n',
+                        text: 'في روشيتة هنا بوابتك الى الصيدليات \n',
                         style: TextStyle(fontSize: 20.0),
                       ),
                     ],

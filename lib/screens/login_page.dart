@@ -3,67 +3,102 @@ import 'package:get/get.dart';
 import 'package:icons_plus/icons_plus.dart';
 import 'package:user_application/widgets/custom_scaffold.dart';
 import 'package:user_application/widgets/custom_text_field.dart';
-import 'package:user_application/widgets/social_sign_in_button.dart';
 import 'package:user_application/auth/auth_services.dart';
 
 // Controller للـ Login
 class LoginController extends GetxController {
   String email = '';
   String password = '';
-  bool rememberMe = false; // <-- هنا bool عادي
-  bool isLoading = false;  // <-- هنا bool عادي
-
+  var isLoading = false.obs;
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
   final authService = AuthService();
 
   void setLoading(bool value) {
-    isLoading = value;
-    update();
+    isLoading.value = value;
   }
 
-  void toggleRemember(bool value) {
-    rememberMe = value;
-    update();
+  // إضافة دالة لتنظيف الحقول
+  void clearFields() {
+    emailController.clear();
+    passwordController.clear();
+    email = '';
+    password = '';
+  }
+
+  @override
+  void onClose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.onClose();
   }
 }
 
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
 
-class LoginPage extends StatelessWidget {
-  LoginPage({super.key});
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
 
+class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final LoginController controller = Get.put(LoginController());
+  late LoginController controller;
+
+  bool showPassword = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // استخدام Get.put مع tag فريد لضمان إنشاء نسخة جديدة
+    // أو استخدام Get.find إذا كانت موجودة بالفعل
+    if (Get.isRegistered<LoginController>()) {
+      controller = Get.find<LoginController>();
+    } else {
+      controller = Get.put(LoginController());
+    }
+  }
+
+  @override
+  void dispose() {
+    // تنظيف الحقول عند مغادرة الصفحة
+    controller.clearFields();
+    // إزالة الـ Controller من الذاكرة إذا أردت
+    // Get.delete<LoginController>();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final height = MediaQuery.of(context).size.height;
 
-    return CustomScaffold(
-      child: Stack(
-        children: [
-          // الجزء العلوي الشفاف
-          Align(
-            alignment: Alignment.topCenter,
-            child: Container(height: height * 0.25, color: Colors.transparent),
-          ),
-
-          // الجزء السفلي الأبيض
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              height: height * 0.75,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-              ),
-              padding: const EdgeInsets.all(24),
-              child: SingleChildScrollView(
-                child: Form(
-                  key: _formKey,
-                  child: GetBuilder<LoginController>(
-                    builder: (controller) => Column(
+    return WillPopScope(
+      onWillPop: () async {
+        // تنظيف الحقول عند الضغط على زر الرجوع
+        controller.clearFields();
+        return true;
+      },
+      child: CustomScaffold(
+        child: Stack(
+          children: [
+            Align(
+              alignment: Alignment.topCenter,
+              child: Container(height: height * 0.25, color: Colors.transparent),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                height: height * 0.75,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+                ),
+                padding: const EdgeInsets.all(24),
+                child: SingleChildScrollView(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
                       children: [
                         const SizedBox(height: 16),
                         Text(
@@ -71,7 +106,10 @@ class LoginPage extends StatelessWidget {
                           style: Theme.of(context)
                               .textTheme
                               .headlineMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
+                              ?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF2C3E50),
+                          ),
                         ),
                         const SizedBox(height: 24),
 
@@ -86,11 +124,15 @@ class LoginPage extends StatelessWidget {
                               : null,
                         ),
 
-                        // كلمة المرور
+                        // كلمة المرور مع زر العين
                         CustomTextField(
                           controller: controller.passwordController,
                           label: "كلمة المرور",
-                          obscure: true,
+                          isPasswordField: true,
+                          showPassword: showPassword,
+                          onVisibilityToggle: () {
+                            setState(() => showPassword = !showPassword);
+                          },
                           onChanged: (value) => controller.password = value,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
@@ -102,24 +144,25 @@ class LoginPage extends StatelessWidget {
                           },
                         ),
 
-                        // تذكر كلمة المرور
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: controller.rememberMe,
-                              onChanged: (value) =>
-                                  controller.toggleRemember(value ?? false),
-                            ),
-                            const Text("تذكر كلمة المرور"),
-                          ],
-                        ),
                         const SizedBox(height: 24),
 
                         // زر تسجيل الدخول
-                        SizedBox(
+                        Obx(() => Container(
                           width: double.infinity,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF5EABD6),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF5EABD6).withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
                           child: ElevatedButton(
-                            onPressed: controller.isLoading
+                            onPressed: controller.isLoading.value
                                 ? null
                                 : () {
                               if (_formKey.currentState!.validate()) {
@@ -131,35 +174,68 @@ class LoginPage extends StatelessWidget {
                                 );
                               }
                             },
-                            child: controller.isLoading
-                                ? const CircularProgressIndicator()
-                                : const Text("تسجيل الدخول"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF5EABD6),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: controller.isLoading.value
+                                ? const SizedBox(
+                              height: 22,
+                              width: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                                : const Text(
+                              "تسجيل الدخول",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
-                        ),
+                        )),
 
                         const SizedBox(height: 20),
-                        const Divider(),
-                        const SizedBox(height: 12),
 
-                        Text(
-                          "أو تسجيل الدخول باستخدام:",
-                          style: Theme.of(context).textTheme.bodyLarge,
-                        ),
-                        const SizedBox(height: 12),
-
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SocialSignInButton(
-                              icon: const Icon(Bootstrap.google),
-                              onPressed: () => controller.authService.signInWithGoogle(
-                                context,
-                                controller.setLoading,
-                              ),
-                              color: Colors.white,
+                        // زر Google
+                        Obx(() => Container(
+                          width: double.infinity,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: ElevatedButton.icon(
+                            onPressed: controller.isLoading.value
+                                ? null
+                                : () => controller.authService.signInWithGoogle(
+                              context,
+                              controller.setLoading,
                             ),
-                          ],
-                        ),
+                            icon: const Icon(Bootstrap.google, color: Colors.red),
+                            label: const Text(
+                              "التسجيل باستخدام Google",
+                              style: TextStyle(
+                                color: Color(0xFF2C3E50),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                          ),
+                        )),
                         const SizedBox(height: 20),
                       ],
                     ),
@@ -167,20 +243,18 @@ class LoginPage extends StatelessWidget {
                 ),
               ),
             ),
-          ),
 
-          // مؤشر التحميل
-          GetBuilder<LoginController>(
-            builder: (controller) => controller.isLoading
+            // مؤشر التحميل overlay
+            Obx(() => controller.isLoading.value
                 ? Container(
               color: Colors.black54,
               child: const Center(
                 child: CircularProgressIndicator(color: Colors.white),
               ),
             )
-                : const SizedBox(),
-          ),
-        ],
+                : const SizedBox()),
+          ],
+        ),
       ),
     );
   }

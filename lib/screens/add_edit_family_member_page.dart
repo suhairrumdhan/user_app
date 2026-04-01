@@ -108,24 +108,34 @@ class _AddEditFamilyMemberPageState extends State<AddEditFamilyMemberPage> {
 
     setState(() => loading = true);
 
-    final member = FamilyMemberModel(
-      id: widget.memberId,
-      name: name.text.trim(),
-      relation: relation,
-      gender: gender,
-      dateOfBirth: dateOfBirth,
-      age: dateOfBirth != null ? getAge(dateOfBirth!) : null,
-    );
+    try {
+      final member = FamilyMemberModel(
+        id: widget.memberId,
+        name: name.text.trim(),
+        relation: relation,
+        gender: gender,
+        dateOfBirth: dateOfBirth,
+        age: dateOfBirth != null ? getAge(dateOfBirth!) : null,
+      );
 
-    if (widget.memberId == null) {
-      await controller.addMember(member);
-    } else {
-      await controller.updateMember(member);
+      if (widget.memberId == null) {
+        await controller.addMember(member);
+      } else {
+        await controller.updateMember(member);
+      }
+
+      // Reset loading state before navigation
+      if (mounted) {
+        setState(() => loading = false);
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('حدث خطأ أثناء الحفظ: ${e.toString()}');
+        setState(() => loading = false);
+      }
     }
-
-    Get.back();
   }
-
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
