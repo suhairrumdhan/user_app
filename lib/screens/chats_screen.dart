@@ -23,7 +23,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         final data = doc.data();
         return Pharmacy(
           id: doc.id,
-          name: data['name'] ?? 'صيدلية',
+          pharmacyName: data['pharmacyName'] ?? 'صيدلية',
           isOnline: data['isOnline'] ?? false,
           imageUrl: data['imageUrl'],
           address: data['address'],
@@ -185,7 +185,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                   SizedBox(
                                     width: favoriteAvatarRadius * 2.5,
                                     child: Text(
-                                      pharmacy.name,
+                                      pharmacy.pharmacyName,
                                       textAlign: TextAlign.center,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
@@ -300,7 +300,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              chat.pharmacy.name,
+                                              chat.pharmacy.pharmacyName,
                                               style: TextStyle(
                                                 fontSize: titleFontSize * 0.9,
                                                 fontWeight: FontWeight.w600,

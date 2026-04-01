@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/health_record_controller.dart';
+import '../../models/family_member_model.dart';
 
 class HealthInfoCard extends StatelessWidget {
   final IconData icon;
@@ -10,9 +11,11 @@ class HealthInfoCard extends StatelessWidget {
   final String emptyMessage;
   final Color color;
   final String fieldType;
-  final HealthRecordController controller; // من الـ parameter
+  final HealthRecordController controller;
+  final String personType; // 'user' or 'family_member'
+  final String personId;
 
-  HealthInfoCard({
+  const HealthInfoCard({
     super.key,
     required this.icon,
     required this.title,
@@ -20,9 +23,9 @@ class HealthInfoCard extends StatelessWidget {
     required this.emptyMessage,
     required this.color,
     required this.fieldType,
-    required this.controller, // أضيفي required
-
-
+    required this.controller,
+    required this.personType,
+    required this.personId,
   });
 
   @override
@@ -32,14 +35,18 @@ class HealthInfoCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
           ),
         ],
+        border: Border.all(
+          color: Colors.grey[100]!,
+          width: 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -60,12 +67,13 @@ class HealthInfoCard extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(
             icon,
             color: color,
-            size: 20,
+            size: 22,
           ),
         ),
         const SizedBox(width: 12),
@@ -74,7 +82,7 @@ class HealthInfoCard extends StatelessWidget {
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: Color(0xFF2C3E50),
           ),
         ),
       ],
@@ -111,8 +119,8 @@ class HealthInfoCard extends StatelessWidget {
                 child: Text(
                   item,
                   style: const TextStyle(
-                    fontSize: 16,
-                    color: Colors.black87,
+                    fontSize: 15,
+                    color: Color(0xFF2C3E50),
                     fontWeight: FontWeight.w500,
                   ),
                   textAlign: TextAlign.right,
@@ -126,29 +134,33 @@ class HealthInfoCard extends StatelessWidget {
   }
 
   Widget _buildEmptyState() {
-    return Text(
-      emptyMessage,
-      style: TextStyle(
-        fontSize: 16,
-        color: Colors.grey[600],
-        fontStyle: FontStyle.italic,
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Center(
+        child: Text(
+          emptyMessage,
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey[500],
+            fontStyle: FontStyle.italic,
+          ),
+        ),
       ),
-      textAlign: TextAlign.center,
     );
   }
 
   Widget _buildEditButton() {
     return Container(
       width: double.infinity,
-      height: 40,
       margin: const EdgeInsets.only(top: 8),
       child: OutlinedButton(
         onPressed: _showEditDialog,
         style: OutlinedButton.styleFrom(
           foregroundColor: color,
           side: BorderSide(color: color),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
         child: const Text(
@@ -171,33 +183,35 @@ class HealthInfoCard extends StatelessWidget {
       Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: Text(
             'تعديل $title',
             style: const TextStyle(
               fontWeight: FontWeight.bold,
+              color: Color(0xFF2C3E50),
             ),
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'أدخل العناصر مفصولة بفاصلة',
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: textController,
-                  maxLines: 4,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    hintText: 'مثال: سكري, ضغط دم, ...',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'أدخل العناصر مفصولة بفاصلة',
+                style: TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: textController,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  hintText: 'مثال: سكري, ضغط دم, حساسية القمح',
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -208,16 +222,28 @@ class HealthInfoCard extends StatelessWidget {
               onPressed: () async {
                 final newItems = controller.parseItemsFromText(textController.text);
 
-                await controller.updateHealthRecords(
-                  healthConditions: fieldType == 'healthConditions' ? newItems : null,
-                  allergies: fieldType == 'allergies' ? newItems : null,
-                  currentMedications: fieldType == 'currentMedications' ? newItems : null,
-                );
+                if (personType == 'user') {
+                  await controller.updateUserHealthRecords(
+                    healthConditions: fieldType == 'healthConditions' ? newItems : null,
+                    allergies: fieldType == 'allergies' ? newItems : null,
+                    currentMedications: fieldType == 'currentMedications' ? newItems : null,
+                  );
+                } else {
+                  await controller.updateFamilyMemberHealthRecords(
+                    memberId: personId,
+                    healthConditions: fieldType == 'healthConditions' ? newItems : null,
+                    allergies: fieldType == 'allergies' ? newItems : null,
+                    currentMedications: fieldType == 'currentMedications' ? newItems : null,
+                  );
+                }
 
                 Get.back();
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1877F2),
+                backgroundColor: const Color(0xFF5EABD6),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: const Text(
                 'حفظ',

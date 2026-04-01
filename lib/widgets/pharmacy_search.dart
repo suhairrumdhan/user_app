@@ -102,7 +102,7 @@ class PharmacySearch extends SearchDelegate<String> {
           ],
         ),
         title: Text(
-          pharmacy.name,
+          pharmacy.pharmacyName,
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Column(

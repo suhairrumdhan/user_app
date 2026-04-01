@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ لجلب البيانات من فايربيز
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
+
 import 'PharmacyHistoryPage.dart';
 import 'chats_screen.dart';
 import 'notifications_page.dart';
@@ -18,28 +22,105 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int currentSelectedIndex = 0;
+
   bool _isLocationLoading = true;
   LatLng? _currentPosition;
-  List<Map<String, dynamic>> _pharmacies = [];
+  List<Map<String, dynamic>> _pharmacies = []; // الصيدليات القريبة
+  List<Map<String, dynamic>> _allPharmacies = []; // 🔥 جميع الصيدليات
 
   List<PharmacyHistory> _searchedPharmacies = [];
   List<PharmacyHistory> _orderedPharmacies = [];
 
+  StreamSubscription<Position>? _positionStream;
+
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
-    _fetchPharmacyHistories(); // ✅ جلب البيانات من الفايربيز
+    _startLiveLocation(); // 🔥 تشغيل التحديث المباشر
+    _fetchAllPharmacies(); // 🔥 جلب جميع الصيدليات
+    _fetchPharmacyHistories();
   }
 
-  // 🔹 جلب موقع المستخدم والصيدليات القريبة
+  // ===============================
+  // 🔥 جلب جميع الصيدليات من Firebase
+  // ===============================
+  Future<void> _fetchAllPharmacies() async {
+    try {
+      final allPharmacies = await LocationUtils.fetchAllPharmacies();
+      setState(() {
+        _allPharmacies = allPharmacies;
+      });
+      debugPrint('📦 Total pharmacies loaded: ${allPharmacies.length}');
+    } catch (e) {
+      debugPrint('Error fetching all pharmacies: $e');
+    }
+  }
+
+  // ===============================
+  // 🔴 التحديث المباشر (كل 30 متر)
+  // ===============================
+  Future<void> _startLiveLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+
+    if (!serviceEnabled) {
+      await LocationDialog.showServiceDisabledDialog(context);
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+
+      if (permission == LocationPermission.denied) {
+        await LocationDialog.showPermissionDialog(context);
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      await LocationDialog.showPermissionDialog(context);
+      return;
+    }
+
+    _positionStream = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 30, // 🔥 كل 30 متر
+      ),
+    ).listen((Position position) async {
+      final current = LatLng(position.latitude, position.longitude);
+
+      final nearbyPharmacies = await LocationUtils.getNearbyPharmacies(
+        currentPosition: current,
+        radiusInKm: 4,
+      );
+
+      setState(() {
+        _currentPosition = current;
+        _pharmacies = nearbyPharmacies;
+        _isLocationLoading = false;
+      });
+    });
+  }
+
+  // ===============================
+  // 🟡 تحديث يدوي (زر)
+  // ===============================
   Future<void> _getCurrentLocation() async {
     setState(() => _isLocationLoading = true);
+
     try {
-      final position = await LocationUtils.getCurrentPosition();
+      final position = await LocationUtils.getCurrentPosition(context);
+
+      if (position == null) {
+        setState(() => _isLocationLoading = false);
+        return;
+      }
+
       final nearbyPharmacies = await LocationUtils.getNearbyPharmacies(
         currentPosition: position,
-        radiusInKm: 5,
+        radiusInKm: 4,
       );
 
       setState(() {
@@ -49,15 +130,18 @@ class _HomePageState extends State<HomePage> {
       });
     } catch (e) {
       setState(() => _isLocationLoading = false);
-      print('⚠️ خطأ في تحديد الموقع أو تحميل الصيدليات: $e');
+      print('⚠️ خطأ: $e');
     }
   }
 
-  // 🔹 جلب بيانات السجلات من Firebase Firestore
+  // ===============================
+  // 🔹 جلب بيانات Firebase للتاريخ
+  // ===============================
   Future<void> _fetchPharmacyHistories() async {
     try {
       final searchedSnapshot =
       await FirebaseFirestore.instance.collection('searched_pharmacies').get();
+
       final orderedSnapshot =
       await FirebaseFirestore.instance.collection('ordered_pharmacies').get();
 
@@ -83,7 +167,7 @@ class _HomePageState extends State<HomePage> {
         }).toList();
       });
     } catch (e) {
-      print('⚠️ خطأ في جلب بيانات الصيدليات من Firebase: $e');
+      print('⚠️ خطأ في Firebase: $e');
     }
   }
 
@@ -93,11 +177,59 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Future<void> _refreshLocation() async {
+    setState(() {
+      _isLocationLoading = true;
+    });
+
+    try {
+      // جلب الموقع الحالي
+      final position = await LocationUtils.getCurrentPosition(context);
+
+      if (position != null) {
+        // جلب الصيدليات القريبة
+        final nearbyPharmacies = await LocationUtils.getNearbyPharmacies(
+          currentPosition: position,
+          radiusInKm: 4,
+        );
+
+        setState(() {
+          _currentPosition = position;
+          _pharmacies = nearbyPharmacies;
+        });
+      } else {
+        // إذا لم يتم الحصول على الموقع
+        setState(() {
+          _pharmacies = [];
+        });
+      }
+    } catch (e) {
+      print('Error refreshing location: $e');
+      // عرض رسالة خطأ للمستخدم
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('حدث خطأ في تحديث الموقع'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLocationLoading = false;
+        });
+      }
+    }
+  }
+
   List<Widget> get pages => [
     HomeTabContent(
       currentPosition: _currentPosition,
-      pharmacies: _pharmacies,
+      pharmacies: _pharmacies, // الصيدليات القريبة فقط
+      allPharmacies: _allPharmacies, // 🔥 جميع الصيدليات
       isLoading: _isLocationLoading,
+      onRefresh: _refreshLocation,
     ),
     const ChatsScreen(),
     PharmacyHistoryPage(
@@ -109,9 +241,16 @@ class _HomePageState extends State<HomePage> {
   ];
 
   @override
+  void dispose() {
+    _positionStream?.cancel(); // 🔥 إيقاف التتبع
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: pages[currentSelectedIndex],
+
       bottomNavigationBar: CustomBottomNavigationBar(
         currentIndex: currentSelectedIndex,
         onTap: updateCurrentIndex,

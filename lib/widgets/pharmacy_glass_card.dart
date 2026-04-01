@@ -38,6 +38,10 @@ class PharmacyGlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 360;
+    final isLargeScreen = screenWidth > 600;
+
     final distance = pharmacy['distance'] != null
         ? (pharmacy['distance'] / 1000).toStringAsFixed(1)
         : '0.0';
@@ -45,246 +49,273 @@ class PharmacyGlassCard extends StatelessWidget {
     final imageUrl = pharmacy['imageUrl'] ?? '';
     final hasImage = imageUrl.isNotEmpty;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-        child: Container(
-          width: 300,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withOpacity(0.25),
-                Colors.white.withOpacity(0.1),
-                Colors.white.withOpacity(0.05),
-              ],
-            ),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.3),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header with image/icon and name
-              Row(
-                children: [
-                  // Pharmacy Image/Icon
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      image: hasImage
-                          ? DecorationImage(
-                        image: NetworkImage(imageUrl),
-                        fit: BoxFit.cover,
-                      )
-                          : null,
-                      gradient: hasImage
-                          ? null
-                          : const LinearGradient(
-                        colors: [Color(0xFF5EABD6), Color(0xFF7FCFEF)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
+    return LayoutBuilder(
+        builder: (context, constraints) {
+          return FractionallySizedBox(
+            widthFactor: 1.0,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                child: Container(
+                  padding: EdgeInsets.all(
+                    isSmallScreen ? 12 : (isLargeScreen ? 24 : 16),
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withOpacity(0.25),
+                        Colors.white.withOpacity(0.1),
+                        Colors.white.withOpacity(0.05),
                       ],
                     ),
-                    child: hasImage
-                        ? null
-                        : const Icon(
-                      Icons.local_pharmacy_rounded,
-                      color: Colors.white,
-                      size: 28,
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1.5,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
                   ),
-
-                  const SizedBox(width: 16),
-
-                  // Pharmacy Name and Status
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          pharmacy["name"] ?? "صيدلية",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            height: 1.2,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: statusColor.withOpacity(0.5),
-                              width: 1,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Header with image/icon and name
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // Pharmacy Image/Icon
+                          Container(
+                            width: isSmallScreen ? 44 : (isLargeScreen ? 60 : 52),
+                            height: isSmallScreen ? 44 : (isLargeScreen ? 60 : 52),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(
+                                isSmallScreen ? 12 : (isLargeScreen ? 20 : 16),
+                              ),
+                              image: hasImage
+                                  ? DecorationImage(
+                                image: NetworkImage(imageUrl),
+                                fit: BoxFit.cover,
+                              )
+                                  : null,
+                              gradient: hasImage
+                                  ? null
+                                  : const LinearGradient(
+                                colors: [Color(0xFF5EABD6), Color(0xFF7FCFEF)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: hasImage
+                                ? null
+                                : Icon(
+                              Icons.local_pharmacy_rounded,
+                              color: Colors.white,
+                              size: isSmallScreen ? 22 : (isLargeScreen ? 32 : 28),
                             ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _getStatusIcon(),
-                                color: statusColor,
-                                size: 14,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                workingStatus,
-                                style: TextStyle(
-                                  color: statusColor,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+
+                          SizedBox(width: isSmallScreen ? 8 : (isLargeScreen ? 20 : 12)),
+
+                          // Pharmacy Name and Status
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  pharmacy["pharmacyName"] ?? "صيدلية",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: isSmallScreen ? 16 : (isLargeScreen ? 20 : 18),
+                                    fontWeight: FontWeight.bold,
+                                    height: 1.2,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
                                 ),
-                              ),
-                            ],
+                                SizedBox(height: isSmallScreen ? 2 : 4),
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isSmallScreen ? 6 : 8,
+                                    vertical: isSmallScreen ? 2 : 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: statusColor.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: statusColor.withOpacity(0.5),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _getStatusIcon(),
+                                        color: statusColor,
+                                        size: isSmallScreen ? 12 : 14,
+                                      ),
+                                      SizedBox(width: isSmallScreen ? 2 : 4),
+                                      Flexible(
+                                        child: Text(
+                                          workingStatus,
+                                          style: TextStyle(
+                                            color: statusColor,
+                                            fontSize: isSmallScreen ? 11 : 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // Address with icon
-              Row(
-                children: [
-                  Icon(
-                    Icons.location_on_outlined,
-                    color: Colors.white.withOpacity(0.8),
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      pharmacy["address"] ?? "العنوان غير متوفر",
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 14,
-                        height: 1.4,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // Working hours info
-              if (!is24Hours) ...[
-                Row(
-                  children: [
-                    Icon(
-                      Icons.access_time_outlined,
-                      color: Colors.white.withOpacity(0.8),
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _getWorkingHoursText(),
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-              ],
-
-              const Spacer(),
-
-              // Footer with distance and phone
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Distance
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.white.withOpacity(0.2),
-                          Colors.white.withOpacity(0.1),
                         ],
                       ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.directions_car_outlined,
-                          color: Colors.white.withOpacity(0.9),
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          "$distance كم",
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
 
-                  // Phone icon (if available)
-                  if (pharmacy['phone'] != null)
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
+                      SizedBox(height: isSmallScreen ? 8 : (isLargeScreen ? 16 : 12)),
+
+                      // Address with icon
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.location_on_outlined,
+                            color: Colors.white.withOpacity(0.8),
+                            size: isSmallScreen ? 16 : (isLargeScreen ? 20 : 18),
+                          ),
+                          SizedBox(width: isSmallScreen ? 4 : 8),
+                          Expanded(
+                            child: Text(
+                              pharmacy["address"] ?? "العنوان غير متوفر",
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: isSmallScreen ? 12 : (isLargeScreen ? 16 : 14),
+                                height: 1.3, // تقليل الـ height قليلاً
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                      child: Icon(
-                        Icons.phone_outlined,
-                        color: Colors.white.withOpacity(0.9),
-                        size: 18,
+
+                      SizedBox(height: isSmallScreen ? 6 : (isLargeScreen ? 12 : 8)),
+
+                      // Working hours info
+                      if (!is24Hours) ...[
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time_outlined,
+                              color: Colors.white.withOpacity(0.8),
+                              size: isSmallScreen ? 14 : (isLargeScreen ? 18 : 16),
+                            ),
+                            SizedBox(width: isSmallScreen ? 4 : 8),
+                            Flexible(
+                              child: Text(
+                                _getWorkingHoursText(),
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.8),
+                                  fontSize: isSmallScreen ? 11 : (isLargeScreen ? 15 : 13),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: isSmallScreen ? 4 : (isLargeScreen ? 10 : 6)),
+                      ],
+
+                      // Footer with distance and phone
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Distance
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isSmallScreen ? 8 : (isLargeScreen ? 16 : 10),
+                              vertical: isSmallScreen ? 3 : (isLargeScreen ? 8 : 5), // تقليل الـ padding الرأسي
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.white.withOpacity(0.2),
+                                  Colors.white.withOpacity(0.1),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(isSmallScreen ? 8 : 12),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.directions_car_outlined,
+                                  color: Colors.white.withOpacity(0.9),
+                                  size: isSmallScreen ? 14 : (isLargeScreen ? 18 : 16),
+                                ),
+                                SizedBox(width: isSmallScreen ? 4 : 6),
+                                Text(
+                                  "$distance كم",
+                                  style: TextStyle(
+                                    fontSize: isSmallScreen ? 12 : (isLargeScreen ? 16 : 14),
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Phone icon (if available)
+                          if (pharmacy['phone'] != null)
+                            Container(
+                              padding: EdgeInsets.all(
+                                isSmallScreen ? 5 : (isLargeScreen ? 10 : 7), // تقليل الـ padding
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(
+                                  isSmallScreen ? 8 : (isLargeScreen ? 12 : 10),
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.phone_outlined,
+                                color: Colors.white.withOpacity(0.9),
+                                size: isSmallScreen ? 16 : (isLargeScreen ? 22 : 18),
+                              ),
+                            ),
+                        ],
                       ),
-                    ),
-                ],
+                    ],
+                  ),
+                ),
               ),
-            ],
-          ),
-        ),
-      ),
+            ),
+          );
+        }
     );
   }
 

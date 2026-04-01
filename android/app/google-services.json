@@ -7,6 +7,42 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:809487153088:android:271dc705bb3f6bfdbffa25",
+        "android_client_info": {
+          "package_name": "com.example.pharmacy_desktop"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "809487153088-gch7h8t2k2dk78kkhkn73bseueiu7gjj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgB3yaONGBon6k07AVpkYPv_cB0TTWYvA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "809487153088-gch7h8t2k2dk78kkhkn73bseueiu7gjj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "809487153088-1qi756tbeaqqfdbdih7dmjsj7pjcho7c.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.userApplication"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:809487153088:android:4d40d254dae4c6c5bffa25",
         "android_client_info": {
           "package_name": "com.example.user_application"

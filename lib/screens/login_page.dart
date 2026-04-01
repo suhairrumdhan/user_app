@@ -158,18 +158,6 @@ class LoginPage extends StatelessWidget {
                               ),
                               color: Colors.white,
                             ),
-                            const SizedBox(width: 16),
-                            SocialSignInButton(
-                              icon: const Icon(Bootstrap.github),
-                              onPressed: () {},
-                              color: const Color(0xFF333333),
-                            ),
-                            const SizedBox(width: 16),
-                            SocialSignInButton(
-                              icon: const Icon(Bootstrap.facebook),
-                              onPressed: () {},
-                              color: const Color(0xFF1877F2),
-                            ),
                           ],
                         ),
                         const SizedBox(height: 20),

@@ -184,7 +184,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.chat.pharmacy.name,
+                    widget.chat.pharmacy.pharmacyName,
                     style: TextStyle(
                         fontSize: titleFontSize,
                         fontWeight: FontWeight.w500

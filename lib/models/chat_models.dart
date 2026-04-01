@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Pharmacy {
   final String id;
-  final String name;
+  final String pharmacyName;
   final bool isOnline;
   final String? imageUrl;
   final double? distance;
@@ -12,7 +12,7 @@ class Pharmacy {
 
   Pharmacy({
     required this.id,
-    required this.name,
+    required this.pharmacyName,
     required this.isOnline,
     this.imageUrl,
     this.distance,
@@ -23,7 +23,7 @@ class Pharmacy {
   factory Pharmacy.fromFirestore(Map<String, dynamic> data, String id) {
     return Pharmacy(
       id: id,
-      name: data['name'] ?? 'صيدلية',
+      pharmacyName: data['pharmacyName'] ?? 'صيدلية',
       isOnline: data['isOnline'] ?? false,
       imageUrl: data['imageUrl'],
       distance: data['distance']?.toDouble(),
@@ -34,7 +34,7 @@ class Pharmacy {
 
   Map<String, dynamic> toMap() {
     return {
-      'name': name,
+      'pharmacyName': pharmacyName,
       'isOnline': isOnline,
       'imageUrl': imageUrl,
       'distance': distance,

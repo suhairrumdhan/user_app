@@ -49,7 +49,7 @@ class ChatService {
     final data = doc.data() as Map<String, dynamic>;
     return Pharmacy(
       id: doc.id,
-      name: data['name'] ?? 'صيدلية',
+      pharmacyName: data['pharmacyName'] ?? 'صيدلية',
       isOnline: data['isOnline'] ?? false,
       imageUrl: data['imageUrl'],
       address: data['address'],
@@ -214,7 +214,7 @@ class ChatService {
       'userId': currentUser.id,
       'userName': currentUser.name,
       'pharmacyId': pharmacy.id,
-      'pharmacyName': pharmacy.name,
+      'pharmacyName': pharmacy.pharmacyName,
       'pharmacyIsOnline': pharmacy.isOnline,
       'pharmacyImageUrl': pharmacy.imageUrl,
       'lastMessage': '',
@@ -298,7 +298,7 @@ class ChatService {
           id: doc.id,
           pharmacy: Pharmacy(
             id: pharmacyId,
-            name: pharmacyData?['name'] ?? 'صيدلية',
+            pharmacyName: pharmacyData?['pharmacyName'] ?? 'صيدلية',
             isOnline: pharmacyData?['isOnline'] ?? false,
             imageUrl: pharmacyData?['imageUrl'],
             address: pharmacyData?['address'],
@@ -326,7 +326,7 @@ class ChatService {
         id: doc.id,
         pharmacy: Pharmacy(
           id: data['pharmacyId'] ?? '',
-          name: data['pharmacyName'] ?? '',
+          pharmacyName: data['pharmacyName'] ?? '',
           isOnline: data['pharmacyIsOnline'] ?? false,
           imageUrl: data['pharmacyImageUrl'],
         ),
@@ -347,7 +347,7 @@ class ChatService {
 
     return Pharmacy(
       id: pharmacyId,
-      name: data['name'] ?? 'صيدلية',
+      pharmacyName: data['pharmacyName'] ?? 'صيدلية',
       isOnline: data['isOnline'] ?? false,
       imageUrl: data['imageUrl'],
       address: data['address'],

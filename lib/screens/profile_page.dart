@@ -3,9 +3,12 @@ import 'package:get/get.dart';
 import 'package:user_application/screens/profileCards/edit_profile_page.dart';
 import 'package:user_application/screens/profileCards/health_record_page.dart';
 import '../controllers/AuthController.dart';
+import '../controllers/family_controller.dart';
+import '../controllers/health_record_controller.dart';
 import '../controllers/user_controller.dart';
 import '../widgets/profile_menu_card.dart';
 import '../services/profile_image_service.dart';
+import 'family_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -200,10 +203,19 @@ class _ProfilePageState extends State<ProfilePage> {
                                 },
                               ),
                               ProfileMenuCard(
+                                icon: Icons.family_restroom,
+                                title: "أفراد العائلة",
+                                subTitle: "عرض وإدارة أفراد عائلتك ",
+                                onTap: () {
+                                  Get.to(() => FamilyPage());
+                                },
+                              ),
+                              ProfileMenuCard(
                                 icon: Icons.description_outlined,
                                 title: "الوصفات الطبية",
                                 subTitle: "عرض وإدارة وصفاتك الطبية",
                               ),
+
                               ProfileMenuCard(
                                 icon: Icons.favorite_border,
                                 title: "الأدوية السابقة",
@@ -219,21 +231,12 @@ class _ProfilePageState extends State<ProfilePage> {
                                 title: "السجل الصحي",
                                 subTitle: "تصفح بياناتك الصحية السابقة",
                                 onTap: () {
-                                  // فتح صفحة السجل الصحي عند الضغط
+                                  Get.put(FamilyController());         // أول واحد
+                                  Get.put(HealthRecordController());   // بعده
                                   Get.to(() => HealthRecordsPage());
                                 },
                               ),
-                              ProfileMenuCard(
-                                icon: Icons.security_outlined,
-                                title: "إعدادات الخصوصية",
-                                subTitle: "تحكم بمن يرى بياناتك الصحية",
-                              ),
-                              ProfileMenuCard(
-                                icon: Icons.share_outlined,
-                                title: "شارك التطبيق",
-                                subTitle: "انشر التطبيق لأصدقائك وادعمهم صحيًا",
-                              ),
-                              const SizedBox(height: 24),
+
 
                               // ===== زر تسجيل الخروج =====
                               InkWell(

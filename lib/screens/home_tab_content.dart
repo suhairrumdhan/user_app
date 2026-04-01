@@ -10,14 +10,18 @@ import 'dart:ui';
 
 class HomeTabContent extends StatefulWidget {
   final LatLng? currentPosition;
-  final List<Map<String, dynamic>> pharmacies;
+  final List<Map<String, dynamic>> pharmacies; // الصيدليات القريبة فقط
+  final List<Map<String, dynamic>> allPharmacies; // 🔥 جميع الصيدليات
   final bool isLoading;
+  final VoidCallback onRefresh;
 
   const HomeTabContent({
     super.key,
     required this.currentPosition,
     required this.pharmacies,
+    required this.allPharmacies, // 🔥 أضف هذا
     required this.isLoading,
+    required this.onRefresh,
   });
 
   @override
@@ -169,10 +173,11 @@ class _HomeTabContentState extends State<HomeTabContent> {
                           ? const Center(child: CircularProgressIndicator())
                           : MapTab(
                         currentPosition: widget.currentPosition,
-                        pharmacies: widget.pharmacies,
+                        pharmacies: widget.pharmacies, // الصيدليات القريبة
+                        allPharmacies: widget.allPharmacies, // 🔥 جميع الصيدليات
+                        onRefresh: widget.onRefresh,
                       ),
-                    ),
-                  ),
+                    ),                  ),
                 ),
               ],
             ),
@@ -184,7 +189,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
               right: 0,
               child: Center(
                 child: Container(
-                  width: screenWidth * 0.65, // تم تقليل العرض بعد إزالة زر الإعدادات
+                  width: screenWidth * 0.65,
                   height: isSmallScreen ? 70 : 80,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(40),
@@ -228,7 +233,9 @@ class _HomeTabContentState extends State<HomeTabContent> {
                               icon: Icons.family_restroom,
                               label: "العائلة",
                               color: const Color(0xFFE14434),
-                              onTap: () {},
+                              onTap: () {
+                                // TODO: Add family functionality
+                              },
                               isSmallScreen: isSmallScreen,
                             ),
 
@@ -247,7 +254,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
                               ),
                             ),
 
-                            // زر الإضافة الرئيسي (بنفس حجم الأزرار الأخرى)
+                            // زر الإضافة الرئيسي
                             _buildGlassFAB(
                               icon: Icons.add,
                               label: "رفع وصفة",
@@ -267,14 +274,49 @@ class _HomeTabContentState extends State<HomeTabContent> {
                                           _fileType = 'image';
                                           _extractedText = extractedText;
                                         });
-                                        FileUtils.showExtractedTextDialog(context, extractedText);
+                                        if (mounted) {
+                                          FileUtils.showExtractedTextDialog(context, extractedText);
+                                        }
                                       }
                                     }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Error: $e')),
+                                      );
+                                    }
                                   } finally {
-                                    setState(() => _isLoading = false);
+                                    if (mounted) setState(() => _isLoading = false);
                                   }
                                 },
-                                onPickPDF: () {},
+                                onPickPDF: () async {
+                                  setState(() => _isLoading = true);
+                                  try {
+                                    final pdfFile = await FileUtils.pickPDF();
+                                    if (pdfFile != null) {
+                                      final confirmed = await _showPreviewDialog(pdfFile, 'pdf');
+                                      if (confirmed) {
+                                        final extractedText = await FileUtils.extractTextFromPDF(pdfFile);
+                                        setState(() {
+                                          _selectedFile = pdfFile;
+                                          _fileType = 'pdf';
+                                          _extractedText = extractedText;
+                                        });
+                                        if (mounted) {
+                                          FileUtils.showExtractedTextDialog(context, extractedText);
+                                        }
+                                      }
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Error: $e')),
+                                      );
+                                    }
+                                  } finally {
+                                    if (mounted) setState(() => _isLoading = false);
+                                  }
+                                },
                               ),
                               isSmallScreen: isSmallScreen,
                             ),
@@ -286,6 +328,15 @@ class _HomeTabContentState extends State<HomeTabContent> {
                 ),
               ),
             ),
+
+            // 🔥 Loading overlay
+            if (_isLoading)
+              Container(
+                color: Colors.black54,
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
           ],
         ),
       ),
@@ -305,8 +356,8 @@ class _HomeTabContentState extends State<HomeTabContent> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: isSmallScreen ? 44 : 48, // نفس الحجم لجميع الأزرار
-            height: isSmallScreen ? 44 : 48, // نفس الحجم لجميع الأزرار
+            width: isSmallScreen ? 44 : 48,
+            height: isSmallScreen ? 44 : 48,
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
@@ -321,7 +372,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
             child: Icon(
               icon,
               color: Colors.white,
-              size: isSmallScreen ? 20 : 22, // نفس الحجم لجميع الأيقونات
+              size: isSmallScreen ? 20 : 22,
             ),
           ),
           const SizedBox(height: 4),
@@ -336,5 +387,11 @@ class _HomeTabContentState extends State<HomeTabContent> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 }
