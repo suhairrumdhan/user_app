@@ -1,0 +1,72 @@
+import 'package:get/get.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:user_application/features/profile/models/user_model.dart';
+
+class UserRepository extends GetxController {
+  static UserRepository get instance => Get.find<UserRepository>();
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  Future<void> createUser(UserModel user) async {
+    try {
+      print('🔄 جاري إنشاء مستخدم جديد: ${user.id}');
+      await _db.collection("users").doc(user.id).set(user.toJson());
+      print('✅ تم إنشاء المستخدم بنجاح في Firestore');
+    } catch (e) {
+      print('❌ خطأ في إنشاء المستخدم: $e');
+      rethrow;
+    }
+  }
+  Future<void> updateUserFields(String uid, Map<String, dynamic> data) async {
+    try {
+      print('🔄 جاري تحديث بيانات المستخدم: $uid');
+      await _db.collection("users").doc(uid).update({
+        ...data,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      print('✅ تم تحديث بيانات المستخدم بنجاح');
+    } catch (e) {
+      print('❌ خطأ في تحديث بيانات المستخدم: $e');
+      rethrow;
+    }
+  }
+  // التحقق مما إذا كان المستخدم موجود مسبقًا في Firestore
+  Future<bool> checkUserExists(String uid) async {
+    final doc = await _db.collection("users").doc(uid).get();
+    return doc.exists;
+  }
+
+  // التحقق من اكتمال المعلومات الصحية
+  Future<bool> isHealthInfoComplete(String uid) async {
+    try {
+      final doc = await _db.collection("users").doc(uid).get();
+      return doc.exists && doc.data()?['healthInfoCompleted'] == true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> saveUser(UserModel user) async {
+    try {
+      print('💾 جاري حفظ المستخدم في Firestore: ${user.id}');
+      await _db.collection("users").doc(user.id).set(
+          user.toJson(),
+          SetOptions(merge: true)  // ✅ هذا هيخلي البيانات تدمج بدل ما تستبدل
+      );
+      print('✅ تم حفظ المستخدم بنجاح في Firestore');
+    } catch (e) {
+      print('❌ خطأ في حفظ المستخدم في Firestore: $e');
+      rethrow;
+    }
+  }
+
+  // جلب بيانات المستخدم من Firestore
+  Future<UserModel?> getUser(String uid) async {
+    try {
+      final doc = await _db.collection("users").doc(uid).get();
+      return doc.exists ? UserModel.fromJson(doc.data()!, doc.id) : null;
+    } catch (e) {
+      throw "فشل في جلب بيانات المستخدم: ${e.toString()}";
+    }
+  }
+
+}
