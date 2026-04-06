@@ -1,6 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:user_application/features/search/models/matched_medicine_result.dart';
+
+import '../../search/models/pharmacy_search_result.dart';
 
 class PharmacyModel {
+  // الحقول الأساسية من PharmacyModel
   final String id;
   final String email;
   final String pharmacyName;
@@ -15,11 +19,6 @@ class PharmacyModel {
   final bool is24Hours;
   final bool isOnline;
 
-  final String address;
-  final double? latitude;
-  final double? longitude;
-
-  final List<double> locationCoordinates;
   final Map<String, dynamic> location;
   final List<String> categories;
 
@@ -32,6 +31,18 @@ class PharmacyModel {
   final DateTime? approvedDate;
   final DateTime? lastStatusUpdate;
 
+  final List<String> acceptedInsuranceCodes;
+
+  // الحقول المضافة من PharmacyDisplayModel
+  final bool isOpenNow;
+  final double distanceKm;
+  final double totalEstimatedPrice;
+  final double pharmacyScore;
+  final List<MatchedMedicineResult> matchedMedicines;
+  final List<String> missingMedicines;
+  final List<String> matchedInsuranceCodes;
+
+  // المُنشئ الرئيسي المدمج
   const PharmacyModel({
     required this.id,
     required this.email,
@@ -46,10 +57,6 @@ class PharmacyModel {
     required this.status,
     required this.is24Hours,
     required this.isOnline,
-    required this.address,
-    required this.latitude,
-    required this.longitude,
-    required this.locationCoordinates,
     required this.location,
     required this.categories,
     this.workingHours,
@@ -59,8 +66,18 @@ class PharmacyModel {
     this.updatedAt,
     this.approvedDate,
     this.lastStatusUpdate,
+    required this.acceptedInsuranceCodes,
+    // الحقول المضافة من PharmacyDisplayModel
+    this.isOpenNow = false,
+    this.distanceKm = 0.0,
+    this.totalEstimatedPrice = 0.0,
+    this.pharmacyScore = 0.0,
+    this.matchedMedicines = const [],
+    this.missingMedicines = const [],
+    this.matchedInsuranceCodes = const [],
   });
 
+  // Getters من PharmacyModel
   bool get isApproved => status.toLowerCase() == 'approved';
   bool get hasImage => imageUrl.trim().isNotEmpty;
   bool get hasPhone => phoneNumber.trim().isNotEmpty;
@@ -69,9 +86,76 @@ class PharmacyModel {
   String get displayName =>
       pharmacyName.trim().isEmpty ? 'صيدلية' : pharmacyName.trim();
 
-  String get displayAddress =>
-      address.trim().isEmpty ? 'العنوان غير متوفر' : address.trim();
+  String get address => (location['address'] ?? '').toString().trim();
 
+  String get displayAddress =>
+      address.isEmpty ? 'العنوان غير متوفر' : address;
+
+  double? get latitude {
+    final value = location['latitude'];
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
+  }
+
+  double? get longitude {
+    final value = location['longitude'];
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
+  }
+
+  List<double> get locationCoordinates {
+    if (latitude == null || longitude == null) return <double>[];
+    return [latitude!, longitude!];
+  }
+
+  // Getters المضافة من PharmacyDisplayModel
+  bool get supportsInsurance => matchedInsuranceCodes.isNotEmpty;
+  bool get hasMatchedInsurance => matchedInsuranceCodes.isNotEmpty;
+
+  String get insuranceLabel {
+    if (!hasMatchedInsurance) return 'بدون تأمين';
+    if (matchedInsuranceCodes.length == 1) return 'تأمين متوافق';
+    return 'عدة شركات متوافقة';
+  }
+
+  int get matchedCount => matchedMedicines.length;
+  int get missingCount => missingMedicines.length;
+  int get requestedCount => matchedCount + missingCount;
+
+  bool get hasFullMatch => missingMedicines.isEmpty;
+
+  bool get hasPartialMatch =>
+      matchedMedicines.isNotEmpty && missingMedicines.isNotEmpty;
+
+  double get coveragePercent {
+    if (requestedCount == 0) return 0;
+    return (matchedCount / requestedCount) * 100;
+  }
+
+  double get averageMatchScore {
+    if (matchedMedicines.isEmpty) return 0;
+    final total = matchedMedicines.fold<double>(
+      0,
+          (sum, item) => sum + item.matchScore,
+    );
+    return total / matchedMedicines.length;
+  }
+
+  String get statusLabel {
+    if (is24Hours) return '24 ساعة';
+    return isOpenNow ? 'مفتوحة الآن' : 'مغلقة الآن';
+  }
+
+  String get matchLabel => hasFullMatch ? 'تطابق كامل' : 'تطابق جزئي';
+
+  String get displayDistance => '${distanceKm.toStringAsFixed(1)} كم';
+  String get displayPrice => '${totalEstimatedPrice.toStringAsFixed(2)} د.ل';
+
+  bool get hasValidCoordinates => latitude != null && longitude != null;
+  bool get hasImageUrl => (imageUrl.trim().isNotEmpty);
+  bool get hasPhoneNumber => (phoneNumber.trim().isNotEmpty);
+
+  // Methods من PharmacyModel
   PharmacyModel copyWith({
     String? id,
     String? email,
@@ -86,10 +170,6 @@ class PharmacyModel {
     String? status,
     bool? is24Hours,
     bool? isOnline,
-    String? address,
-    double? latitude,
-    double? longitude,
-    List<double>? locationCoordinates,
     Map<String, dynamic>? location,
     List<String>? categories,
     Map<String, dynamic>? workingHours,
@@ -99,6 +179,15 @@ class PharmacyModel {
     DateTime? updatedAt,
     DateTime? approvedDate,
     DateTime? lastStatusUpdate,
+    List<String>? acceptedInsuranceCodes,
+    // الحقول المضافة
+    bool? isOpenNow,
+    double? distanceKm,
+    double? totalEstimatedPrice,
+    double? pharmacyScore,
+    List<MatchedMedicineResult>? matchedMedicines,
+    List<String>? missingMedicines,
+    List<String>? matchedInsuranceCodes,
   }) {
     return PharmacyModel(
       id: id ?? this.id,
@@ -114,10 +203,6 @@ class PharmacyModel {
       status: status ?? this.status,
       is24Hours: is24Hours ?? this.is24Hours,
       isOnline: isOnline ?? this.isOnline,
-      address: address ?? this.address,
-      latitude: latitude ?? this.latitude,
-      longitude: longitude ?? this.longitude,
-      locationCoordinates: locationCoordinates ?? this.locationCoordinates,
       location: location ?? this.location,
       categories: categories ?? this.categories,
       workingHours: workingHours ?? this.workingHours,
@@ -127,9 +212,20 @@ class PharmacyModel {
       updatedAt: updatedAt ?? this.updatedAt,
       approvedDate: approvedDate ?? this.approvedDate,
       lastStatusUpdate: lastStatusUpdate ?? this.lastStatusUpdate,
+      acceptedInsuranceCodes:
+      acceptedInsuranceCodes ?? this.acceptedInsuranceCodes,
+      // الحقول المضافة
+      isOpenNow: isOpenNow ?? this.isOpenNow,
+      distanceKm: distanceKm ?? this.distanceKm,
+      totalEstimatedPrice: totalEstimatedPrice ?? this.totalEstimatedPrice,
+      pharmacyScore: pharmacyScore ?? this.pharmacyScore,
+      matchedMedicines: matchedMedicines ?? this.matchedMedicines,
+      missingMedicines: missingMedicines ?? this.missingMedicines,
+      matchedInsuranceCodes: matchedInsuranceCodes ?? this.matchedInsuranceCodes,
     );
   }
 
+  // Factory constructor من Firestore
   factory PharmacyModel.fromFirestore(
       DocumentSnapshot<Map<String, dynamic>> doc, {
         Map<String, dynamic>? workingHours,
@@ -137,23 +233,10 @@ class PharmacyModel {
       }) {
     final data = doc.data() ?? {};
 
-    final locationMap = data['location'] is Map<String, dynamic>
-        ? Map<String, dynamic>.from(data['location'])
+    final rawLocation = data['location'];
+    final locationMap = rawLocation is Map
+        ? Map<String, dynamic>.from(rawLocation)
         : <String, dynamic>{};
-
-    final coords = _toDoubleList(data['locationCoordinates']);
-
-    final lat = _toDouble(data['latitude']) ??
-        _toDouble(locationMap['latitude']) ??
-        (coords.isNotEmpty ? coords[0] : null);
-
-    final lng = _toDouble(data['longitude']) ??
-        _toDouble(locationMap['longitude']) ??
-        (coords.length > 1 ? coords[1] : null);
-
-    final resolvedAddress = (data['address'] ?? '').toString().trim().isNotEmpty
-        ? data['address'].toString()
-        : (locationMap['address'] ?? '').toString();
 
     return PharmacyModel(
       id: doc.id,
@@ -169,10 +252,6 @@ class PharmacyModel {
       status: (data['status'] ?? 'pending').toString(),
       is24Hours: data['is24Hours'] == true,
       isOnline: data['isOnline'] == true,
-      address: resolvedAddress,
-      latitude: lat,
-      longitude: lng,
-      locationCoordinates: coords,
       location: locationMap,
       categories: _toStringList(data['categories']),
       workingHours: workingHours,
@@ -182,9 +261,36 @@ class PharmacyModel {
       updatedAt: _toDateTime(data['updatedAt']),
       approvedDate: _toDateTime(data['approvedDate']),
       lastStatusUpdate: _toDateTime(data['lastStatusUpdate']),
+      acceptedInsuranceCodes: _toStringList(data['acceptedInsuranceCodes']),
+      // القيم الافتراضية للحقول المضافة
+      isOpenNow: false,
+      distanceKm: 0.0,
+      totalEstimatedPrice: 0.0,
+      pharmacyScore: 0.0,
+      matchedMedicines: const [],
+      missingMedicines: const [],
+      matchedInsuranceCodes: const [],
     );
   }
 
+  // Factory constructor من PharmacySearchResult
+// Factory constructor من PharmacySearchResult
+  factory PharmacyModel.fromSearchResult(
+      PharmacySearchResult result, {
+        required PharmacyModel pharmacy,
+      }) {
+    return pharmacy.copyWith(
+      isOpenNow: result.isOpenNow,
+      distanceKm: result.distanceKm,
+      totalEstimatedPrice: result.totalEstimatedPrice,
+      pharmacyScore: result.pharmacyScore,
+      matchedMedicines: result.matchedMedicines,
+      missingMedicines: result.missingMedicines,
+      matchedInsuranceCodes: result.matchedInsuranceCodes,
+    );
+  }
+
+  // toMap method
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -200,10 +306,6 @@ class PharmacyModel {
       'status': status,
       'is24Hours': is24Hours,
       'isOnline': isOnline,
-      'address': address,
-      'latitude': latitude,
-      'longitude': longitude,
-      'locationCoordinates': locationCoordinates,
       'location': location,
       'categories': categories,
       'workingHours': workingHours,
@@ -213,9 +315,18 @@ class PharmacyModel {
       'updatedAt': updatedAt,
       'approvedDate': approvedDate,
       'lastStatusUpdate': lastStatusUpdate,
+      'acceptedInsuranceCodes': acceptedInsuranceCodes,
+      'isOpenNow': isOpenNow,
+      'distanceKm': distanceKm,
+      'totalEstimatedPrice': totalEstimatedPrice,
+      'pharmacyScore': pharmacyScore,
+      'matchedMedicines': matchedMedicines.map((e) => e.toMap()).toList(),
+      'missingMedicines': missingMedicines,
+      'matchedInsuranceCodes': matchedInsuranceCodes,
     };
   }
 
+  // Helper methods
   static DateTime? _toDateTime(dynamic value) {
     if (value == null) return null;
     if (value is Timestamp) return value.toDate();
@@ -225,19 +336,6 @@ class PharmacyModel {
     } catch (_) {
       return null;
     }
-  }
-
-  static double? _toDouble(dynamic value) {
-    if (value == null) return null;
-    if (value is num) return value.toDouble();
-    return double.tryParse(value.toString());
-  }
-
-  static List<double> _toDoubleList(dynamic value) {
-    if (value is List) {
-      return value.map((e) => _toDouble(e) ?? 0.0).toList();
-    }
-    return <double>[];
   }
 
   static List<String> _toStringList(dynamic value) {

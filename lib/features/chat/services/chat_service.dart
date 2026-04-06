@@ -212,12 +212,10 @@ class ChatService {
             status: 'approved',
             is24Hours: false,
             isOnline: data['pharmacyIsOnline'] ?? false,
-            address: data['pharmacyAddress'] ?? '',
-            latitude: null,
-            longitude: null,
-            locationCoordinates: const [],
+
             location: const {},
             categories: const [],
+            acceptedInsuranceCodes: const [],
           );
         }
 

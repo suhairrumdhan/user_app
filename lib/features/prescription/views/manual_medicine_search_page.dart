@@ -1,9 +1,12 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide SearchController;
 import 'package:iconsax/iconsax.dart';
 import 'package:get/get.dart';
+
 import '../../family/controllers/family_controller.dart';
 import '../../profile/controllers/user_controller.dart';
-import '../models/beneficiary_model.dart';
+import '../../search/models/medicine_search_request.dart';
+import '../../search/controllers/search_controller.dart';
+import '../../search/services/medicine_normalizer.dart';
 import '../models/beneficiary_model.dart';
 import '../models/medicine_model.dart';
 import '../widgets/beneficiary_selector_sheet.dart';
@@ -22,11 +25,22 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
   final FocusNode _medicineFocusNode = FocusNode();
   final UserController _userController = Get.find<UserController>();
   final FamilyController _familyController = Get.find<FamilyController>();
+
+  late final SearchController _searchController;
+
   final List<MedicineModel> _medicines = [];
   final Color pPrimaryColor = const Color(0xFF5EABD6);
   final Color pSecondaryColor = const Color(0xFF7BC4EA);
   final Color pLightColor = const Color(0xFFF5FBFF);
   final Color pAccentColor = const Color(0xFF4CAF50);
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = Get.isRegistered<SearchController>()
+        ? Get.find<SearchController>()
+        : Get.put(SearchController());
+  }
 
   void _addMedicine() {
     final text = _medicineController.text.trim();
@@ -53,6 +67,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
 
     _medicineFocusNode.requestFocus();
   }
+
   void _removeMedicine(int index) {
     setState(() {
       _medicines.removeAt(index);
@@ -72,6 +87,18 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
     _openBeneficiarySelector();
   }
 
+  List<MedicineSearchRequest> _buildRequestsFromMedicines() {
+    return _medicines.map((medicine) {
+      final raw = medicine.displayName.trim();
+
+      return MedicineSearchRequest(
+        rawText: raw,
+        normalizedText: MedicineNormalizer.normalize(raw),
+        strength: MedicineNormalizer.extractStrength(raw),
+        dosageForm: MedicineNormalizer.extractDosageForm(raw),
+      );
+    }).toList();
+  }
 
   @override
   void dispose() {
@@ -82,7 +109,6 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    // -- الحل الأمثل: استخدام resizeToAvoidBottomInset: false --
     return Scaffold(
       backgroundColor: pLightColor,
       appBar: AppBar(
@@ -99,14 +125,12 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
           ),
         ),
       ),
-      // الحل الأساسي: منع إعادة حجم الشاشة عند ظهور الكيبورد
       resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: SingleChildScrollView(
-                // تبسيط البادينغ لأننا لن نستخدم viewInsets.bottom بنفس الطريقة
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +144,6 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
                 ),
               ),
             ),
-            // تمرير 0 لأننا لن نستخدم viewInsets.bottom، وبدلاً من ذلك نعتمد على SingleChildScrollView
             _buildBottomAction(),
           ],
         ),
@@ -243,6 +266,13 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
         return BeneficiarySelectorSheet(
           beneficiaries: beneficiaries,
           onSelected: (beneficiary) {
+            final requests = _buildRequestsFromMedicines();
+
+            _searchController.clearAll();
+            _searchController.setSearchSource('manual');
+            _searchController.setBeneficiary(beneficiary);
+            _searchController.setRequests(requests);
+
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -252,12 +282,6 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
                 ),
               ),
             );
-
-            // TODO:
-            // هنا لاحقًا ننتقل لصفحة النتائج/الفلاتر
-            // مع تمرير:
-            // - beneficiary
-            // - _medicines
           },
         );
       },
@@ -512,7 +536,6 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
 
   Widget _buildBottomAction() {
     return Container(
-      // إزالة الاعتماد على bottomPadding وترك padding ثابت
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
       decoration: BoxDecoration(
         color: Colors.white,
