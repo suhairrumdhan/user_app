@@ -3,7 +3,12 @@ import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../app/core/utils/location_utils.dart';
+import '../../chat/services/chat_service.dart';
+import '../../chat/views/chat_detail_screen.dart';
 import '../../insurance/controllers/insurance_controller.dart';
+import '../../orders/models/order_status.dart';
+import '../../orders/views/confirm_order_sheet.dart';
+import '../../orders/views/orders_page.dart';
 import '../../pharmacy/models/pharmacy_model.dart';
 import '../../search/controllers/search_controller.dart';
 import '../../search/models/pharmacy_search_filters.dart';
@@ -13,24 +18,24 @@ import '../../search/views/search_ui_colors.dart';
 import '../models/beneficiary_model.dart';
 import '../models/medicine_model.dart';
 
-class ManualSearchResultsPage extends StatefulWidget {
+class SearchResultsPage extends StatefulWidget {
   final List<MedicineModel> medicines;
   final BeneficiaryModel beneficiary;
 
-  const ManualSearchResultsPage({
+  const SearchResultsPage({
     super.key,
     required this.medicines,
     required this.beneficiary,
   });
 
   @override
-  State<ManualSearchResultsPage> createState() =>
-      _ManualSearchResultsPageState();
+  State<SearchResultsPage> createState() =>
+      _SearchResultsPageState();
 }
 
-class _ManualSearchResultsPageState extends State<ManualSearchResultsPage> {
+class _SearchResultsPageState extends State<SearchResultsPage> {
   final SearchController controller = Get.find<SearchController>();
-
+  final ChatService _chatService = ChatService();
   late final InsuranceController? _insuranceController;
   late final PageController _pageController;
 
@@ -693,7 +698,42 @@ class _ManualSearchResultsPageState extends State<ManualSearchResultsPage> {
                 child: PharmacyResultCard(
                   pharmacy: result,
                   onTapDetails: null,
-                  onTapChat: () {},
+                  onTapChat: () async {
+                    try {
+                      // 🔥 الصحيح
+                      final chat = await _chatService.createNewChat(result);
+
+                      Get.to(() => ChatDetailScreen(chat: chat));
+                    } catch (e) {
+                      Get.snackbar(
+                        'خطأ',
+                        'فشل في فتح المحادثة',
+                        backgroundColor: Colors.red,
+                        colorText: Colors.white,
+                      );
+                    }
+                  },
+                  onTapOrder: () async {
+                    final order = await showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => ConfirmOrderSheet(
+                        pharmacy: result,
+                        beneficiary: widget.beneficiary,
+                        medicines: widget.medicines,
+                        useInsurance: useInsurance,
+                        requestSource: OrderRequestSource.manual,
+                        metadata: const {
+                          'searchFlow': 'manual',
+                        },
+                      ),
+                    );
+
+                    if (order != null) {
+                      Get.to(() => OrdersPage());
+                    }
+                  },
                 ),
               );
             },

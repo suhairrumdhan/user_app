@@ -9,11 +9,10 @@ import '../../../app/core/utils/location_utils.dart';
 import '../../../app/core/widgets/custom_bottom_navigation_bar.dart';
 import '../../chat/views/chats_screen.dart';
 import '../../notifications/views/notifications_page.dart';
+import '../../orders/views/orders_page.dart';
 import '../../profile/views/profile_page.dart';
-import '../models/pharmacy_history.dart';
 import '../models/pharmacy_model.dart';
 import 'home_tab_content.dart';
-import 'pharmacy_history_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -33,8 +32,6 @@ class _HomePageState extends State<HomePage> {
 
   double _selectedDistance = 4.0;
 
-  List<PharmacyHistory> _searchedPharmacies = [];
-  List<PharmacyHistory> _orderedPharmacies = [];
 
   StreamSubscription<Position>? _positionStream;
 
@@ -46,7 +43,6 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _initializePage() async {
     await _fetchAllPharmacies();
-    await _fetchPharmacyHistories();
     await _startLiveLocation();
   }
 
@@ -236,46 +232,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _fetchPharmacyHistories() async {
-    try {
-      final searchedSnapshot = await FirebaseFirestore.instance
-          .collection('searched_pharmacies')
-          .get();
-
-      final orderedSnapshot = await FirebaseFirestore.instance
-          .collection('ordered_pharmacies')
-          .get();
-
-      final searched = searchedSnapshot.docs.map((doc) {
-        final data = doc.data();
-        return PharmacyHistory(
-          name: data['name'] ?? 'غير معروف',
-          address: data['address'] ?? 'غير معروف',
-          date: data['date'] ?? '',
-          searchCount: data['searchCount'] ?? 0,
-        );
-      }).toList();
-
-      final ordered = orderedSnapshot.docs.map((doc) {
-        final data = doc.data();
-        return PharmacyHistory(
-          name: data['name'] ?? 'غير معروف',
-          address: data['address'] ?? 'غير معروف',
-          date: data['date'] ?? '',
-          searchCount: data['searchCount'] ?? 0,
-        );
-      }).toList();
-
-      if (!mounted) return;
-
-      setState(() {
-        _searchedPharmacies = searched;
-        _orderedPharmacies = ordered;
-      });
-    } catch (e) {
-      debugPrint('⚠️ خطأ في Firebase: $e');
-    }
-  }
 
   void updateCurrentIndex(int index) {
     setState(() {
@@ -294,10 +250,8 @@ class _HomePageState extends State<HomePage> {
       onDistanceChanged: _filterPharmaciesByDistance,
     ),
     const ChatsScreen(),
-    PharmacyHistoryPage(
-      orderedPharmacies: _orderedPharmacies,
-      searchedPharmacies: _searchedPharmacies,
-    ),
+    OrdersPage(),
+
     const NotificationsPage(),
     const ProfilePage(),
   ];

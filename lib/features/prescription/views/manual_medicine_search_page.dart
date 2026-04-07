@@ -10,7 +10,7 @@ import '../../search/services/medicine_normalizer.dart';
 import '../models/beneficiary_model.dart';
 import '../models/medicine_model.dart';
 import '../widgets/beneficiary_selector_sheet.dart';
-import 'manual_search_results_page.dart';
+import 'search_results_page.dart';
 
 class ManualMedicineSearchPage extends StatefulWidget {
   const ManualMedicineSearchPage({super.key});
@@ -276,7 +276,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ManualSearchResultsPage(
+                builder: (_) => SearchResultsPage(
                   medicines: _medicines,
                   beneficiary: beneficiary,
                 ),
