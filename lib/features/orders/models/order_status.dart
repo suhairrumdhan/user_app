@@ -58,7 +58,7 @@ extension OrderStatusX on OrderStatus {
   String get label {
     switch (this) {
       case OrderStatus.pending:
-        return 'قيد الإرسال';
+        return 'معلقة';
       case OrderStatus.reviewing:
         return 'قيد المراجعة';
       case OrderStatus.confirmed:
@@ -653,7 +653,7 @@ class OrderModel {
     required this.requestSourceLabel,
     required this.medicines,
     this.status = OrderStatus.pending,
-    this.statusLabel = 'قيد الإرسال',
+    this.statusLabel = 'معلقة',
     this.userNote,
     this.pharmacyNote,
     this.chatId,

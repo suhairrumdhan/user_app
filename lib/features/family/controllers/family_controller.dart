@@ -19,12 +19,27 @@ class FamilyController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _waitForUserAndListen();
+  }
+
+  void _waitForUserAndListen() async {
+    while (FirebaseAuth.instance.currentUser == null) {
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+
     _listenToMembers();
   }
 
   /// 🔹 الاستماع للتغييرات في الوقت الفعلي
   void _listenToMembers() {
-    familyRef.orderBy('createdAt', descending: true).snapshots().listen((snapshot) {
+    print("👤 userId: $userId");
+
+    familyRef
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+      print("📦 members count: ${snapshot.docs.length}");
+
       members.value = snapshot.docs
           .map((doc) => FamilyMemberModel.fromMap(
         doc.id,
@@ -33,7 +48,6 @@ class FamilyController extends GetxController {
           .toList();
     });
   }
-
   /// 🔹 جلب البيانات (Stream)
   Stream<List<FamilyMemberModel>> getMembers() {
     return familyRef.orderBy('createdAt', descending: true).snapshots().map(

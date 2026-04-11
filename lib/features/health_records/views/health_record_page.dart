@@ -222,6 +222,14 @@ class HealthRecordsPage extends StatelessWidget {
   // ✅ بناء سجلات أفراد العائلة
   Widget _buildFamilyMembersHealthRecords() {
     return Obx(() {
+      if (familyController.isLoading.value) {
+        return const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF5EABD6)),
+          ),
+        );
+      }
+
       final members = familyController.members;
 
       if (members.isEmpty) {
@@ -266,7 +274,6 @@ class HealthRecordsPage extends StatelessWidget {
       );
     });
   }
-
   Widget _buildFamilyMemberCard(FamilyMemberModel member) {
     return GestureDetector(
       onTap: () {

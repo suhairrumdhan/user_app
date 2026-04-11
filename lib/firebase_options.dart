@@ -41,53 +41,51 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAbRJpPIXvI11zYIF8_kg_po4XokPAX61U',
-    appId: '1:809487153088:web:5de4770b3fab8be4bffa25',
-    messagingSenderId: '809487153088',
-    projectId: 'pharmafind-fd452',
-    authDomain: 'pharmafind-fd452.firebaseapp.com',
-    storageBucket: 'pharmafind-fd452.firebasestorage.app',
-    measurementId: 'G-76Z70T8WGG',
+    apiKey: 'AIzaSyAsn2tC0UirEnjPLSgVYvLNTGY1Z9GQoi0',
+    appId: '1:657034913156:web:6cf3497ff0d637328769d1',
+    messagingSenderId: '657034913156',
+    projectId: 'pharma-apps',
+    authDomain: 'pharma-apps.firebaseapp.com',
+    storageBucket: 'pharma-apps.firebasestorage.app',
+    measurementId: 'G-VTR79DH4ZH',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCgB3yaONGBon6k07AVpkYPv_cB0TTWYvA',
-    appId: '1:809487153088:android:4d40d254dae4c6c5bffa25',
-    messagingSenderId: '809487153088',
-    projectId: 'pharmafind-fd452',
-    storageBucket: 'pharmafind-fd452.firebasestorage.app',
+    apiKey: 'AIzaSyAZuHBzN1X9kfQNSCXkWb70FbGXDT8e7V8',
+    appId: '1:657034913156:android:4339d08b7cf787fe8769d1',
+    messagingSenderId: '657034913156',
+    projectId: 'pharma-apps',
+    storageBucket: 'pharma-apps.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBj6mj7RPCf2Hy6rcEgZgwV3nRQ2WzcCLI',
-    appId: '1:809487153088:ios:2468cb266d551d59bffa25',
-    messagingSenderId: '809487153088',
-    projectId: 'pharmafind-fd452',
-    storageBucket: 'pharmafind-fd452.firebasestorage.app',
-    androidClientId: '809487153088-aod847c8p38p76b93v8pgkg03estjits.apps.googleusercontent.com',
-    iosClientId: '809487153088-1qi756tbeaqqfdbdih7dmjsj7pjcho7c.apps.googleusercontent.com',
+    apiKey: 'AIzaSyBJZQwnYz080hy58WeJILCjWyqquXAVAjg',
+    appId: '1:657034913156:ios:f3c14711ff76a45b8769d1',
+    messagingSenderId: '657034913156',
+    projectId: 'pharma-apps',
+    storageBucket: 'pharma-apps.firebasestorage.app',
+    iosClientId: '657034913156-15v4tp1u5itnjd30k70u5hiqfqp6hrp6.apps.googleusercontent.com',
     iosBundleId: 'com.example.userApplication',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyBj6mj7RPCf2Hy6rcEgZgwV3nRQ2WzcCLI',
-    appId: '1:809487153088:ios:2468cb266d551d59bffa25',
-    messagingSenderId: '809487153088',
-    projectId: 'pharmafind-fd452',
-    storageBucket: 'pharmafind-fd452.firebasestorage.app',
-    androidClientId: '809487153088-aod847c8p38p76b93v8pgkg03estjits.apps.googleusercontent.com',
-    iosClientId: '809487153088-1qi756tbeaqqfdbdih7dmjsj7pjcho7c.apps.googleusercontent.com',
+    apiKey: 'AIzaSyBJZQwnYz080hy58WeJILCjWyqquXAVAjg',
+    appId: '1:657034913156:ios:f3c14711ff76a45b8769d1',
+    messagingSenderId: '657034913156',
+    projectId: 'pharma-apps',
+    storageBucket: 'pharma-apps.firebasestorage.app',
+    iosClientId: '657034913156-15v4tp1u5itnjd30k70u5hiqfqp6hrp6.apps.googleusercontent.com',
     iosBundleId: 'com.example.userApplication',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyAbRJpPIXvI11zYIF8_kg_po4XokPAX61U',
-    appId: '1:809487153088:web:a9c9b4b2e57d8da5bffa25',
-    messagingSenderId: '809487153088',
-    projectId: 'pharmafind-fd452',
-    authDomain: 'pharmafind-fd452.firebaseapp.com',
-    storageBucket: 'pharmafind-fd452.firebasestorage.app',
-    measurementId: 'G-BCXMQXHFSM',
+    apiKey: 'AIzaSyAsn2tC0UirEnjPLSgVYvLNTGY1Z9GQoi0',
+    appId: '1:657034913156:web:d70e535499e6b2c58769d1',
+    messagingSenderId: '657034913156',
+    projectId: 'pharma-apps',
+    authDomain: 'pharma-apps.firebaseapp.com',
+    storageBucket: 'pharma-apps.firebasestorage.app',
+    measurementId: 'G-01DPFQSG0G',
   );
 
 }
