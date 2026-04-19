@@ -1,24 +1,66 @@
 class TextPreprocessor {
-  /// Normalize prescription text extracted from OCR
   static String normalize(String text) {
-    String output = text;
+    if (text.trim().isEmpty) return '';
 
-    // 1) Convert to lowercase
-    output = output.toLowerCase();
+    String output = text.trim();
 
-    // 2) Common OCR mistakes corrections
-    output = output.replaceAll('rn', 'm');  // e.g. "0rnox" -> "omox"
-    output = output.replaceAll('l0', '10'); // "l0mg" -> "10mg"
-    output = output.replaceAll('o0', '00'); // "5o0mg" -> "500mg"
+    output = output.replaceAll('×', 'x');
+    output = output.replaceAll('_', ' ');
+    output = output.replaceAll('-', ' ');
 
-    // 3) Normalize units
-    output = output.replaceAll(RegExp(r'\bmilligrams?\b'), 'mg');
-    output = output.replaceAll(RegExp(r'\bmilliliters?\b'), 'ml');
-    output = output.replaceAll(RegExp(r'\btablet(s)?\b'), 'tab');
-    output = output.replaceAll(RegExp(r'\bcapsule(s)?\b'), 'cap');
-    output = output.replaceAll(RegExp(r'\bdrops?\b'), 'drop');
+    // common OCR fixes
+    output = output.replaceAll('rn', 'm');
+    output = output.replaceAll('l0', '10');
+    output = output.replaceAll('o0', '00');
+    output = output.replaceAll('Omg', '0mg');
 
-    // 4) Remove extra spaces
+    // normalize units/forms
+    output = output.replaceAll(
+      RegExp(r'\bmilligrams?\b', caseSensitive: false),
+      'mg',
+    );
+    output = output.replaceAll(
+      RegExp(r'\bmilliliters?\b', caseSensitive: false),
+      'ml',
+    );
+    output = output.replaceAll(
+      RegExp(r'\btablet(s)?\b', caseSensitive: false),
+      'tab',
+    );
+    output = output.replaceAll(
+      RegExp(r'\bcapsule(s)?\b', caseSensitive: false),
+      'cap',
+    );
+    output = output.replaceAll(
+      RegExp(r'\bdrops?\b', caseSensitive: false),
+      'drop',
+    );
+    output = output.replaceAll(
+      RegExp(r'\bsyp\b', caseSensitive: false),
+      'syrup',
+    );
+    output = output.replaceAll(
+      RegExp(r'\bsuspension\b', caseSensitive: false),
+      'susp',
+    );
+
+    // 500mg -> 500 mg
+    output = output.replaceAllMapped(
+      RegExp(r'(\d+(?:\.\d+)?)(mg|ml|mcg|g|kg|iu)\b', caseSensitive: false),
+          (m) => '${m.group(1)} ${m.group(2)}',
+    );
+
+    // ampiclox500 -> ampiclox 500
+    output = output.replaceAll(RegExp(r'([a-zA-Z])(\d)'), r'$1 $2');
+    output = output.replaceAll(RegExp(r'(\d)([a-zA-Z])'), r'$1 $2');
+
+    // remove useless punctuation
+    output = output.replaceAll(RegExp(r'[^\w\s/+.%]'), ' ');
+
+    // normalize slash spacing
+    output = output.replaceAll(RegExp(r'\s*/\s*'), '/');
+
+    // normalize repeated spaces
     output = output.replaceAll(RegExp(r'\s+'), ' ').trim();
 
     return output;

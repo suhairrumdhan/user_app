@@ -46,7 +46,11 @@ dependencies:
   syncfusion_flutter_pdf: ^31.1.3
   flutter_launcher_icons: ^0.13.1
   intl: ^0.20.2
-
+  firebase_messaging: ^15.0.0
+  flutter_local_notifications: ^17.0.0
+  isar: ^3.1.0+1
+  isar_flutter_libs: ^3.1.0+1
+  timezone: ^0.9.4
 
   flutter_chat_core: ^2.0.0
   flutter_chat_ui: ^2.0.0
@@ -57,10 +61,10 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-
+  isar_generator: ^3.1.0+1
+  build_runner: ^2.4.13
   flutter_lints: ^6.0.0
-
+  analyzer: ^5.13.0  # This version is compatible (>=4.6.0 <6.0.0)
 
 flutter:
 

@@ -1,56 +1,50 @@
-class DrugInfo {
-  final String name;
-  final String dosage;
-  final String? route;
-  final String? frequency;
-  final String? duration;
-
-  DrugInfo({
-    required this.name,
-    required this.dosage,
-    this.route,
-    this.frequency,
-    this.duration,
-  });
-}
+import '../../search/models/medicine_search_request.dart';
+import '../models/medicine_model.dart';
 
 class DrugParser {
-  static List<DrugInfo> parse(String text) {
-    final List<DrugInfo> drugs = [];
+  static List<MedicineModel> parseMedicineModels(List<dynamic> items) {
+    return items
+        .whereType<Map>()
+        .map(
+          (item) => MedicineModel(
+        name: (item['matchedDisplayName'] ?? item['parsedBrandName'] ?? '')
+            .toString()
+            .trim(),
+        dosage: item['strength']?.toString().trim(),
+        route: item['dosageForm']?.toString().trim(),
+      ),
+    )
+        .where((medicine) => medicine.name.isNotEmpty)
+        .toList();
+  }
 
-    // تقسيم النص لأسطرغ
-    final lines = text.split('\n');
+  static List<MedicineSearchRequest> parseSearchRequests(List<dynamic> items) {
+    return items
+        .whereType<Map>()
+        .map(
+          (item) => MedicineSearchRequest(
+        rawText: (item['rawText'] ?? '').toString().trim(),
+        normalizedText: (item['normalizedText'] ?? '').toString().trim(),
+        parsedBrandName: _nullableString(item['parsedBrandName']),
+        parsedScientificName: _nullableString(item['parsedScientificName']),
+        strength: _nullableString(item['strength']),
+        dosageForm: _nullableString(item['dosageForm']),
+        quantity: _parseQuantity(item['quantity']),
+      ),
+    )
+        .where((request) => request.rawText.isNotEmpty)
+        .toList();
+  }
 
-    // Regex شامل: اسم دواء + جرعة + وحدة + route + frequency + duration
-    final regex = RegExp(
-      r'(?<name>[A-Za-z][A-Za-z0-9\s\-]+)\s+(?<dose>\d+\s?(mg|ml|g|tab|cap|drop|cream))'
-      r'(?:.*?\b(?<route>oral|local|iv|im)\b)?'
-      r'(?:.*?\b(?<freq>\d+\s?(daily|times|x\/day))\b)?'
-      r'(?:.*?\b(?<dur>\d+\s?day\(s\)?)\b)?',
-      caseSensitive: false,
-    );
+  static String? _nullableString(dynamic value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    return text;
+  }
 
-    for (var line in lines) {
-      final match = regex.firstMatch(line.trim());
-      if (match != null) {
-        final name = (match.namedGroup('name') ?? '').trim();
-        final dose = (match.namedGroup('dose') ?? '').trim();
-        final route = match.namedGroup('route')?.trim();
-        final freq = match.namedGroup('freq')?.trim();
-        final dur = match.namedGroup('dur')?.trim();
-
-        drugs.add(
-          DrugInfo(
-            name: name,
-            dosage: dose,
-            route: route,
-            frequency: freq,
-            duration: dur,
-          ),
-        );
-      }
-    }
-
-    return drugs;
+  static int _parseQuantity(dynamic value) {
+    if (value == null) return 1;
+    if (value is int) return value;
+    return int.tryParse(value.toString()) ?? 1;
   }
 }

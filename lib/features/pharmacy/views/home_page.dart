@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:get/get.dart';
+import 'package:get/get_core/src/get_main.dart';
 import 'package:latlong2/latlong.dart';
-
+import '../../../app/controllers/main_navigation_controller.dart';
 import '../../../app/core/utils/location_utils.dart';
 import '../../../app/core/widgets/custom_bottom_navigation_bar.dart';
 import '../../chat/views/chats_screen.dart';
@@ -22,7 +24,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int currentSelectedIndex = 0;
 
   bool _isLocationLoading = true;
   LatLng? _currentPosition;
@@ -32,9 +33,11 @@ class _HomePageState extends State<HomePage> {
 
   double _selectedDistance = 4.0;
 
+  final MainNavigationController _navController =
+  Get.find<MainNavigationController>();
 
   StreamSubscription<Position>? _positionStream;
-
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _pharmaciesSubscription;
   @override
   void initState() {
     super.initState();
@@ -42,24 +45,59 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _initializePage() async {
-    await _fetchAllPharmacies();
+    await _listenToPharmacies();
+    await _refreshLocation();
     await _startLiveLocation();
   }
 
-  Future<void> _fetchAllPharmacies() async {
-    try {
-      final allPharmacies = await LocationUtils.fetchAllPharmacies();
+  Future<void> _listenToPharmacies() async {
+    await _pharmaciesSubscription?.cancel();
 
-      if (!mounted) return;
+    _pharmaciesSubscription = FirebaseFirestore.instance
+        .collection('pharmacies')
+        .where('status', isEqualTo: 'approved')
+        .snapshots()
+        .listen(
+          (snapshot) {
+        final pharmacies = snapshot.docs
+            .map((doc) => PharmacyModel.fromFirestore(doc))
+            .toList();
 
-      setState(() {
-        _allPharmacies = allPharmacies;
-      });
+        final pharmaciesWithDistance = _currentPosition == null
+            ? pharmacies
+            : _attachDistances(
+          pharmacies: pharmacies,
+          currentPosition: _currentPosition!,
+        );
 
-      debugPrint('📦 Total pharmacies loaded: ${allPharmacies.length}');
-    } catch (e) {
-      debugPrint('Error fetching all pharmacies: $e');
-    }
+        final filtered = _currentPosition == null
+            ? <PharmacyModel>[]
+            : pharmaciesWithDistance.where((pharmacy) {
+          final distance = pharmacy.distance;
+          if (distance == null) return false;
+          return (distance / 1000) <= _selectedDistance;
+        }).toList()
+          ..sort(
+                (a, b) => (a.distance ?? double.infinity)
+                .compareTo(b.distance ?? double.infinity),
+          );
+
+        if (!mounted) return;
+
+        setState(() {
+          _allPharmacies = pharmaciesWithDistance;
+          _filteredPharmacies = filtered;
+          _isLocationLoading = false;
+        });
+      },
+      onError: (error) {
+        debugPrint('Error listening to pharmacies: $error');
+        if (!mounted) return;
+        setState(() {
+          _isLocationLoading = false;
+        });
+      },
+    );
   }
 
   List<PharmacyModel> _attachDistances({
@@ -84,51 +122,50 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _filterPharmaciesByDistance(double maxDistanceInKm) {
-    if (_currentPosition == null || _allPharmacies.isEmpty) {
-      setState(() {
-        _selectedDistance = maxDistanceInKm;
-        _filteredPharmacies = [];
-      });
-      return;
-    }
-
     final filtered = _allPharmacies.where((pharmacy) {
       final distance = pharmacy.distance;
       if (distance == null) return false;
 
-      final distanceInKm = distance / 1000;
-      return distanceInKm <= maxDistanceInKm;
-    }).toList();
-
-    filtered.sort(
-          (a, b) => (a.distance ?? double.infinity).compareTo(
-        b.distance ?? double.infinity,
-      ),
-    );
+      return (distance / 1000) <= maxDistanceInKm;
+    }).toList()
+      ..sort(
+            (a, b) => (a.distance ?? double.infinity)
+            .compareTo(b.distance ?? double.infinity),
+      );
 
     setState(() {
-      _filteredPharmacies = filtered;
       _selectedDistance = maxDistanceInKm;
+      _filteredPharmacies = filtered;
     });
   }
 
+
   Future<void> _updateCurrentLocationAndPharmacies(LatLng position) async {
-    final allPharmacies = await LocationUtils.fetchAllPharmacies();
     final pharmaciesWithDistance = _attachDistances(
-      pharmacies: allPharmacies,
+      pharmacies: _allPharmacies,
       currentPosition: position,
     );
+
+    final filtered = pharmaciesWithDistance.where((pharmacy) {
+      final distance = pharmacy.distance;
+      if (distance == null) return false;
+      return (distance / 1000) <= _selectedDistance;
+    }).toList()
+      ..sort(
+            (a, b) => (a.distance ?? double.infinity)
+            .compareTo(b.distance ?? double.infinity),
+      );
 
     if (!mounted) return;
 
     setState(() {
       _currentPosition = position;
       _allPharmacies = pharmaciesWithDistance;
+      _filteredPharmacies = filtered;
       _isLocationLoading = false;
     });
-
-    _filterPharmaciesByDistance(_selectedDistance);
   }
+
 
   Future<void> _startLiveLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -175,6 +212,15 @@ class _HomePageState extends State<HomePage> {
     ).listen(
           (Position position) async {
         final current = LatLng(position.latitude, position.longitude);
+
+        if (_currentPosition != null) {
+          final movedMeters = LocationUtils.calculateDistance(
+            _currentPosition!,
+            current,
+          );
+
+          if (movedMeters < 15) return;
+        }
 
         try {
           await _updateCurrentLocationAndPharmacies(current);
@@ -233,11 +279,7 @@ class _HomePageState extends State<HomePage> {
   }
 
 
-  void updateCurrentIndex(int index) {
-    setState(() {
-      currentSelectedIndex = index;
-    });
-  }
+
 
   List<Widget> get pages => [
     HomeTabContent(
@@ -259,17 +301,25 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _positionStream?.cancel();
+    _pharmaciesSubscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: pages[currentSelectedIndex],
-      bottomNavigationBar: CustomBottomNavigationBar(
-        currentIndex: currentSelectedIndex,
-        onTap: updateCurrentIndex,
-      ),
-    );
+    return Obx(() {
+      final currentIndex = _navController.currentIndex.value;
+
+      return Scaffold(
+        body: IndexedStack(
+          index: currentIndex,
+          children: pages,
+        ),
+        bottomNavigationBar: CustomBottomNavigationBar(
+          currentIndex: currentIndex,
+          onTap: _navController.changeIndex,
+        ),
+      );
+    });
   }
 }

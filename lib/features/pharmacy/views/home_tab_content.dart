@@ -3,15 +3,24 @@ import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 import 'dart:io';
 import 'package:latlong2/latlong.dart';
+import '../../prescription/models/beneficiary_model.dart';
+import '../../prescription/models/medicine_model.dart';
+import '../../prescription/services/drug_parser.dart';
+import '../../prescription/services/prescription_api_service.dart';
 import '../../prescription/views/manual_medicine_search_page.dart';
+import '../../prescription/views/search_results_page.dart';
+import '../../prescription/widgets/beneficiary_selector_sheet.dart';
+import '../../search/models/medicine_search_request.dart';
+import '../../search/services/medicine_normalizer.dart';
 import '../models/pharmacy_model.dart';
 import 'map_tab.dart';
 import '../../prescription/views/preview_screen.dart';
-import '../../../app/core/utils/file_utils.dart';
+import '../../prescription/services/file_utils.dart';
 import '../../../app/core/utils/image_source_dialog.dart';
 import '../widgets/pharmacy_glass_card.dart';
 import 'dart:ui';
 import '../../family/controllers/family_controller.dart';
+import '../../search/controllers/search_controller.dart' as app_search;
 
 class HomeTabContent extends StatefulWidget {
   final LatLng? currentPosition;
@@ -44,8 +53,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
   bool _isLoading = false;
 
   final PageController _pageController = PageController(viewportFraction: 0.78);
-  int currentIndex = 0;
-
+  final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
   final List<double> _distanceOptions = [1, 2, 3, 4, 5, 10, 15, 20];
   double _tempDistance = 4;
 
@@ -72,7 +80,125 @@ class _HomeTabContentState extends State<HomeTabContent> {
     ) ??
         false;
   }
-  @override
+
+  Future<void> _processExtractedText(String text) async {
+    try {
+      setState(() => _isLoading = true);
+
+      final response = await PrescriptionApiService.analyzePrescription(text);
+      final medicines = response['medicines'] as List<dynamic>? ?? [];
+
+      if (medicines.isEmpty) {
+        throw Exception('لم يتم العثور على أدوية في الوصفة');
+      }
+
+      final parsedMedicines = DrugParser.parseMedicineModels(medicines);
+      final parsedRequests = DrugParser.parseSearchRequests(medicines);
+
+      if (parsedMedicines.isEmpty || parsedRequests.isEmpty) {
+        throw Exception('فشل تحليل الأدوية');
+      }
+
+      final searchController =
+      Get.isRegistered<app_search.SearchController>()
+          ? Get.find<app_search.SearchController>()
+          : Get.put(app_search.SearchController());
+
+      searchController.clearAll();
+      searchController.setSearchSource('prescription');
+      searchController.setExtractedText(text);
+      searchController.setRequests(parsedRequests);
+
+      if (!mounted) return;
+
+      /// 1) مراجعة/تعديل الأدوية عبر نفس صفحة المانول
+      final reviewedMedicines = await Navigator.push<List<MedicineModel>>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ManualMedicineSearchPage(
+            initialMedicines: parsedMedicines,
+            searchSource: 'prescription',
+            isReviewMode: true,
+          ),
+        ),
+      );
+
+      if (reviewedMedicines == null || reviewedMedicines.isEmpty) {
+        throw Exception('لم يتم اعتماد أي دواء');
+      }
+
+      /// 2) إعادة بناء requests من النسخة المعدلة
+      final reviewedRequests = reviewedMedicines.map((medicine) {
+        final raw = medicine.displayName.trim();
+        return MedicineSearchRequest(
+          rawText: raw,
+          normalizedText: MedicineNormalizer.normalize(raw),
+          strength: MedicineNormalizer.extractStrength(raw),
+          dosageForm: MedicineNormalizer.extractDosageForm(raw),
+        );
+      }).toList();
+
+      searchController.clearAll();
+      searchController.setSearchSource('prescription');
+      searchController.setExtractedText(text);
+      searchController.setRequests(reviewedRequests);
+
+      /// 3) اختيار المستفيد بنفس السلكتور
+      final beneficiaries = [
+        const BeneficiaryModel(
+          id: 'self',
+          name: 'أنا',
+          relation: 'أنا',
+          type: 'self',
+        ),
+        ..._familyController.members.map(
+              (member) => BeneficiaryModel(
+            id: member.id,
+            name: member.name,
+            relation: member.relation ?? 'فرد من العائلة',
+            type: 'family',
+          ),
+        ),
+      ];
+
+      final beneficiary = await showModalBottomSheet<BeneficiaryModel>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) {
+          return BeneficiarySelectorSheet(
+            beneficiaries: beneficiaries,
+          );
+        },
+      );
+
+      if (beneficiary == null) return;
+
+      searchController.setBeneficiary(beneficiary);
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SearchResultsPage(
+            medicines: reviewedMedicines,
+            beneficiary: beneficiary,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
@@ -225,48 +351,52 @@ class _HomeTabContentState extends State<HomeTabContent> {
                       const SizedBox(height: 20),
 
                       if (!widget.isLoading && widget.pharmacies.isNotEmpty)
-                        Column(
-                          children: [
-                            SizedBox(
-                              height: isSmallScreen ? 180 : 200,
-                              child: PageView.builder(
-                                controller: _pageController,
-                                itemCount: widget.pharmacies.length,
-                                onPageChanged: (i) => setState(() => currentIndex = i),
-                                itemBuilder: (context, index) {
-                                  return AnimatedScale(
-                                    scale: currentIndex == index ? 1 : 0.88,
-                                    duration: const Duration(milliseconds: 300),
-                                    child: PharmacyGlassCard(
-                                      pharmacy: widget.pharmacies[index],
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: List.generate(
-                                widget.pharmacies.length,
-                                    (i) => AnimatedContainer(
-                                  duration: const Duration(milliseconds: 250),
-                                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                                  width: currentIndex == i ? 14 : 7,
-                                  height: 7,
-                                  decoration: BoxDecoration(
-                                    color: currentIndex == i
-                                        ? Colors.white
-                                        : Colors.white54,
-                                    borderRadius: BorderRadius.circular(12),
+                        ValueListenableBuilder<int>(
+                          valueListenable: _currentIndexNotifier,
+                          builder: (context, currentIndex, _) {
+                            return Column(
+                              children: [
+                                SizedBox(
+                                  height: isSmallScreen ? 180 : 200,
+                                  child: PageView.builder(
+                                    controller: _pageController,
+                                    itemCount: widget.pharmacies.length,
+                                    onPageChanged: (i) => _currentIndexNotifier.value = i,
+                                    itemBuilder: (context, index) {
+                                      return AnimatedScale(
+                                        scale: currentIndex == index ? 1 : 0.88,
+                                        duration: const Duration(milliseconds: 300),
+                                        child: PharmacyGlassCard(
+                                          pharmacy: widget.pharmacies[index],
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                          ],
-                        )
-                      else if (!widget.isLoading && widget.pharmacies.isEmpty)
+                                const SizedBox(height: 10),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: List.generate(
+                                    widget.pharmacies.length,
+                                        (i) => AnimatedContainer(
+                                      duration: const Duration(milliseconds: 250),
+                                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                                      width: currentIndex == i ? 14 : 7,
+                                      height: 7,
+                                      decoration: BoxDecoration(
+                                        color: currentIndex == i
+                                            ? Colors.white
+                                            : Colors.white54,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                              ],
+                            );
+                          },
+                        )                      else if (!widget.isLoading && widget.pharmacies.isEmpty)
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
@@ -367,8 +497,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
                                   _extractedText = extractedText;
                                 });
                                 if (mounted) {
-                                  FileUtils.showExtractedTextDialog(context, extractedText);
-                                }
+                                  await _processExtractedText(extractedText);                                }
                               }
                             }
                           } catch (e) {
@@ -395,8 +524,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
                                   _extractedText = extractedText;
                                 });
                                 if (mounted) {
-                                  FileUtils.showExtractedTextDialog(context, extractedText);
-                                }
+                                  await _processExtractedText(extractedText);                                }
                               }
                             }
                           } catch (e) {
@@ -494,6 +622,8 @@ class _HomeTabContentState extends State<HomeTabContent> {
   @override
   void dispose() {
     _pageController.dispose();
+    _currentIndexNotifier.dispose();
+
     super.dispose();
   }
 }

@@ -4,12 +4,12 @@ import '../models/beneficiary_model.dart';
 
 class BeneficiarySelectorSheet extends StatelessWidget {
   final List<BeneficiaryModel> beneficiaries;
-  final ValueChanged<BeneficiaryModel> onSelected;
+  final ValueChanged<BeneficiaryModel>? onSelected;
 
   const BeneficiarySelectorSheet({
     super.key,
     required this.beneficiaries,
-    required this.onSelected,
+    this.onSelected,
   });
 
   @override
@@ -36,8 +36,8 @@ class BeneficiarySelectorSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: const [
+            const Row(
+              children: [
                 Icon(Iconsax.profile_2user, color: primary),
                 SizedBox(width: 8),
                 Text(
@@ -68,8 +68,8 @@ class BeneficiarySelectorSheet extends StatelessWidget {
                 child: InkWell(
                   borderRadius: BorderRadius.circular(18),
                   onTap: () {
-                    Navigator.pop(context);
-                    onSelected(item);
+                    Navigator.pop(context, item);
+                    onSelected?.call(item);
                   },
                   child: Container(
                     padding: const EdgeInsets.all(14),
@@ -115,7 +115,11 @@ class BeneficiarySelectorSheet extends StatelessWidget {
                             ],
                           ),
                         ),
-                        const Icon(Iconsax.arrow_left_2, color: primary, size: 18),
+                        const Icon(
+                          Iconsax.arrow_left_2,
+                          color: primary,
+                          size: 18,
+                        ),
                       ],
                     ),
                   ),

@@ -34,21 +34,15 @@ class AuthService {
 
     setLoading(true);
     try {
-      print('🔄 جاري إنشاء مستخدم جديد في Authentication...');
-
-      // 1. إنشاء المستخدم في Firebase Auth
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password.trim(),
       );
 
       final uid = credential.user!.uid;
-      print('✅ تم إنشاء المستخدم في Authentication: $uid');
 
-      // 2. تحديث الاسم في Auth
       await credential.user!.updateDisplayName(name.trim());
 
-      // 3. إنشاء UserModel
       final newUser = UserModel(
         id: uid,
         name: name.trim(),
@@ -58,20 +52,9 @@ class AuthService {
         healthInfoCompleted: false,
       );
 
-      print('🔄 جاري حفظ المستخدم في Firestore...');
-
-      // 4. حفظ المستخدم في Firestore
       await FirebaseFirestore.instance.collection('users').doc(uid).set(newUser.toJson());
-
-      print('✅ تم حفظ المستخدم في Firestore بنجاح');
-
-      // 5. تحميل بيانات المستخدم في الـ Controller
       final userController = Get.find<UserController>();
       await userController.loadUser(uid);
-
-      print('✅ تم تحميل بيانات المستخدم في الـ Controller');
-
-      // 6. الانتقال إلى شاشة المعلومات الصحية
       if (!context.mounted) return;
       Get.offAll(() => const HealthInfoScreen());
 

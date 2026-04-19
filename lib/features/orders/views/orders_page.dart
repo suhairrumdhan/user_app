@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 
+import '../../../app/controllers/main_navigation_controller.dart';
 import '../../profile/controllers/user_controller.dart';
 import '../../search/views/search_ui_colors.dart';
 import '../models/order_status.dart';
@@ -9,10 +10,17 @@ import '../services/order_service.dart';
 import '../widgets/order_card.dart';
 import 'order_details_page.dart';
 
-class OrdersPage extends StatelessWidget {
-  OrdersPage({super.key});
+class OrdersPage extends StatefulWidget {
+  const OrdersPage({super.key});
 
+  @override
+  State<OrdersPage> createState() => _OrdersPageState();
+}
+
+class _OrdersPageState extends State<OrdersPage> {
   final UserController _userController = Get.find<UserController>();
+  final MainNavigationController _navController =
+  Get.find<MainNavigationController>();
 
   @override
   Widget build(BuildContext context) {
@@ -98,10 +106,8 @@ class OrdersPage extends StatelessWidget {
       ),
     );
   }
-
-
-
 }
+
 
 class _OrdersShell extends StatelessWidget {
   final Widget child;
@@ -126,7 +132,7 @@ class _OrdersShell extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Icon(
-                    Iconsax.box,
+                    Iconsax.shopping_cart4,
                     color: Colors.white,
                     size: 25,
                   ),
@@ -176,7 +182,6 @@ class _OrdersShell extends StatelessWidget {
     );
   }
 }
-
 
 class _OrdersSummaryCard extends StatelessWidget {
   final int totalOrders;

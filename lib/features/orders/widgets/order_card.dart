@@ -7,7 +7,6 @@ import '../models/order_status.dart';
 class OrderCard extends StatelessWidget {
   final OrderModel order;
   final VoidCallback? onTap;
-
   const OrderCard({
     super.key,
     required this.order,

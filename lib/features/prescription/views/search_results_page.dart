@@ -11,12 +11,15 @@ import '../../orders/views/confirm_order_sheet.dart';
 import '../../orders/views/orders_page.dart';
 import '../../pharmacy/models/pharmacy_model.dart';
 import '../../search/controllers/search_controller.dart';
+import '../../search/models/medicine_search_request.dart';
 import '../../search/models/pharmacy_search_filters.dart';
+import '../../search/services/medicine_normalizer.dart';
 import '../../search/views/pharmacy_result_card.dart';
 import '../../search/views/search_filters_card.dart';
 import '../../search/views/search_ui_colors.dart';
 import '../models/beneficiary_model.dart';
 import '../models/medicine_model.dart';
+import 'manual_medicine_search_page.dart';
 
 class SearchResultsPage extends StatefulWidget {
   final List<MedicineModel> medicines;
@@ -263,8 +266,47 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                 ),
               ),
               TextButton(
-                onPressed: () => Navigator.pop(context),
-                style: TextButton.styleFrom(
+                onPressed: () async {
+                  final editedMedicines = await Navigator.push<List<MedicineModel>>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ManualMedicineSearchPage(
+                        initialMedicines: widget.medicines,
+                        searchSource: controller.searchSource.value,
+                        isReviewMode: true,
+                      ),
+                    ),
+                  );
+
+                  if (editedMedicines == null || editedMedicines.isEmpty) return;
+
+                  final editedRequests = editedMedicines.map((medicine) {
+                    final raw = medicine.displayName.trim();
+                    return MedicineSearchRequest(
+                      rawText: raw,
+                      normalizedText: MedicineNormalizer.normalize(raw),
+                      strength: MedicineNormalizer.extractStrength(raw),
+                      dosageForm: MedicineNormalizer.extractDosageForm(raw),
+                    );
+                  }).toList();
+
+                  controller.clearAll();
+                  controller.setSearchSource(controller.searchSource.value);
+                  controller.setBeneficiary(widget.beneficiary);
+                  controller.setRequests(editedRequests);
+
+                  if (!mounted) return;
+
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SearchResultsPage(
+                        medicines: editedMedicines,
+                        beneficiary: widget.beneficiary,
+                      ),
+                    ),
+                  );
+                },                style: TextButton.styleFrom(
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 ),

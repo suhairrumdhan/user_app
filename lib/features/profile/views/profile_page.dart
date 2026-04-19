@@ -10,6 +10,7 @@ import '../controllers/user_controller.dart';
 import '../widgets/profile_menu_card.dart';
 import '../../../app/core/services/profile_image_service.dart';
 import '../../family/views/family_page.dart';
+import '../../reminders/views/reminders_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -223,9 +224,12 @@ class _ProfilePageState extends State<ProfilePage> {
                                 subTitle: "عرض قائمة الأدوية السابقة",
                               ),
                               ProfileMenuCard(
-                                icon: Icons.notifications_outlined,
-                                title: "تنبيهات الأدوية",
-                                subTitle: "إعداد مواعيد التنبيه لتناول الأدوية",
+                                icon: Icons.alarm_outlined,
+                                title: "التذكيرات الصحية",
+                                subTitle: "إدارة تنبيهات الأدوية والمواعيد الصحية",
+                                onTap: () {
+                                  Get.to(() => const RemindersPage());
+                                },
                               ),
                               ProfileMenuCard(
                                 icon: Icons.monitor_heart,

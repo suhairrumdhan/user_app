@@ -1,0 +1,4 @@
+enum ReminderType {
+  medication,
+  appointment,
+}
