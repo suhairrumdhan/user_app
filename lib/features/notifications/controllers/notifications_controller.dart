@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../../app/controllers/main_navigation_controller.dart';
 
+import '../../../app/controllers/main_navigation_controller.dart';
+import '../../previous_medications/views/add_previous_medication_from_notification_sheet.dart';
 import '../models/app_notification_model.dart';
 import '../models/notification_type.dart';
 import '../services/notifications_service.dart';
@@ -19,13 +20,12 @@ enum NotificationsFilter {
 
 class NotificationsController extends GetxController {
   final NotificationsService _service;
+
   MainNavigationController get _navController =>
       Get.find<MainNavigationController>();
 
   NotificationsController({NotificationsService? service})
       : _service = service ?? NotificationsService();
-
-
 
   final RxBool isProcessing = false.obs;
 
@@ -33,9 +33,6 @@ class NotificationsController extends GetxController {
       _service.getNotificationsStream();
 
   Stream<int> get unreadCountStream => _service.getUnreadCountStream();
-
-
-
 
   int countUnread(List<AppNotificationModel> notifications) {
     return notifications.where((n) => !n.isRead).length;
@@ -157,11 +154,16 @@ class NotificationsController extends GetxController {
 
     await navigateFromNotification(notification, context);
   }
+
   Future<void> navigateFromNotification(
       AppNotificationModel notification,
       BuildContext context,
       ) async {
-    // 🔹 1. لو عنده route جاهز (مستقبلاً)
+    if (_shouldOpenPreviousMedicationSheet(notification)) {
+      _openPreviousMedicationSheet(notification, context);
+      return;
+    }
+
     if (notification.actionRoute != null &&
         notification.actionRoute!.trim().isNotEmpty) {
       try {
@@ -175,10 +177,9 @@ class NotificationsController extends GetxController {
       }
     }
 
-    // 🔹 2. fallback على Navigator (الحالي)
     switch (notification.type) {
       case AppNotificationType.orderUpdate:
-        _navController.goOrders();
+        _navController.goOrders(orderId: notification.orderId);
         break;
 
       case AppNotificationType.pharmacyMessage:
@@ -187,12 +188,7 @@ class NotificationsController extends GetxController {
 
       case AppNotificationType.medicineReminder:
       case AppNotificationType.appointmentReminder:
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const Placeholder(),
-          ),
-        );
+        _navController.goNotifications();
         break;
 
       case AppNotificationType.adminMessage:
@@ -201,5 +197,58 @@ class NotificationsController extends GetxController {
         _navController.goNotifications();
         break;
     }
+  }
+
+  bool _shouldOpenPreviousMedicationSheet(AppNotificationModel notification) {
+    if (notification.type != AppNotificationType.orderUpdate) {
+      return false;
+    }
+
+    if (!_hasMinimumPreviousMedicationContext(notification)) {
+      return false;
+    }
+
+    final status = _normalizeStatus(notification.extraData['status']);
+    final statusLabel = _normalizeStatus(notification.extraData['statusLabel']);
+    final canAddFlag =
+        notification.extraData['canAddToMedicationHistory'] == true;
+
+    final delivered = status == 'delivered' ||
+        status == 'completed_delivery' ||
+        statusLabel == 'تم الاستلام' ||
+        statusLabel == 'تم التسليم' ||
+        statusLabel == 'delivered';
+
+    return delivered || canAddFlag;
+  }
+
+  bool _hasMinimumPreviousMedicationContext(AppNotificationModel notification) {
+    final hasOrderId = (notification.orderId ?? '').trim().isNotEmpty;
+    final hasBeneficiaryId =
+        (notification.beneficiaryId ?? '').trim().isNotEmpty;
+    final medicines = notification.extraData['deliveredMedicines'];
+
+    final hasMedicines = medicines is List && medicines.isNotEmpty;
+
+    return hasOrderId && hasBeneficiaryId && hasMedicines;
+  }
+
+  String _normalizeStatus(dynamic value) {
+    if (value == null) return '';
+    return value.toString().trim().toLowerCase();
+  }
+
+  void _openPreviousMedicationSheet(
+      AppNotificationModel notification,
+      BuildContext context,
+      ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddPreviousMedicationFromNotificationSheet(
+        notification: notification,
+      ),
+    );
   }
 }

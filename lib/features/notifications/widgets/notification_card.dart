@@ -172,15 +172,33 @@ class NotificationCard extends StatelessWidget {
 
   static String? _buildSecondaryLabel(AppNotificationModel notification) {
     final beneficiary = notification.beneficiaryName?.trim();
-    final statusLabel = notification.extraData['statusLabel']?.toString().trim();
+    final status = notification.extraData['status']?.toString().trim().toLowerCase();
+    final statusLabel =
+    notification.extraData['statusLabel']?.toString().trim();
+    final canAdd =
+        notification.extraData['canAddToMedicationHistory'] == true;
 
     if (notification.type == AppNotificationType.orderUpdate) {
+      final isDelivered = status == 'delivered' ||
+          status == 'completed_delivery' ||
+          statusLabel == 'تم الاستلام' ||
+          statusLabel == 'تم التسليم';
+
+      if (isDelivered || canAdd) {
+        if (beneficiary != null && beneficiary.isNotEmpty) {
+          return '$beneficiary • إضافة إلى الأدوية السابقة';
+        }
+        return 'إضافة إلى الأدوية السابقة';
+      }
+
       if (beneficiary != null && beneficiary.isNotEmpty) {
         return beneficiary;
       }
+
       if (statusLabel != null && statusLabel.isNotEmpty) {
         return statusLabel;
       }
+
       return null;
     }
 
@@ -192,8 +210,7 @@ class NotificationCard extends StatelessWidget {
     }
 
     return null;
-  }
-}
+  }}
 
 class _StatusStripe extends StatelessWidget {
   final Color color;

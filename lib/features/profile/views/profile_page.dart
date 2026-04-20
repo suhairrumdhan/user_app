@@ -6,6 +6,7 @@ import '../../auth/controllers/auth_controller.dart';
 import '../../family/controllers/family_controller.dart';
 import '../../health_records/controllers/health_record_controller.dart';
 import '../../insurance/views/insurance_page.dart';
+import '../../previous_medications/views/previous_medications_page.dart';
 import '../controllers/user_controller.dart';
 import '../widgets/profile_menu_card.dart';
 import '../../../app/core/services/profile_image_service.dart';
@@ -219,9 +220,12 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
 
                               ProfileMenuCard(
-                                icon: Icons.favorite_border,
+                                icon: Icons.history_outlined,
                                 title: "الأدوية السابقة",
-                                subTitle: "عرض قائمة الأدوية السابقة",
+                                subTitle: "سجل الأدوية السابقة للمستخدم وأفراد العائلة وربطها بالتذكيرات",
+                                onTap: () {
+                                  Get.to(() => const PreviousMedicationsPage());
+                                },
                               ),
                               ProfileMenuCard(
                                 icon: Icons.alarm_outlined,
