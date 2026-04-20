@@ -35,6 +35,7 @@ class SearchResultsPage extends StatefulWidget {
   @override
   State<SearchResultsPage> createState() => _SearchResultsPageState();
 }
+
 typedef OnWidgetSizeChange = void Function(Size size);
 
 class MeasureSize extends StatefulWidget {
@@ -68,9 +69,11 @@ class _MeasureSizeState extends State<MeasureSize> {
     return widget.child;
   }
 }
+
 class _SearchResultsPageState extends State<SearchResultsPage> {
   final SearchController controller = Get.find<SearchController>();
   final ChatService _chatService = ChatService();
+
   late final PageController _pageController;
   final Map<int, double> _cardHeights = {};
   double _currentCardHeight = 450;
@@ -108,6 +111,12 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  String _buildRequestKey(String raw) {
+    final normalized = MedicineNormalizer.normalize(raw);
+    final safe = normalized.isNotEmpty ? normalized : raw.trim().toUpperCase();
+    return '${safe}_${DateTime.now().microsecondsSinceEpoch}';
   }
 
   Future<void> _runSearch() async {
@@ -193,7 +202,9 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
 
     final editedRequests = editedMedicines.map((medicine) {
       final raw = medicine.displayName.trim();
+
       return MedicineSearchRequest(
+        requestKey: _buildRequestKey(raw),
         rawText: raw,
         normalizedText: MedicineNormalizer.normalize(raw),
         strength: MedicineNormalizer.extractStrength(raw),
@@ -224,12 +235,12 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
 
   void _handleAlternativeSelection({
     required String pharmacyId,
-    required String requestedName,
+    required String requestKey,
     required MatchedMedicineResult newSelection,
   }) {
     controller.replaceMatchedMedicine(
       pharmacyId: pharmacyId,
-      requestedName: requestedName,
+      requestKey: requestKey,
       newSelection: newSelection,
     );
 
@@ -429,8 +440,7 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
               });
             },
             child: Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
                   Container(
@@ -802,7 +812,6 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                       builder: (_) => ConfirmOrderSheet(
                         pharmacy: result,
                         beneficiary: widget.beneficiary,
-                        medicines: widget.medicines,
                         useInsurance: useInsurance,
                         requestSource: OrderRequestSource.manual,
                         metadata: const {
@@ -823,7 +832,6 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
       ],
     );
   }
-
 
   Widget _buildBottomActionBar() {
     return Container(

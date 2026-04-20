@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:get/get_core/src/get_main.dart';
-import 'package:get/get_navigation/src/snackbar/snackbar.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../search/views/search_ui_colors.dart';
@@ -15,6 +13,12 @@ class OrderDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final estimatedTotal = order.estimatedTotalPrice ??
+        order.medicines.fold<double>(
+          0,
+              (sum, item) => sum + item.lineTotal,
+        );
+
     return Scaffold(
       backgroundColor: SearchUiColors.primary,
       body: Column(
@@ -44,8 +48,6 @@ class OrderDetailsPage extends StatelessWidget {
               ),
             ),
           ),
-
-          /// BODY
           Expanded(
             child: Container(
               width: double.infinity,
@@ -64,6 +66,11 @@ class OrderDetailsPage extends StatelessWidget {
                     children: [
                       _row('الاسم', order.pharmacy.pharmacyName),
                       _row('العنوان', order.pharmacy.address ?? 'غير متوفر'),
+                      if (order.pharmacy.distanceKm != null)
+                        _row(
+                          'المسافة',
+                          '${order.pharmacy.distanceKm!.toStringAsFixed(1)} كم',
+                        ),
                     ],
                   ),
                   _section(
@@ -71,22 +78,38 @@ class OrderDetailsPage extends StatelessWidget {
                     icon: Iconsax.profile_circle,
                     children: [
                       _row('الاسم', order.beneficiary.name),
-                      _row('الصفة', order.beneficiary.relationLabel ?? ''),
+                      _row(
+                        'الصفة',
+                        order.beneficiary.relationLabel ??
+                            (order.beneficiary.isSelf ? 'أنا' : 'فرد من العائلة'),
+                      ),
+                      _row(
+                        'التأمين',
+                        order.containsInsurance ? 'متضمن' : 'غير متضمن',
+                      ),
                     ],
                   ),
                   _section(
                     title: 'الأدوية',
                     icon: Iconsax.box,
                     children: order.medicines
-                        .map((e) => _row('دواء', e.requestedName))
+                        .map((e) => _medicineRow(e))
                         .toList(),
                   ),
                   _section(
-                    title: 'الحالة',
+                    title: 'الحالة والملخص',
                     icon: Iconsax.timer_1,
                     children: [
-                      _row('الحالة الحالية', order.statusLabel),
-                      _row('نوع الطلب', order.requestSourceLabel),
+                      _row('حالة الطلب', order.statusLabel),
+                      _row('عدد العناصر', '${order.totalItemsCount}'),
+                      _row(
+                        'السعر ',
+                        estimatedTotal > 0
+                            ? '${estimatedTotal.toStringAsFixed(2)} د.ل'
+                            : 'غير محدد',
+                      ),
+                      if (order.userNote?.trim().isNotEmpty == true)
+                        _row('ملاحظاتك', order.userNote!.trim()),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -136,14 +159,18 @@ class OrderDetailsPage extends StatelessWidget {
 
   Widget _row(String title, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '$title: ',
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              color: Colors.grey,
+          SizedBox(
+            width: 110,
+            child: Text(
+              '$title:',
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.grey,
+              ),
             ),
           ),
           Expanded(
@@ -151,6 +178,36 @@ class OrderDetailsPage extends StatelessWidget {
               value,
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _medicineRow(OrderMedicineItem item) {
+    final matchedName = item.matchedMedicineName?.trim();
+    final hasMatched = matchedName != null && matchedName.isNotEmpty;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: SearchUiColors.light,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: SearchUiColors.primary.withOpacity(0.08),
+        ),
+      ),
+      child: Column(
+        children: [
+          if (hasMatched)
+            _row(' العنصر', matchedName),
+          _row('الكمية', '${item.quantity}'),
+          _row(
+            'السعر',
+            item.estimatedPrice != null && item.estimatedPrice! > 0
+                ? '${item.estimatedPrice!.toStringAsFixed(2)} د.ل'
+                : 'غير محدد',
           ),
         ],
       ),
@@ -189,6 +246,7 @@ class OrderDetailsPage extends StatelessWidget {
       await _cancelOrder(context);
     }
   }
+
   Widget _buildCancelButton(BuildContext context) {
     final canCancel = order.status != OrderStatus.completed &&
         order.status != OrderStatus.cancelled;
@@ -213,10 +271,11 @@ class OrderDetailsPage extends StatelessWidget {
       ),
     );
   }
+
   Future<void> _cancelOrder(BuildContext context) async {
     try {
       await OrderService.instance.updateOrderStatus(
-        orderId: order.id!,
+        orderId: order.id,
         newStatus: OrderStatus.cancelled,
         changedById: order.user.userId,
         changedByType: 'user',
@@ -225,7 +284,7 @@ class OrderDetailsPage extends StatelessWidget {
 
       if (!context.mounted) return;
 
-      Navigator.pop(context); // يرجع لصفحة الطلبات
+      Navigator.pop(context);
 
       Get.snackbar(
         'تم الإلغاء',

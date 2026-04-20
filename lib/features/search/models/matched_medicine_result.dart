@@ -1,4 +1,5 @@
 class MatchedMedicineResult {
+  final String? _requestKey;
   final String requestedName;
   final String? imageUrl;
   final List<MatchedMedicineResult> similarMatches;
@@ -19,7 +20,8 @@ class MatchedMedicineResult {
   final double matchScore;
   final String matchType;
 
-  const MatchedMedicineResult({
+  MatchedMedicineResult({
+    String? requestKey,
     required this.requestedName,
     this.imageUrl,
     this.similarMatches = const [],
@@ -36,13 +38,32 @@ class MatchedMedicineResult {
     this.isAvailable = false,
     required this.matchScore,
     required this.matchType,
-  });
+  }) : _requestKey = requestKey;
+
+  String get requestKey {
+    final value = _requestKey?.trim();
+    if (value != null && value.isNotEmpty) {
+      return value;
+    }
+
+    final requested = requestedName.trim();
+    if (requested.isNotEmpty) {
+      return requested.toUpperCase();
+    }
+
+    final matched = matchedMedicineName.trim();
+    if (matched.isNotEmpty) {
+      return matched.toUpperCase();
+    }
+
+    return '${pharmacyId}_${matchedMedicineId}'.toUpperCase();
+  }
 
   bool get isStrongMatch => matchScore >= 80;
 
-
   Map<String, dynamic> toMap() {
     return {
+      'requestKey': requestKey,
       'requestedName': requestedName,
       'imageUrl': imageUrl,
       'similarMatches': similarMatches.map((e) => e.toMap()).toList(),
@@ -62,8 +83,8 @@ class MatchedMedicineResult {
     };
   }
 
-
   MatchedMedicineResult copyWith({
+    String? requestKey,
     String? requestedName,
     String? pharmacyId,
     String? matchedMedicineId,
@@ -82,6 +103,7 @@ class MatchedMedicineResult {
     List<MatchedMedicineResult>? similarMatches,
   }) {
     return MatchedMedicineResult(
+      requestKey: requestKey ?? this.requestKey,
       requestedName: requestedName ?? this.requestedName,
       pharmacyId: pharmacyId ?? this.pharmacyId,
       matchedMedicineId: matchedMedicineId ?? this.matchedMedicineId,
@@ -102,8 +124,10 @@ class MatchedMedicineResult {
       similarMatches: similarMatches ?? this.similarMatches,
     );
   }
+
   factory MatchedMedicineResult.fromMap(Map<String, dynamic> map) {
     return MatchedMedicineResult(
+      requestKey: map['requestKey']?.toString(),
       requestedName: map['requestedName']?.toString() ?? '',
       imageUrl: map['imageUrl']?.toString(),
       similarMatches: (map['similarMatches'] as List<dynamic>? ?? [])
@@ -113,21 +137,29 @@ class MatchedMedicineResult {
       matchedMedicineId: map['matchedMedicineId']?.toString() ?? '',
       matchedMedicineName: map['matchedMedicineName']?.toString() ?? '',
       matchedScientificName: map['matchedScientificName']?.toString(),
-      price: (map['price'] ?? 0.0).toDouble(),
-      isAlternative: map['isAlternative'] ?? false,
-      soldByPiece: map['soldByPiece'] ?? false,
+      price: ((map['price'] ?? 0.0) as num).toDouble(),
+      isAlternative: map['isAlternative'] == true,
+      soldByPiece: map['soldByPiece'] == true,
       unit: map['unit']?.toString(),
-      availableQuantity: map['availableQuantity'] ?? 0,
-      availablePieceQuantity: map['availablePieceQuantity'] ?? 0,
-      isAvailable: map['isAvailable'] ?? false,
-      matchScore: (map['matchScore'] ?? 0.0).toDouble(),
+      availableQuantity: _toInt(map['availableQuantity']),
+      availablePieceQuantity: _toInt(map['availablePieceQuantity']),
+      isAvailable: map['isAvailable'] == true,
+      matchScore: ((map['matchScore'] ?? 0.0) as num).toDouble(),
       matchType: map['matchType']?.toString() ?? '',
     );
+  }
+
+  static int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
   }
 
   @override
   String toString() {
     return 'MatchedMedicineResult('
+        'requestKey: $requestKey, '
         'requestedName: $requestedName, '
         'pharmacyId: $pharmacyId, '
         'matchedMedicineId: $matchedMedicineId, '

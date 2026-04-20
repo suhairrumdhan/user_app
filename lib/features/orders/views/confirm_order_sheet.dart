@@ -4,7 +4,7 @@ import 'package:iconsax/iconsax.dart';
 
 import '../../pharmacy/models/pharmacy_model.dart';
 import '../../prescription/models/beneficiary_model.dart';
-import '../../prescription/models/medicine_model.dart';
+import '../../search/models/matched_medicine_result.dart';
 import '../../search/views/search_ui_colors.dart';
 import '../models/order_status.dart';
 import '../services/order_service.dart';
@@ -12,7 +12,6 @@ import '../services/order_service.dart';
 class ConfirmOrderSheet extends StatefulWidget {
   final PharmacyModel pharmacy;
   final BeneficiaryModel beneficiary;
-  final List<MedicineModel> medicines;
   final bool useInsurance;
   final OrderRequestSource requestSource;
   final Map<String, dynamic>? metadata;
@@ -24,7 +23,6 @@ class ConfirmOrderSheet extends StatefulWidget {
     super.key,
     required this.pharmacy,
     required this.beneficiary,
-    required this.medicines,
     required this.useInsurance,
     required this.requestSource,
     this.metadata,
@@ -41,11 +39,6 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
   final TextEditingController _noteController = TextEditingController();
   bool _isSubmitting = false;
   late final List<_SelectableMedicineItem> _availableMedicines;
-  @override
-  void dispose() {
-    _noteController.dispose();
-    super.dispose();
-  }
 
   @override
   void initState() {
@@ -53,33 +46,34 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
     _availableMedicines = _buildAvailableMedicines();
   }
 
-  List<_SelectableMedicineItem> _buildAvailableMedicines() {
-    final matchedRequestedNames = widget.pharmacy.matchedMedicines
-        .map((e) => e.requestedName.trim().toLowerCase())
-        .toSet();
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
+  }
 
-    return widget.medicines
-        .where(
-          (medicine) => matchedRequestedNames.contains(
-        medicine.displayName.trim().toLowerCase(),
-      ),
-    )
+  List<_SelectableMedicineItem> _buildAvailableMedicines() {
+    return widget.pharmacy.matchedMedicines
         .map(
-          (medicine) => _SelectableMedicineItem(
-        medicine: medicine,
+          (matched) => _SelectableMedicineItem(
+        match: matched,
         isSelected: true,
+        quantity: 1,
       ),
     )
         .toList();
   }
 
-  List<MedicineModel> get _selectedMedicines => _availableMedicines
-      .where((item) => item.isSelected)
-      .map((item) => item.medicine)
+  List<_SelectableMedicineItem> get _selectedItems => _availableMedicines
+      .where((item) => item.isSelected && item.quantity > 0)
       .toList();
 
-  bool get _hasSelectedMedicines => _selectedMedicines.isNotEmpty;
+  bool get _hasSelectedMedicines => _selectedItems.isNotEmpty;
 
+  double get _selectedEstimatedTotal => _selectedItems.fold<double>(
+    0,
+        (sum, item) => sum + (item.match.price * item.quantity),
+  );
 
   Future<void> _submitOrder() async {
     if (_isSubmitting) return;
@@ -95,15 +89,24 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
       );
       return;
     }
+
     setState(() {
       _isSubmitting = true;
     });
 
     try {
+      final selectedMatches = _selectedItems.map((e) => e.match).toList();
+
+      final quantitiesByMatchedMedicineId = <String, int>{
+        for (final item in _selectedItems)
+          item.match.matchedMedicineId: item.quantity,
+      };
+
       final order = await OrderService.instance.createOrder(
         pharmacy: widget.pharmacy,
         beneficiary: widget.beneficiary,
-        medicines: _selectedMedicines,
+        selectedMatches: selectedMatches,
+        quantitiesByMatchedMedicineId: quantitiesByMatchedMedicineId,
         useInsurance: widget.useInsurance,
         requestSource: widget.requestSource,
         userNote: _noteController.text.trim().isEmpty
@@ -116,6 +119,7 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
           ...?widget.metadata,
           'sourceLabel': widget.requestSource.label,
           'createdFromSheet': true,
+          'selectedItemsCount': _selectedItems.length,
         },
       );
 
@@ -151,11 +155,6 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
     }
   }
 
-  String get _requestSourceLabel {
-    return widget.requestSource == OrderRequestSource.manual
-        ? 'بحث يدوي'
-        : 'وصفة طبية';
-  }
 
   String get _insuranceLabel {
     return widget.useInsurance ? 'مع التأمين' : 'بدون تأمين';
@@ -224,7 +223,7 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
                           children: [
                             _sectionHeader(
                               icon: Iconsax.hospital,
-                              title: 'الصيدلية المختارة',
+                              title: 'الصيدلية ',
                             ),
                             const SizedBox(height: 14),
                             _infoRow(
@@ -240,11 +239,6 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
                             _infoRow(
                               title: 'الحالة',
                               value: widget.pharmacy.statusLabel,
-                            ),
-                            const SizedBox(height: 10),
-                            _infoRow(
-                              title: 'السعر التقديري',
-                              value: widget.pharmacy.displayPrice,
                             ),
                             if (widget.pharmacy.distanceKm > 0) ...[
                               const SizedBox(height: 10),
@@ -274,18 +268,16 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
                             const SizedBox(height: 10),
                             _infoRow(
                               title: 'الصفة',
-                              value: (widget.beneficiary.relation?.trim().isNotEmpty ==
+                              value: (widget.beneficiary.relation
+                                  ?.trim()
+                                  .isNotEmpty ==
                                   true)
                                   ? widget.beneficiary.relation!.trim()
                                   : (widget.beneficiary.isSelf
                                   ? 'أنا'
                                   : 'فرد من العائلة'),
                             ),
-                            const SizedBox(height: 10),
-                            _infoRow(
-                              title: 'نوع الطلب',
-                              value: _requestSourceLabel,
-                            ),
+
                             const SizedBox(height: 10),
                             _infoRow(
                               title: 'التأمين',
@@ -301,12 +293,12 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
                           children: [
                             _sectionHeader(
                               icon: Iconsax.box,
-                              title: 'الأدوية المتوفرة للطلب',
-                              trailing: _countBadge(_selectedMedicines.length),
+                              title: 'الأدوية التي تم تأكيدها',
+                              trailing: _countBadge(_selectedItems.length),
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'تم عرض الأدوية المتوفرة فقط، ويمكنك إلغاء أي دواء لا تريدينه.',
+                              'يمكنك تعديل الكمية أو إلغاء أي عنصر قبل الإرسال..',
                               style: TextStyle(
                                 color: Colors.grey.shade600,
                                 fontSize: 12.5,
@@ -340,42 +332,65 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
 
                                 return Padding(
                                   padding: EdgeInsets.only(
-                                    bottom: index == _availableMedicines.length - 1 ? 0 : 10,
+                                    bottom: index == _availableMedicines.length - 1
+                                        ? 0
+                                        : 10,
                                   ),
                                   child: _selectableMedicineTile(
                                     index: index + 1,
                                     item: item,
-                                    onChanged: (value) {
+                                    onToggle: (value) {
                                       setState(() {
-                                        item.isSelected = value ?? false;
+                                        item.isSelected = value;
+                                        if (!item.isSelected) {
+                                          item.quantity = 1;
+                                        }
+                                      });
+                                    },
+                                    onIncrease: () {
+                                      setState(() {
+                                        item.quantity++;
+                                      });
+                                    },
+                                    onDecrease: () {
+                                      setState(() {
+                                        if (item.quantity > 1) {
+                                          item.quantity--;
+                                        }
                                       });
                                     },
                                   ),
                                 );
                               }),
-                            if (widget.pharmacy.missingMedicines.isNotEmpty) ...[
-                              const SizedBox(height: 14),
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.withOpacity(0.06),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: Colors.red.withOpacity(0.12),
-                                  ),
-                                ),
-                                child: Text(
-                                  'أدوية غير متوفرة: ${widget.pharmacy.missingMedicines.join('، ')}',
-                                  style: const TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.red,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ),
-                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _sectionCard(
+                        child: Column(
+                          children: [
+                            _sectionHeader(
+                              icon: Iconsax.money_4,
+                              title: 'الملخص',
+                            ),
+                            const SizedBox(height: 14),
+                            _infoRow(
+                              title: 'العناصر ',
+                              value: '${_selectedItems.length}',
+                            ),
+                            const SizedBox(height: 10),
+                            _infoRow(
+                              title: 'إجمالي القطع',
+                              value:
+                              '${_selectedItems.fold<int>(0, (sum, item) => sum + item.quantity)}',
+                            ),
+                            const SizedBox(height: 10),
+                            _infoRow(
+                              title: 'السعر ',
+                              value: _selectedEstimatedTotal > 0
+                                  ? '${_selectedEstimatedTotal.toStringAsFixed(2)} د.ل'
+                                  : 'غير محدد',
+                            ),
                           ],
                         ),
                       ),
@@ -385,30 +400,32 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _sectionHeader(
-                              icon: Iconsax.note_1,
-                              title: 'ملاحظة إضافية',
+                              icon: Iconsax.note_2,
+                              title: 'ملاحظات إضافية',
                             ),
                             const SizedBox(height: 14),
                             TextField(
                               controller: _noteController,
-                              maxLines: 4,
                               minLines: 3,
+                              maxLines: 5,
                               decoration: InputDecoration(
                                 hintText:
-                                'أضيفي أي ملاحظة تريدين إيصالها للصيدلية',
+                                'أضف أي ملاحظات مهمة للصيدلية مثل وقت الاستلام أو تفاصيل إضافية...',
                                 filled: true,
                                 fillColor: SearchUiColors.light,
                                 contentPadding: const EdgeInsets.all(14),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(16),
                                   borderSide: BorderSide(
-                                    color: SearchUiColors.primary.withOpacity(0.10),
+                                    color:
+                                    SearchUiColors.primary.withOpacity(0.08),
                                   ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(16),
                                   borderSide: BorderSide(
-                                    color: SearchUiColors.primary.withOpacity(0.10),
+                                    color:
+                                    SearchUiColors.primary.withOpacity(0.08),
                                   ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
@@ -445,7 +462,7 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'بعد تأكيد الطلب سيتم إرساله إلى الصيدلية للمراجعة، ويمكن استخدام الدردشة لاحقًا للاستفسارات فقط.',
+                                'بعد تأكيد الطلب سيتم إرساله إلى الصيدلية للمراجعة. يمكنك الغاء الطلب من صفحة الطلبات',
                                 style: TextStyle(
                                   height: 1.5,
                                   fontSize: 12.5,
@@ -478,7 +495,10 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: (_isSubmitting || !_hasSelectedMedicines) ? null : _submitOrder, icon: _isSubmitting
+                      onPressed: (_isSubmitting || !_hasSelectedMedicines)
+                          ? null
+                          : _submitOrder,
+                      icon: _isSubmitting
                           ? const SizedBox(
                         width: 18,
                         height: 18,
@@ -628,132 +648,191 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
   Widget _selectableMedicineTile({
     required int index,
     required _SelectableMedicineItem item,
-    required ValueChanged<bool?> onChanged,
+    required ValueChanged<bool> onToggle,
+    required VoidCallback onIncrease,
+    required VoidCallback onDecrease,
   }) {
+    final selected = item.isSelected;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: item.isSelected
-            ? SearchUiColors.light
-            : Colors.grey.shade50,
+        color: selected ? SearchUiColors.light : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: item.isSelected
+          color: selected
               ? SearchUiColors.primary.withOpacity(0.14)
               : Colors.grey.shade300,
         ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [
-                  SearchUiColors.primary,
-                  SearchUiColors.secondary,
-                ],
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      SearchUiColors.primary,
+                      SearchUiColors.secondary,
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Center(
+                  child: Text(
+                    '$index',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
               ),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Center(
-              child: Text(
-                '$index',
-                style: const TextStyle(
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.match.matchedMedicineName,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.match.requestedName,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: selected
+                            ? SearchUiColors.softText
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.match.estimatedPriceText,
+                      style: const TextStyle(
+                        color: SearchUiColors.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Checkbox(
+                value: selected,
+                onChanged: _isSubmitting
+                    ? null
+                    : (value) => onToggle(value ?? false),
+                activeColor: SearchUiColors.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _qtyButton(
+                icon: Icons.remove,
+                onTap: (_isSubmitting || !selected || item.quantity <= 1)
+                    ? null
+                    : onDecrease,
+              ),
+              Container(
+                width: 52,
+                height: 38,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
                   color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: SearchUiColors.primary.withOpacity(0.12),
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    '${item.quantity}',
+                    style: const TextStyle(
+                      color: SearchUiColors.darkText,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              _qtyButton(
+                icon: Icons.add,
+                onTap: (_isSubmitting || !selected) ? null : onIncrease,
+              ),
+              const Spacer(),
+              Text(
+                selected
+                    ? '${(item.match.price * item.quantity).toStringAsFixed(2)} د.ل'
+                    : 'غير محدد',
+                style: const TextStyle(
+                  color: SearchUiColors.darkText,
+                  fontSize: 12.8,
                   fontWeight: FontWeight.w800,
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              item.medicine.displayName,
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
-                color: item.isSelected
-                    ? SearchUiColors.darkText
-                    : Colors.grey.shade500,
-              ),
-            ),
-          ),
-          Checkbox(
-            value: item.isSelected,
-            onChanged: _isSubmitting ? null : onChanged,
-            activeColor: SearchUiColors.primary,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(5),
-            ),
+            ],
           ),
         ],
       ),
     );
   }
-  Widget _medicineTile({
-    required int index,
-    required String name,
+
+  Widget _qtyButton({
+    required IconData icon,
+    required VoidCallback? onTap,
   }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: SearchUiColors.light,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: SearchUiColors.primary.withOpacity(0.08),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: onTap == null
+              ? Colors.grey.shade200
+              : SearchUiColors.primary.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(12),
         ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [
-                  SearchUiColors.primary,
-                  SearchUiColors.secondary,
-                ],
-              ),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Center(
-              child: Text(
-                '$index',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              name,
-              style: const TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
-                color: SearchUiColors.darkText,
-              ),
-            ),
-          ),
-        ],
+        child: Icon(
+          icon,
+          size: 18,
+          color: onTap == null ? Colors.grey : SearchUiColors.primary,
+        ),
       ),
     );
   }
 }
 
 class _SelectableMedicineItem {
-  final MedicineModel medicine;
+  final MatchedMedicineResult match;
   bool isSelected;
+  int quantity;
 
   _SelectableMedicineItem({
-    required this.medicine,
+    required this.match,
     this.isSelected = true,
+    this.quantity = 1,
   });
+}
+
+extension _MatchedMedicineUiX on MatchedMedicineResult {
+  String get estimatedPriceText {
+    if (price <= 0) return 'السعر غير محدد';
+    return '${price.toStringAsFixed(2)} د.ل';
+  }
 }

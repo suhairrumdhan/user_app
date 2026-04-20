@@ -1,4 +1,5 @@
 class MedicineSearchRequest {
+  final String requestKey;
   final String rawText;
   final String normalizedText;
 
@@ -8,12 +9,12 @@ class MedicineSearchRequest {
   final String? dosageForm;
   final int quantity;
 
-  // ✅ جديدة
   final String? baseName;
   final List<String> searchTokens;
   final String? resolvedDisplayName;
 
-  const MedicineSearchRequest({
+  MedicineSearchRequest({
+    String? requestKey,
     required this.rawText,
     required this.normalizedText,
     this.parsedBrandName,
@@ -24,9 +25,31 @@ class MedicineSearchRequest {
     this.baseName,
     this.searchTokens = const [],
     this.resolvedDisplayName,
-  });
+  }) : requestKey = _resolveRequestKey(
+    requestKey: requestKey,
+    rawText: rawText,
+    normalizedText: normalizedText,
+  );
+
+  static String _resolveRequestKey({
+    String? requestKey,
+    required String rawText,
+    required String normalizedText,
+  }) {
+    final cleaned = requestKey?.trim();
+    if (cleaned != null && cleaned.isNotEmpty) {
+      return cleaned;
+    }
+
+    final base = normalizedText.trim().isNotEmpty
+        ? normalizedText.trim().toUpperCase()
+        : rawText.trim().toUpperCase();
+
+    return '${base}_${DateTime.now().microsecondsSinceEpoch}';
+  }
 
   MedicineSearchRequest copyWith({
+    String? requestKey,
     String? rawText,
     String? normalizedText,
     String? parsedBrandName,
@@ -39,6 +62,7 @@ class MedicineSearchRequest {
     String? resolvedDisplayName,
   }) {
     return MedicineSearchRequest(
+      requestKey: requestKey ?? this.requestKey,
       rawText: rawText ?? this.rawText,
       normalizedText: normalizedText ?? this.normalizedText,
       parsedBrandName: parsedBrandName ?? this.parsedBrandName,
@@ -75,6 +99,7 @@ class MedicineSearchRequest {
   @override
   String toString() {
     return 'MedicineSearchRequest('
+        'requestKey: $requestKey, '
         'rawText: $rawText, '
         'normalizedText: $normalizedText, '
         'parsedBrandName: $parsedBrandName, '

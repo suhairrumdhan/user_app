@@ -7,6 +7,7 @@ import '../models/order_status.dart';
 class OrderCard extends StatelessWidget {
   final OrderModel order;
   final VoidCallback? onTap;
+
   const OrderCard({
     super.key,
     required this.order,
@@ -16,30 +17,24 @@ class OrderCard extends StatelessWidget {
   Color _statusColor(OrderStatus status) {
     switch (status) {
       case OrderStatus.pending:
-        return const Color(0xFFFFA726); // برتقالي هادي
-
+        return const Color(0xFFFFA726);
       case OrderStatus.reviewing:
-        return const Color(0xFF42A5F5); // أزرق فاتح
-
+        return const Color(0xFF42A5F5);
       case OrderStatus.confirmed:
-        return const Color(0xFF66BB6A); // أخضر جميل
-
+        return const Color(0xFF66BB6A);
       case OrderStatus.partiallyConfirmed:
-        return const Color(0xFFFF7043); // برتقالي غامق
-
+        return const Color(0xFFFF7043);
       case OrderStatus.rejected:
-        return const Color(0xFFE53935); // أحمر قوي
-
+        return const Color(0xFFE53935);
       case OrderStatus.ready:
-        return const Color(0xFF26A69A); // تيل (جميل مع الأزرق)
-
+        return const Color(0xFF26A69A);
       case OrderStatus.completed:
-        return const Color(0xFF43A047); // أخضر غامق
-
+        return const Color(0xFF43A047);
       case OrderStatus.cancelled:
-        return const Color(0xFFD32F2F); // 🔥 أحمر واضح (المهم)
+        return const Color(0xFFD32F2F);
     }
   }
+
   String _formatDate(DateTime? date) {
     if (date == null) return 'غير محدد';
     return '${date.year}/${date.month}/${date.day}';
@@ -81,30 +76,18 @@ class OrderCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-
-            /// معلومات سريعة
             Row(
               children: [
                 Expanded(
                   child: _miniInfo(
-                    icon: Iconsax.document_text,
-                    label: 'نوع الطلب',
-                    value: order.requestSourceLabel,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _miniInfo(
                     icon: Iconsax.box,
-                    label: 'عدد الأدوية',
+                    label: 'عدد القطع',
                     value: '${order.totalItemsCount}',
                   ),
                 ),
               ],
             ),
-
             const SizedBox(height: 10),
-
             Row(
               children: [
                 Expanded(
@@ -126,13 +109,18 @@ class OrderCard extends StatelessWidget {
                 ),
               ],
             ),
-
             const SizedBox(height: 12),
-
-            /// Tags
             Row(
               children: [
                 if (order.containsInsurance) _tag('تأمين'),
+                if (order.medicines.any(
+                      (e) =>
+                  (e.matchedMedicineName?.trim().isNotEmpty ?? false) &&
+                      e.matchedMedicineName!.trim() != e.requestedName.trim(),
+                )) ...[
+                  const SizedBox(width: 6),
+                  _tag('بديل مختار'),
+                ],
                 const Spacer(),
                 const Icon(
                   Iconsax.arrow_left_2,
@@ -197,7 +185,7 @@ class OrderCard extends StatelessWidget {
 
   Widget _statusBadge(Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: color.withOpacity(0.10),
         borderRadius: BorderRadius.circular(12),
@@ -206,7 +194,7 @@ class OrderCard extends StatelessWidget {
         order.statusLabel,
         style: TextStyle(
           color: color,
-          fontSize: 11.5,
+          fontSize: 11.2,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -219,39 +207,48 @@ class OrderCard extends StatelessWidget {
     required String value,
   }) {
     return Container(
-      padding: const EdgeInsets.all(11),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 11),
       decoration: BoxDecoration(
         color: SearchUiColors.light,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: SearchUiColors.primary.withOpacity(0.08),
+        ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: SearchUiColors.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+          Row(
+            children: [
+              Icon(
+                icon,
+                size: 15,
+                color: SearchUiColors.primary,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
                   label,
-                  style: TextStyle(
-                    fontSize: 10.8,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
-                    color: SearchUiColors.darkText,
+                    fontSize: 11.2,
+                    color: SearchUiColors.softText,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 14,
+              color: SearchUiColors.darkText,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],
@@ -270,7 +267,7 @@ class OrderCard extends StatelessWidget {
         text,
         style: const TextStyle(
           color: SearchUiColors.primary,
-          fontSize: 11.5,
+          fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
       ),

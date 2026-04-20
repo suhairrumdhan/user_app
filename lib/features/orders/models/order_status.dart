@@ -303,27 +303,16 @@ class OrderBeneficiarySnapshot {
   final String beneficiaryId;
   final String ownerUserId;
   final BeneficiaryType type;
-
-  /// اسم المستفيد وقت الطلب
   final String name;
-
-  /// "أنا" أو "أخ" أو "ابن" ... إلخ
   final String? relationLabel;
-
-  /// مرجع اختياري للأصل
   final String? familyMemberId;
-
-  /// snapshot صحي
   final String? gender;
   final String? bloodType;
   final int? age;
   final DateTime? dateOfBirth;
-
   final List<String> allergies;
   final List<String> healthConditions;
   final List<String> currentMedications;
-
-  /// مهم لعرض تحذير سريع عند الصيدلية
   final bool hasHealthData;
 
   const OrderBeneficiarySnapshot({
@@ -476,12 +465,13 @@ class OrderMedicineItem {
   final String? dosageForm;
   final int quantity;
   final String? note;
-
-  /// اختيارية للتوسع لاحقًا
   final String? matchedMedicineId;
   final String? matchedMedicineName;
   final double? estimatedPrice;
   final bool? availableAtSelection;
+  final bool soldByPiece;
+  final String? unit;
+  final String? imageUrl;
 
   const OrderMedicineItem({
     required this.requestedName,
@@ -494,7 +484,18 @@ class OrderMedicineItem {
     this.matchedMedicineName,
     this.estimatedPrice,
     this.availableAtSelection,
+    this.soldByPiece = false,
+    this.unit,
+    this.imageUrl,
   });
+
+  String get displayName {
+    final matched = matchedMedicineName?.trim();
+    if (matched != null && matched.isNotEmpty) return matched;
+    return requestedName;
+  }
+
+  double get lineTotal => (estimatedPrice ?? 0) * quantity;
 
   factory OrderMedicineItem.fromMap(Map<String, dynamic> map) {
     return OrderMedicineItem(
@@ -502,12 +503,17 @@ class OrderMedicineItem {
       normalizedName: (map['normalizedName'] ?? '').toString(),
       strength: map['strength']?.toString(),
       dosageForm: map['dosageForm']?.toString(),
-      quantity: map['quantity'] is int ? map['quantity'] as int : int.tryParse('${map['quantity']}') ?? 1,
+      quantity: map['quantity'] is int
+          ? map['quantity'] as int
+          : int.tryParse('${map['quantity']}') ?? 1,
       note: map['note']?.toString(),
       matchedMedicineId: map['matchedMedicineId']?.toString(),
       matchedMedicineName: map['matchedMedicineName']?.toString(),
       estimatedPrice: _toDouble(map['estimatedPrice']),
       availableAtSelection: map['availableAtSelection'] as bool?,
+      soldByPiece: map['soldByPiece'] == true,
+      unit: map['unit']?.toString(),
+      imageUrl: map['imageUrl']?.toString(),
     );
   }
 
@@ -523,6 +529,9 @@ class OrderMedicineItem {
       'matchedMedicineName': matchedMedicineName,
       'estimatedPrice': estimatedPrice,
       'availableAtSelection': availableAtSelection,
+      'soldByPiece': soldByPiece,
+      'unit': unit,
+      'imageUrl': imageUrl,
     };
   }
 
@@ -537,6 +546,9 @@ class OrderMedicineItem {
     String? matchedMedicineName,
     double? estimatedPrice,
     bool? availableAtSelection,
+    bool? soldByPiece,
+    String? unit,
+    String? imageUrl,
   }) {
     return OrderMedicineItem(
       requestedName: requestedName ?? this.requestedName,
@@ -549,6 +561,9 @@ class OrderMedicineItem {
       matchedMedicineName: matchedMedicineName ?? this.matchedMedicineName,
       estimatedPrice: estimatedPrice ?? this.estimatedPrice,
       availableAtSelection: availableAtSelection ?? this.availableAtSelection,
+      soldByPiece: soldByPiece ?? this.soldByPiece,
+      unit: unit ?? this.unit,
+      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 }
@@ -557,7 +572,7 @@ class OrderStatusLog {
   final String status;
   final String label;
   final String? changedById;
-  final String? changedByType; // user / pharmacy / system / admin
+  final String? changedByType;
   final String? note;
   final DateTime? changedAt;
 
@@ -588,54 +603,36 @@ class OrderStatusLog {
       'changedById': changedById,
       'changedByType': changedByType,
       'note': note,
-      'changedAt': changedAt != null ? Timestamp.fromDate(changedAt!) : FieldValue.serverTimestamp(),
+      'changedAt': changedAt != null
+          ? Timestamp.fromDate(changedAt!)
+          : FieldValue.serverTimestamp(),
     };
   }
 }
 
 class OrderModel {
   final String id;
-
   final OrderUserSnapshot user;
   final OrderPharmacySnapshot pharmacy;
   final OrderBeneficiarySnapshot beneficiary;
   final OrderInsuranceSnapshot insurance;
-
   final OrderRequestSource requestSource;
   final String requestSourceLabel;
-
   final List<OrderMedicineItem> medicines;
-
   final OrderStatus status;
   final String statusLabel;
-
-  /// ملاحظات من المستخدم
   final String? userNote;
-
-  /// ملاحظات داخلية لاحقًا أو من الصيدلية
   final String? pharmacyNote;
-
-  /// ربط اختياري مع الشات وليس أساسيًا
   final String? chatId;
-
-  /// للحسابات والعرض فقط
   final int totalItemsCount;
   final double? estimatedTotalPrice;
-
-  /// لواجهة الطلبات
   final bool hasSensitiveHealthData;
   final bool containsInsurance;
-
-  /// لو الطلب جاي من وصفة
   final String? prescriptionId;
   final String? prescriptionImageUrl;
   final String? prescriptionText;
-
-  /// extensibility
   final Map<String, dynamic> metadata;
-
   final List<OrderStatusLog> statusHistory;
-
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? submittedAt;
@@ -693,7 +690,8 @@ class OrderModel {
       insurance: OrderInsuranceSnapshot.fromMap(
         Map<String, dynamic>.from(map['insurance'] ?? {}),
       ),
-      requestSource: OrderRequestSourceX.fromValue(map['requestSource']?.toString()),
+      requestSource:
+      OrderRequestSourceX.fromValue(map['requestSource']?.toString()),
       requestSourceLabel: (map['requestSourceLabel'] ?? '').toString(),
       medicines: (map['medicines'] as List<dynamic>? ?? [])
           .map((e) => OrderMedicineItem.fromMap(Map<String, dynamic>.from(e)))
@@ -712,7 +710,7 @@ class OrderModel {
       prescriptionId: map['prescriptionId']?.toString(),
       prescriptionImageUrl: map['prescriptionImageUrl']?.toString(),
       prescriptionText: map['prescriptionText']?.toString(),
-      metadata: Map<String, dynamic>.from(map['metadata'] ?? {}),
+      metadata: Map<String, dynamic>.from(map['metadata'] ?? const {}),
       statusHistory: (map['statusHistory'] as List<dynamic>? ?? [])
           .map((e) => OrderStatusLog.fromMap(Map<String, dynamic>.from(e)))
           .toList(),
@@ -726,7 +724,7 @@ class OrderModel {
   }
 
   factory OrderModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    return OrderModel.fromMap(doc.id, doc.data() ?? {});
+    return OrderModel.fromMap(doc.id, doc.data() ?? const {});
   }
 
   Map<String, dynamic> toMap() {
@@ -735,38 +733,34 @@ class OrderModel {
       'pharmacy': pharmacy.toMap(),
       'beneficiary': beneficiary.toMap(),
       'insurance': insurance.toMap(),
-
       'requestSource': requestSource.value,
       'requestSourceLabel': requestSourceLabel,
-
       'medicines': medicines.map((e) => e.toMap()).toList(),
-
       'status': status.value,
       'statusLabel': statusLabel,
-
       'userNote': userNote,
       'pharmacyNote': pharmacyNote,
       'chatId': chatId,
-
       'totalItemsCount': totalItemsCount,
       'estimatedTotalPrice': estimatedTotalPrice,
-
       'hasSensitiveHealthData': hasSensitiveHealthData,
       'containsInsurance': containsInsurance,
-
       'prescriptionId': prescriptionId,
       'prescriptionImageUrl': prescriptionImageUrl,
       'prescriptionText': prescriptionText,
-
       'metadata': metadata,
       'statusHistory': statusHistory.map((e) => e.toMap()).toList(),
-
-      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
+      'createdAt': createdAt != null
+          ? Timestamp.fromDate(createdAt!)
+          : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-      'submittedAt': submittedAt != null ? Timestamp.fromDate(submittedAt!) : null,
+      'submittedAt':
+      submittedAt != null ? Timestamp.fromDate(submittedAt!) : null,
       'reviewedAt': reviewedAt != null ? Timestamp.fromDate(reviewedAt!) : null,
-      'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
-      'cancelledAt': cancelledAt != null ? Timestamp.fromDate(cancelledAt!) : null,
+      'completedAt':
+      completedAt != null ? Timestamp.fromDate(completedAt!) : null,
+      'cancelledAt':
+      cancelledAt != null ? Timestamp.fromDate(cancelledAt!) : null,
     };
   }
 
@@ -816,7 +810,8 @@ class OrderModel {
       chatId: chatId ?? this.chatId,
       totalItemsCount: totalItemsCount ?? this.totalItemsCount,
       estimatedTotalPrice: estimatedTotalPrice ?? this.estimatedTotalPrice,
-      hasSensitiveHealthData: hasSensitiveHealthData ?? this.hasSensitiveHealthData,
+      hasSensitiveHealthData:
+      hasSensitiveHealthData ?? this.hasSensitiveHealthData,
       containsInsurance: containsInsurance ?? this.containsInsurance,
       prescriptionId: prescriptionId ?? this.prescriptionId,
       prescriptionImageUrl: prescriptionImageUrl ?? this.prescriptionImageUrl,

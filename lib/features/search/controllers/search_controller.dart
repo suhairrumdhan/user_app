@@ -22,7 +22,8 @@ class SearchController extends GetxController {
 
   final Rxn<BeneficiaryModel> selectedBeneficiary = Rxn<BeneficiaryModel>();
 
-  final RxMap<String, PharmacyModel> pharmaciesById = <String, PharmacyModel>{}.obs;
+  final RxMap<String, PharmacyModel> pharmaciesById =
+      <String, PharmacyModel>{}.obs;
 
   final Rx<PharmacySearchFilters> filters =
       const PharmacySearchFilters().obs;
@@ -31,7 +32,7 @@ class SearchController extends GetxController {
       <PharmacySearchResult>[].obs;
 
   final RxBool isLoading = false.obs;
-  final RxString searchSource = 'manual'.obs; // manual / prescription
+  final RxString searchSource = 'manual'.obs;
   final RxString extractedText = ''.obs;
   final RxString errorMessage = ''.obs;
 
@@ -72,7 +73,7 @@ class SearchController extends GetxController {
 
   void replaceMatchedMedicine({
     required String pharmacyId,
-    required String requestedName,
+    required String requestKey,
     required MatchedMedicineResult newSelection,
   }) {
     final index = results.indexWhere((r) => r.pharmacyId == pharmacyId);
@@ -80,23 +81,29 @@ class SearchController extends GetxController {
 
     final oldResult = results[index];
 
-    final updatedMatches = oldResult.matchedMedicines.map((item) {
-      if (item.requestedName == requestedName) {
-        final oldSelected = item;
+    final targetIndex = oldResult.matchedMedicines.indexWhere(
+          (item) => item.requestKey == requestKey,
+    );
 
-        final mergedAlternatives = <MatchedMedicineResult>[
-          oldSelected.copyWith(similarMatches: const []),
-          ...item.similarMatches.where(
-                (e) => e.matchedMedicineId != newSelection.matchedMedicineId,
-          ),
-        ];
+    if (targetIndex == -1) return;
 
-        return newSelection.copyWith(
-          similarMatches: mergedAlternatives,
-        );
-      }
-      return item;
-    }).toList();
+    final oldSelected = oldResult.matchedMedicines[targetIndex];
+
+    final mergedAlternatives = <MatchedMedicineResult>[
+      oldSelected.copyWith(similarMatches: const []),
+      ...oldSelected.similarMatches.where(
+            (e) => e.matchedMedicineId != newSelection.matchedMedicineId,
+      ),
+    ];
+
+    final updatedItem = newSelection.copyWith(
+      requestKey: oldSelected.requestKey,
+      requestedName: oldSelected.requestedName,
+      similarMatches: mergedAlternatives,
+    );
+
+    final updatedMatches = [...oldResult.matchedMedicines];
+    updatedMatches[targetIndex] = updatedItem;
 
     final newTotalPrice = updatedMatches.fold<double>(
       0,
@@ -221,6 +228,7 @@ class SearchController extends GetxController {
           .toList();
 
       await _loadPharmaciesByIds(pharmacyIds);
+
       if (searchResults.isEmpty) {
         errorMessage.value = 'لم يتم العثور على نتائج مناسبة';
       }

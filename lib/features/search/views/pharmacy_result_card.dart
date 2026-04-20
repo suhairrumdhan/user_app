@@ -13,10 +13,9 @@ class PharmacyResultCard extends StatelessWidget {
   final VoidCallback? onTapOpenMap;
   final VoidCallback? onTapDetails;
 
-  /// Reactive callback from parent
   final void Function({
   required String pharmacyId,
-  required String requestedName,
+  required String requestKey,
   required MatchedMedicineResult newSelection,
   })? onSelectAlternative;
 
@@ -94,9 +93,12 @@ class PharmacyResultCard extends StatelessWidget {
             height: 46,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => Container(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [SearchUiColors.primary, SearchUiColors.secondary],
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    SearchUiColors.primary,
+                    SearchUiColors.secondary,
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -109,9 +111,12 @@ class PharmacyResultCard extends StatelessWidget {
             ),
           )
               : Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [SearchUiColors.primary, SearchUiColors.secondary],
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  SearchUiColors.primary,
+                  SearchUiColors.secondary,
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -123,7 +128,6 @@ class PharmacyResultCard extends StatelessWidget {
             ),
           ),
         ),
-
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -187,7 +191,7 @@ class PharmacyResultCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   InkWell(
-                    onTap: onTapOpenMap ?? _openGoogleMaps,  // استخدام الدالة الافتراضية إذا لم يتم تمرير callback
+                    onTap: onTapOpenMap ?? _openGoogleMaps,
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -221,7 +225,8 @@ class PharmacyResultCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                  ),                ],
+                  ),
+                ],
               ),
             ],
           ),
@@ -468,7 +473,8 @@ class PharmacyResultCard extends StatelessWidget {
       context: context,
       builder: (_) {
         return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          insetPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
@@ -511,18 +517,20 @@ class PharmacyResultCard extends StatelessWidget {
                                     onChanged: (updatedItem) {
                                       final updatedMatches =
                                       currentPharmacy.matchedMedicines.map((m) {
-                                        if (m.requestedName == updatedItem.requestedName) {
+                                        if (m.requestKey == updatedItem.requestKey) {
                                           return updatedItem;
                                         }
                                         return m;
                                       }).toList();
 
-                                      final updatedTotal = updatedMatches.fold<double>(
+                                      final updatedTotal =
+                                      updatedMatches.fold<double>(
                                         0,
                                             (sum, item) => sum + item.price,
                                       );
 
-                                      final updatedPharmacy = currentPharmacy.copyWith(
+                                      final updatedPharmacy =
+                                      currentPharmacy.copyWith(
                                         matchedMedicines: updatedMatches,
                                         totalEstimatedPrice: updatedTotal,
                                       );
@@ -531,7 +539,7 @@ class PharmacyResultCard extends StatelessWidget {
 
                                       onSelectAlternative?.call(
                                         pharmacyId: currentPharmacy.id,
-                                        requestedName: updatedItem.requestedName,
+                                        requestKey: updatedItem.requestKey,
                                         newSelection: updatedItem,
                                       );
                                     },
@@ -561,10 +569,13 @@ class PharmacyResultCard extends StatelessWidget {
                                       vertical: 8,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: SearchUiColors.danger.withOpacity(0.08),
-                                      borderRadius: BorderRadius.circular(12),
+                                      color: SearchUiColors.danger
+                                          .withOpacity(0.08),
+                                      borderRadius:
+                                      BorderRadius.circular(12),
                                       border: Border.all(
-                                        color: SearchUiColors.danger.withOpacity(0.16),
+                                        color: SearchUiColors.danger
+                                            .withOpacity(0.16),
                                       ),
                                     ),
                                     child: Text(
@@ -593,6 +604,7 @@ class PharmacyResultCard extends StatelessWidget {
       },
     );
   }
+
   Widget _buildDialogHeader(BuildContext context, PharmacyModel currentPharmacy) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 10, 12),
@@ -842,11 +854,14 @@ class PharmacyResultCard extends StatelessWidget {
                           final nextAlternatives = <MatchedMedicineResult>[
                             oldSelected.copyWith(similarMatches: const []),
                             ...selected.similarMatches
-                                .where((e) => e.matchedMedicineId != alt.matchedMedicineId)
+                                .where((e) =>
+                            e.matchedMedicineId != alt.matchedMedicineId)
                                 .toList(),
                           ];
 
                           final newSelected = alt.copyWith(
+                            requestKey: oldSelected.requestKey,
+                            requestedName: oldSelected.requestedName,
                             similarMatches: nextAlternatives,
                           );
 
@@ -971,18 +986,15 @@ class PharmacyResultCard extends StatelessWidget {
       ),
     );
   }
+
   void _openGoogleMaps() {
     final lat = pharmacy.latitude;
     final lng = pharmacy.longitude;
 
     if (lat == null || lng == null) return;
 
-    // فتح خرائط Google مباشرة
-    final url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
-
-    // يمكنك استخدام url_launcher package
-    // لا تنس إضافة الحزمة: flutter pub add url_launcher
-    // ثم استيرادها: import 'package:url_launcher/url_launcher.dart';
+    final url =
+    Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
 
     _launchUrl(url);
   }

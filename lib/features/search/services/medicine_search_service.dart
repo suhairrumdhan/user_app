@@ -31,7 +31,7 @@ class MedicineSearchService {
     debugPrint('🔎 requests count: ${requests.length}');
     for (final r in requests) {
       debugPrint(
-        '   - raw="${r.rawText}" normalized="${r.normalizedText}" strength="${r.strength}" form="${r.dosageForm}"',
+        '   - key="${r.requestKey}" raw="${r.rawText}" normalized="${r.normalizedText}" strength="${r.strength}" form="${r.dosageForm}"',
       );
     }
 
@@ -102,7 +102,8 @@ class MedicineSearchService {
     final String pharmacyName =
     (first['pharmacyName'] ?? 'صيدلية').toString().trim();
 
-    final String status = (first['status'] ?? '').toString().trim().toLowerCase();
+    final String status =
+    (first['status'] ?? '').toString().trim().toLowerCase();
     if (status.isNotEmpty && status != 'approved') {
       debugPrint('⛔ pharmacy skipped بسبب status: $pharmacyName ($status)');
       return null;
@@ -136,7 +137,9 @@ class MedicineSearchService {
     );
 
     if (distanceKm > filters.maxDistanceKm) {
-      debugPrint('⛔ pharmacy skipped بسبب distance: $pharmacyName -> $distanceKm km');
+      debugPrint(
+        '⛔ pharmacy skipped بسبب distance: $pharmacyName -> $distanceKm km',
+      );
       return null;
     }
 
@@ -159,7 +162,7 @@ class MedicineSearchService {
       );
 
       debugPrint(
-        '🧪 pharmacy="$pharmacyName" request="${request.rawText}" candidates=${candidates.length}',
+        '🧪 pharmacy="$pharmacyName" requestKey="${request.requestKey}" request="${request.rawText}" candidates=${candidates.length}',
       );
 
       final topMatches = MedicineMatcher.findTopMatches(
@@ -172,29 +175,49 @@ class MedicineSearchService {
         debugPrint('   ❌ no match for "${request.rawText}" in "$pharmacyName"');
         missingMedicines.add(request.rawText);
       } else {
-        final bestMatch = topMatches.first;
+        final bestMatch = topMatches.first.copyWith(
+          requestKey: request.requestKey,
+          requestedName: request.rawText,
+          isAlternative: false,
+        );
+
+        final alternativeMatches = topMatches
+            .skip(1)
+            .map(
+              (item) => item.copyWith(
+            requestKey: request.requestKey,
+            requestedName: request.rawText,
+            isAlternative: true,
+            similarMatches: const [],
+          ),
+        )
+            .toList();
 
         debugPrint(
           '   ✅ matched "${request.rawText}" -> "${bestMatch.matchedMedicineName}" '
               'score=${bestMatch.matchScore} '
-              'alternatives=${topMatches.length - 1}',
+              'alternatives=${alternativeMatches.length}',
         );
 
         matchedMedicines.add(
           bestMatch.copyWith(
-            similarMatches: topMatches.skip(1).toList(),
+            similarMatches: alternativeMatches,
           ),
         );
       }
     }
 
     if (matchedMedicines.isEmpty) {
-      debugPrint('⛔ pharmacy="$pharmacyName" dropped because matchedMedicines is empty');
+      debugPrint(
+        '⛔ pharmacy="$pharmacyName" dropped because matchedMedicines is empty',
+      );
       return null;
     }
 
     if (filters.fullMatchOnly && missingMedicines.isNotEmpty) {
-      debugPrint('⛔ pharmacy="$pharmacyName" dropped because fullMatchOnly=true');
+      debugPrint(
+        '⛔ pharmacy="$pharmacyName" dropped because fullMatchOnly=true',
+      );
       return null;
     }
 
@@ -266,7 +289,6 @@ class MedicineSearchService {
       bool isContains = false;
       bool isFuzzy = false;
 
-      // 1) exact / base exact
       if (normalizedRequest == normalizedName ||
           normalizedRequest == normalizedScientific ||
           (requestBase.isNotEmpty &&
@@ -274,7 +296,6 @@ class MedicineSearchService {
         isExact = true;
       }
 
-      // 2) contains / family match / token hit
       if (!isExact) {
         if (MedicineNormalizer.containsNormalized(name, request.rawText) ||
             MedicineNormalizer.containsNormalized(scientific, request.rawText)) {
@@ -293,7 +314,6 @@ class MedicineSearchService {
           }
         }
 
-        // first word family match: PANADOL -> PANADOL EXTRA
         if (!isContains && requestBase.isNotEmpty) {
           final reqParts =
           requestBase.split(' ').where((e) => e.isNotEmpty).toList();
@@ -310,7 +330,6 @@ class MedicineSearchService {
         }
       }
 
-      // 3) fuzzy fallback
       if (!isExact && !isContains) {
         final fuzzyName =
         MedicineNormalizer.similarityScore(request.rawText, name);
@@ -331,7 +350,6 @@ class MedicineSearchService {
       }
     }
 
-    // ✅ المهم: لا نرجع bucket واحدة فقط
     final combined = <Map<String, dynamic>>[
       ...exact,
       ...contains,
@@ -340,7 +358,6 @@ class MedicineSearchService {
 
     if (combined.isEmpty) return [];
 
-    // إزالة التكرار حسب medicineId أو الاسم
     final Map<String, Map<String, dynamic>> unique = {};
 
     for (final med in combined) {
@@ -355,6 +372,7 @@ class MedicineSearchService {
 
     return unique.values.toList();
   }
+
   double _calculateTotalEstimatedPrice(List<MatchedMedicineResult> matches) {
     double total = 0;
     for (final item in matches) {
@@ -469,11 +487,10 @@ class MedicineSearchService {
     final double dLat = _degToRad(lat2 - lat1);
     final double dLon = _degToRad(lon2 - lon1);
 
-    final double a =
-        math.pow(math.sin(dLat / 2), 2).toDouble() +
-            math.cos(_degToRad(lat1)) *
-                math.cos(_degToRad(lat2)) *
-                math.pow(math.sin(dLon / 2), 2).toDouble();
+    final double a = math.pow(math.sin(dLat / 2), 2).toDouble() +
+        math.cos(_degToRad(lat1)) *
+            math.cos(_degToRad(lat2)) *
+            math.pow(math.sin(dLon / 2), 2).toDouble();
 
     final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
 

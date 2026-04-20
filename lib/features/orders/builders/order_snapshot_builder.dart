@@ -5,7 +5,6 @@ import '../../family/models/family_member_model.dart';
 import '../../insurance/controllers/insurance_controller.dart';
 import '../../pharmacy/models/pharmacy_model.dart';
 import '../../prescription/models/beneficiary_model.dart';
-import '../../prescription/models/medicine_model.dart';
 import '../../profile/controllers/user_controller.dart';
 import '../../search/models/matched_medicine_result.dart';
 import '../../search/services/medicine_normalizer.dart';
@@ -40,7 +39,8 @@ class OrderSnapshotBuilder {
           _resolveAge(
             explicitAge: null,
             dateOfBirth: currentUser.dateOfBirth,
-          ) != null ||
+          ) !=
+              null ||
           currentUser.dateOfBirth != null ||
           _hasText(currentUser.gender);
 
@@ -61,7 +61,8 @@ class OrderSnapshotBuilder {
         age: _resolveAge(
           explicitAge: null,
           dateOfBirth: currentUser.dateOfBirth,
-        ),        dateOfBirth: currentUser.dateOfBirth,
+        ),
+        dateOfBirth: currentUser.dateOfBirth,
         allergies: allergies,
         healthConditions: healthConditions,
         currentMedications: currentMedications,
@@ -170,6 +171,7 @@ class OrderSnapshotBuilder {
           .toList(),
     );
   }
+
   static OrderPharmacySnapshot buildPharmacySnapshot({
     required PharmacyModel pharmacy,
   }) {
@@ -184,56 +186,54 @@ class OrderSnapshotBuilder {
       isOpenNow: pharmacy.isOpenNow,
       latitude: pharmacy.latitude,
       longitude: pharmacy.longitude,
-      distanceKm: pharmacy.distanceKm > 0 ? pharmacy.distanceKm : pharmacy.distance,
+      distanceKm:
+      pharmacy.distanceKm > 0 ? pharmacy.distanceKm : pharmacy.distance,
       estimatedTotalPrice:
       pharmacy.totalEstimatedPrice > 0 ? pharmacy.totalEstimatedPrice : null,
       pharmacyScore: pharmacy.pharmacyScore > 0 ? pharmacy.pharmacyScore : null,
     );
   }
 
-  static List<OrderMedicineItem> buildMedicineItems({
-    required List<MedicineModel> medicines,
-    PharmacyModel? selectedPharmacy,
+  static List<OrderMedicineItem> buildMedicineItemsFromMatches({
+    required List<MatchedMedicineResult> selectedMatches,
+    required Map<String, int> quantitiesByMatchedMedicineId,
   }) {
-    return medicines.map((medicine) {
-      final rawName = medicine.displayName.trim();
-      final normalized = MedicineNormalizer.normalize(rawName);
-      final strength = MedicineNormalizer.extractStrength(rawName);
-      final dosageForm = MedicineNormalizer.extractDosageForm(rawName);
+    return selectedMatches.map((matched) {
+      final quantity =
+          quantitiesByMatchedMedicineId[matched.matchedMedicineId] ?? 1;
 
-      MatchedMedicineResult? matched;
-
-      if (selectedPharmacy != null && selectedPharmacy.matchedMedicines.isNotEmpty) {
-        matched = selectedPharmacy.matchedMedicines.cast<MatchedMedicineResult?>().firstWhere(
-              (item) =>
-          item != null &&
-              item.requestedName.trim().toLowerCase() == rawName.toLowerCase(),
-          orElse: () => null,
-        );
-      }
+      final normalizedRequested =
+      MedicineNormalizer.normalize(matched.requestedName);
+      final strength =
+      MedicineNormalizer.extractStrength(matched.requestedName);
+      final dosageForm =
+      MedicineNormalizer.extractDosageForm(matched.requestedName);
 
       return OrderMedicineItem(
-        requestedName: rawName,
-        normalizedName: normalized,
+        requestedName: matched.requestedName,
+        normalizedName: normalizedRequested,
         strength: strength,
         dosageForm: dosageForm,
-        quantity: 1,
+        quantity: quantity < 1 ? 1 : quantity,
         note: null,
-        matchedMedicineId: matched?.matchedMedicineId,
-        matchedMedicineName: matched?.matchedMedicineName,
-        estimatedPrice: matched?.price,
-        availableAtSelection: matched != null,
+        matchedMedicineId: matched.matchedMedicineId,
+        matchedMedicineName: matched.matchedMedicineName,
+        estimatedPrice: matched.price,
+        availableAtSelection: matched.isAvailable,
+        soldByPiece: matched.soldByPiece,
+        unit: matched.unit,
+        imageUrl: matched.imageUrl,
       );
     }).toList();
   }
 
-
-  static OrderModel buildOrder({
+  static OrderModel buildOrderFromMatches({
     required String ownerUserId,
     required OrderUserSnapshot userSnapshot,
     required PharmacyModel pharmacy,
     required BeneficiaryModel beneficiary,
-    required List<MedicineModel> medicines,
+    required List<MatchedMedicineResult> selectedMatches,
+    required Map<String, int> quantitiesByMatchedMedicineId,
     required bool useInsurance,
     required OrderRequestSource requestSource,
     String? userNote,
@@ -257,26 +257,31 @@ class OrderSnapshotBuilder {
       pharmacy: pharmacy,
     );
 
-    final medicineItems = buildMedicineItems(
-      medicines: medicines,
-      selectedPharmacy: pharmacy,
+    final medicineItems = buildMedicineItemsFromMatches(
+      selectedMatches: selectedMatches,
+      quantitiesByMatchedMedicineId: quantitiesByMatchedMedicineId,
     );
 
     final now = DateTime.now();
-
     final containsInsurance = insuranceSnapshot.hasInsurance;
 
-    final hasSensitiveHealthData =
-        beneficiarySnapshot.allergies.isNotEmpty ||
-            beneficiarySnapshot.healthConditions.isNotEmpty ||
-            beneficiarySnapshot.currentMedications.isNotEmpty ||
-            beneficiarySnapshot.hasHealthData;
+    final hasSensitiveHealthData = beneficiarySnapshot.allergies.isNotEmpty ||
+        beneficiarySnapshot.healthConditions.isNotEmpty ||
+        beneficiarySnapshot.currentMedications.isNotEmpty ||
+        beneficiarySnapshot.hasHealthData;
 
     final status = OrderStatus.pending;
 
+    final calculatedTotal = medicineItems.fold<double>(
+      0,
+          (sum, item) => sum + item.lineTotal,
+    );
+
     return OrderModel(
       user: userSnapshot,
-      pharmacy: pharmacySnapshot,
+      pharmacy: pharmacySnapshot.copyWith(
+        estimatedTotalPrice: calculatedTotal > 0 ? calculatedTotal : pharmacySnapshot.estimatedTotalPrice,
+      ),
       beneficiary: beneficiarySnapshot,
       insurance: insuranceSnapshot,
       requestSource: requestSource,
@@ -291,13 +296,16 @@ class OrderSnapshotBuilder {
         0,
             (sum, item) => sum + item.quantity,
       ),
-      estimatedTotalPrice: pharmacySnapshot.estimatedTotalPrice,
+      estimatedTotalPrice: calculatedTotal > 0 ? calculatedTotal : null,
       hasSensitiveHealthData: hasSensitiveHealthData,
       containsInsurance: containsInsurance,
       prescriptionId: _safeOptionalText(prescriptionId),
       prescriptionImageUrl: _safeOptionalText(prescriptionImageUrl),
       prescriptionText: _safeOptionalText(prescriptionText),
-      metadata: metadata ?? const {},
+      metadata: {
+        ...?metadata,
+        'selectedMatchedMedicinesCount': selectedMatches.length,
+      },
       statusHistory: [
         OrderStatusLog(
           status: status.value,
@@ -344,6 +352,7 @@ class OrderSnapshotBuilder {
       profileImageUrl: _safeText(currentUser.profileImageUrl),
     );
   }
+
   static int? _resolveAge({
     int? explicitAge,
     DateTime? dateOfBirth,
@@ -354,9 +363,8 @@ class OrderSnapshotBuilder {
     final now = DateTime.now();
     int age = now.year - dateOfBirth.year;
 
-    final hasHadBirthdayThisYear =
-        now.month > dateOfBirth.month ||
-            (now.month == dateOfBirth.month && now.day >= dateOfBirth.day);
+    final hasHadBirthdayThisYear = now.month > dateOfBirth.month ||
+        (now.month == dateOfBirth.month && now.day >= dateOfBirth.day);
 
     if (!hasHadBirthdayThisYear) {
       age--;
@@ -381,21 +389,17 @@ class OrderSnapshotBuilder {
     return text;
   }
 
+  static String _safeName({
+    required String? preferred,
+    required String fallback,
+  }) {
+    final a = preferred?.trim();
+    if (a != null && a.isNotEmpty) return a;
+    return fallback;
+  }
+
   static bool _hasText(dynamic value) {
     final text = value?.toString().trim();
     return text != null && text.isNotEmpty;
-  }
-
-  static String _safeName({
-    required String? preferred,
-    required String? fallback,
-  }) {
-    final p = preferred?.trim();
-    if (p != null && p.isNotEmpty) return p;
-
-    final f = fallback?.trim();
-    if (f != null && f.isNotEmpty) return f;
-
-    return 'مستفيد';
   }
 }

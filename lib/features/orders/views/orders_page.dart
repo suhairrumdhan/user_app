@@ -75,7 +75,10 @@ class _OrdersPageState extends State<OrdersPage> {
                     pendingCount: orders
                         .where((o) =>
                     o.status == OrderStatus.pending ||
-                        o.status == OrderStatus.reviewing)
+                        o.status == OrderStatus.reviewing ||
+                        o.status == OrderStatus.confirmed ||
+                        o.status == OrderStatus.partiallyConfirmed ||
+                        o.status == OrderStatus.ready)
                         .length,
                     completedCount: orders
                         .where((o) => o.status == OrderStatus.completed)
@@ -107,7 +110,6 @@ class _OrdersPageState extends State<OrdersPage> {
     );
   }
 }
-
 
 class _OrdersShell extends StatelessWidget {
   final Widget child;

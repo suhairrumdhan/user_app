@@ -3,8 +3,8 @@ import 'package:get/get.dart';
 
 import '../../pharmacy/models/pharmacy_model.dart';
 import '../../prescription/models/beneficiary_model.dart';
-import '../../prescription/models/medicine_model.dart';
 import '../../profile/controllers/user_controller.dart';
+import '../../search/models/matched_medicine_result.dart';
 import '../builders/order_snapshot_builder.dart';
 import '../models/order_status.dart';
 
@@ -22,7 +22,8 @@ class OrderService {
   Future<OrderModel> createOrder({
     required PharmacyModel pharmacy,
     required BeneficiaryModel beneficiary,
-    required List<MedicineModel> medicines,
+    required List<MatchedMedicineResult> selectedMatches,
+    required Map<String, int> quantitiesByMatchedMedicineId,
     required bool useInsurance,
     required OrderRequestSource requestSource,
     String? userNote,
@@ -45,18 +46,19 @@ class OrderService {
       throw Exception('يجب اختيار المستفيد');
     }
 
-    if (medicines.isEmpty) {
-      throw Exception('يجب إضافة دواء واحد على الأقل');
+    if (selectedMatches.isEmpty) {
+      throw Exception('يجب اختيار دواء واحد على الأقل');
     }
 
-    final order = OrderSnapshotBuilder.buildOrder(
+    final order = OrderSnapshotBuilder.buildOrderFromMatches(
       ownerUserId: currentUser.id,
       userSnapshot: OrderSnapshotBuilder.buildUserSnapshot(
         userId: currentUser.id,
       ),
       pharmacy: pharmacy,
       beneficiary: beneficiary,
-      medicines: medicines,
+      selectedMatches: selectedMatches,
+      quantitiesByMatchedMedicineId: quantitiesByMatchedMedicineId,
       useInsurance: useInsurance,
       requestSource: requestSource,
       userNote: userNote,
