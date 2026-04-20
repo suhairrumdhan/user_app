@@ -108,7 +108,11 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
         normalizedText: MedicineNormalizer.normalize(raw),
         strength: MedicineNormalizer.extractStrength(raw),
         dosageForm: MedicineNormalizer.extractDosageForm(raw),
+        baseName: MedicineNormalizer.extractBaseName(raw),
+        searchTokens: MedicineNormalizer.buildSearchTokens(raw),
+        resolvedDisplayName: raw,
       );
+
     }).toList();
   }
 
@@ -212,16 +216,16 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
 
   String get _topTitle {
     if (widget.isReviewMode && _isPrescriptionMode) {
-      return 'راجعي الأدوية المستخرجة من الوصفة';
+      return 'راجع الأدوية المستخرجة من الوصفة';
     }
-    return 'ابحثي عن أكثر من دواء بسهولة';
+    return 'ابحث عن أكثر من دواء بسهولة';
   }
 
   String get _topSubtitle {
     if (widget.isReviewMode && _isPrescriptionMode) {
       return 'يمكنك حذف أي دواء غير صحيح، وإضافة أدوية أخرى قبل متابعة البحث.';
     }
-    return 'أضيفي الأدوية التي تريدين البحث عنها، ثم انتقلي لاختيار المستفيد وإكمال الطلب.';
+    return 'أضف الأدوية التي تريد البحث عنها، ثم انتقل لاختيار المستفيد وإكمال الطلب.';
   }
 
   String get _bottomButtonText {

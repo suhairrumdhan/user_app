@@ -69,13 +69,11 @@ class _HomeTabContentState extends State<HomeTabContent> {
   Future<bool> _showPreviewDialog(File file, String type) async {
     return await showDialog<bool>(
       context: context,
-      builder: (context) => Dialog(
-        child: PreviewScreen(
-          file: file,
-          fileType: type,
-          onConfirm: () => Navigator.pop(context, true),
-          onCancel: () => Navigator.pop(context, false),
-        ),
+      builder: (context) => PreviewScreen(
+        file: file,
+        fileType: type,
+        onConfirm: () => Navigator.pop(context, true),
+        onCancel: () => Navigator.pop(context, false),
       ),
     ) ??
         false;
@@ -130,11 +128,15 @@ class _HomeTabContentState extends State<HomeTabContent> {
       /// 2) إعادة بناء requests من النسخة المعدلة
       final reviewedRequests = reviewedMedicines.map((medicine) {
         final raw = medicine.displayName.trim();
+
         return MedicineSearchRequest(
           rawText: raw,
           normalizedText: MedicineNormalizer.normalize(raw),
           strength: MedicineNormalizer.extractStrength(raw),
           dosageForm: MedicineNormalizer.extractDosageForm(raw),
+          baseName: MedicineNormalizer.extractBaseName(raw),
+          searchTokens: MedicineNormalizer.buildSearchTokens(raw),
+          resolvedDisplayName: raw,
         );
       }).toList();
 

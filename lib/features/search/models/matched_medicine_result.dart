@@ -1,6 +1,7 @@
 class MatchedMedicineResult {
   final String requestedName;
-
+  final String? imageUrl;
+  final List<MatchedMedicineResult> similarMatches;
   final String pharmacyId;
   final String matchedMedicineId;
   final String matchedMedicineName;
@@ -20,6 +21,8 @@ class MatchedMedicineResult {
 
   const MatchedMedicineResult({
     required this.requestedName,
+    this.imageUrl,
+    this.similarMatches = const [],
     required this.pharmacyId,
     required this.matchedMedicineId,
     required this.matchedMedicineName,
@@ -37,9 +40,12 @@ class MatchedMedicineResult {
 
   bool get isStrongMatch => matchScore >= 80;
 
+
   Map<String, dynamic> toMap() {
     return {
       'requestedName': requestedName,
+      'imageUrl': imageUrl,
+      'similarMatches': similarMatches.map((e) => e.toMap()).toList(),
       'pharmacyId': pharmacyId,
       'matchedMedicineId': matchedMedicineId,
       'matchedMedicineName': matchedMedicineName,
@@ -56,9 +62,53 @@ class MatchedMedicineResult {
     };
   }
 
+
+  MatchedMedicineResult copyWith({
+    String? requestedName,
+    String? pharmacyId,
+    String? matchedMedicineId,
+    String? matchedMedicineName,
+    String? matchedScientificName,
+    double? price,
+    bool? isAlternative,
+    bool? soldByPiece,
+    String? unit,
+    int? availableQuantity,
+    int? availablePieceQuantity,
+    bool? isAvailable,
+    double? matchScore,
+    String? matchType,
+    String? imageUrl,
+    List<MatchedMedicineResult>? similarMatches,
+  }) {
+    return MatchedMedicineResult(
+      requestedName: requestedName ?? this.requestedName,
+      pharmacyId: pharmacyId ?? this.pharmacyId,
+      matchedMedicineId: matchedMedicineId ?? this.matchedMedicineId,
+      matchedMedicineName: matchedMedicineName ?? this.matchedMedicineName,
+      matchedScientificName:
+      matchedScientificName ?? this.matchedScientificName,
+      price: price ?? this.price,
+      isAlternative: isAlternative ?? this.isAlternative,
+      soldByPiece: soldByPiece ?? this.soldByPiece,
+      unit: unit ?? this.unit,
+      availableQuantity: availableQuantity ?? this.availableQuantity,
+      availablePieceQuantity:
+      availablePieceQuantity ?? this.availablePieceQuantity,
+      isAvailable: isAvailable ?? this.isAvailable,
+      matchScore: matchScore ?? this.matchScore,
+      matchType: matchType ?? this.matchType,
+      imageUrl: imageUrl ?? this.imageUrl,
+      similarMatches: similarMatches ?? this.similarMatches,
+    );
+  }
   factory MatchedMedicineResult.fromMap(Map<String, dynamic> map) {
     return MatchedMedicineResult(
       requestedName: map['requestedName']?.toString() ?? '',
+      imageUrl: map['imageUrl']?.toString(),
+      similarMatches: (map['similarMatches'] as List<dynamic>? ?? [])
+          .map((e) => MatchedMedicineResult.fromMap(Map<String, dynamic>.from(e)))
+          .toList(),
       pharmacyId: map['pharmacyId']?.toString() ?? '',
       matchedMedicineId: map['matchedMedicineId']?.toString() ?? '',
       matchedMedicineName: map['matchedMedicineName']?.toString() ?? '',

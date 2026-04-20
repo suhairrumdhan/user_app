@@ -2,35 +2,84 @@ class MedicineNormalizer {
   const MedicineNormalizer._();
 
   static const Map<String, List<String>> dosageForms = {
-    'tablet': ['tablet', 'tablets', 'tab', 'tabs', 'قرص', 'اقراص', 'حبوب'],
-    'capsule': ['capsule', 'capsules', 'cap', 'caps', 'كبسولة', 'كبسولات'],
-    'syrup': ['syrup', 'شراب'],
-    'suspension': ['suspension', 'معلق'],
-    'drops': ['drops', 'drop', 'قطرة', 'قطرات'],
-    'spray': ['spray', 'بخاخ'],
-    'cream': ['cream', 'كريم'],
-    'ointment': ['ointment', 'مرهم'],
-    'gel': ['gel', 'جل'],
-    'solution': ['solution', 'محلول'],
-    'ampoule': ['ampoule', 'amp', 'ampoules', 'امبول', 'أمبول'],
-    'vial': ['vial', 'vials', 'فيال'],
-    'inhaler': ['inhaler', 'بخاخة'],
-    'suppository': ['suppository', 'suppositories', 'لبوس'],
-    'sachet': ['sachet', 'sachets', 'كيس', 'اكياس'],
-    'injection': ['injection', 'injectable', 'حقن', 'حقنة'],
-    'powder': ['powder', 'بودرة'],
-    'lotion': ['lotion', 'لوشن'],
-    'patch': ['patch', 'لاصقة'],
+    'TABLET': ['TABLET', 'TABLETS', 'TAB', 'TABS'],
+    'CAPSULE': ['CAPSULE', 'CAPSULES', 'CAP', 'CAPS'],
+    'SYRUP': ['SYRUP', 'SYP'],
+    'SUSPENSION': ['SUSPENSION', 'SUSP'],
+    'DROPS': ['DROPS', 'DROP'],
+    'SPRAY': ['SPRAY'],
+    'CREAM': ['CREAM'],
+    'OINTMENT': ['OINTMENT', 'OINT'],
+    'GEL': ['GEL'],
+    'SOLUTION': ['SOLUTION', 'SOLN'],
+    'AMPOULE': ['AMPOULE', 'AMP', 'AMPOULES'],
+    'VIAL': ['VIAL', 'VIALS'],
+    'INHALER': ['INHALER'],
+    'SUPPOSITORY': ['SUPPOSITORY', 'SUPPOSITORIES'],
+    'SACHET': ['SACHET', 'SACHETS'],
+    'INJECTION': ['INJECTION', 'INJECTABLE', 'INJ'],
+    'POWDER': ['POWDER'],
+    'LOTION': ['LOTION'],
+    'PATCH': ['PATCH'],
   };
+
+  static const List<String> _genericNoiseWords = [
+    'MG',
+    'MCG',
+    'G',
+    'ML',
+    'IU',
+    '%',
+    'TABLET',
+    'TABLETS',
+    'TAB',
+    'TABS',
+    'CAPSULE',
+    'CAPSULES',
+    'CAP',
+    'CAPS',
+    'SYRUP',
+    'SYP',
+    'SUSPENSION',
+    'SUSP',
+    'DROPS',
+    'DROP',
+    'SPRAY',
+    'CREAM',
+    'OINTMENT',
+    'OINT',
+    'GEL',
+    'AMP',
+    'AMPOULE',
+    'AMPOULES',
+    'VIAL',
+    'VIALS',
+    'INHALER',
+    'SUPPOSITORY',
+    'SUPPOSITORIES',
+    'SACHET',
+    'SACHETS',
+    'INJECTION',
+    'INJECTABLE',
+    'INJ',
+    'POWDER',
+    'LOTION',
+    'PATCH',
+    'PLUS',
+    'AND',
+    'OR',
+    'WITH',
+    'FOR',
+  ];
 
   static String normalize(String input) {
     if (input.trim().isEmpty) return '';
 
-    String text = input.trim().toLowerCase();
+    String text = input.trim().toUpperCase();
 
-    text = _normalizeArabic(text);
     text = _normalizeEnglish(text);
     text = _normalizeUnits(text);
+    text = _normalizeDosageAliases(text);
     text = _removeNoise(text);
     text = _collapseSpaces(text);
 
@@ -42,6 +91,8 @@ class MedicineNormalizer {
     if (normalized.isEmpty) return [];
 
     final baseName = extractBaseName(normalized);
+    final strength = extractStrength(normalized);
+    final dosageForm = extractDosageForm(normalized);
 
     final parts = normalized
         .split(' ')
@@ -63,10 +114,28 @@ class MedicineNormalizer {
       unique.add(baseName);
     }
 
+    if (strength != null && strength.isNotEmpty) {
+      unique.add(strength);
+    }
+
+    if (dosageForm != null && dosageForm.isNotEmpty) {
+      unique.add(dosageForm);
+    }
+
     unique.addAll(parts);
     unique.addAll(baseParts);
 
-    return unique.toList();
+    // add useful prefixes like first word / first two words
+    if (baseParts.isNotEmpty) {
+      unique.add(baseParts.first);
+    }
+    if (baseParts.length >= 2) {
+      unique.add('${baseParts[0]} ${baseParts[1]}');
+    }
+
+    return unique
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
   }
 
   static String? extractStrength(String input) {
@@ -74,12 +143,10 @@ class MedicineNormalizer {
 
     final patterns = [
       RegExp(
-        r'(\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)?)\s*(mg|mcg|g|ml|iu|%)',
-        caseSensitive: false,
+        r'(\d+(?:\.\d+)?)\s*(MG|MCG|G|IU)\s*/\s*(\d+(?:\.\d+)?)\s*(ML)',
       ),
       RegExp(
-        r'(\d+(?:\.\d+)?)\s*(mg|mcg|g|iu)\s*/\s*(\d+(?:\.\d+)?)\s*(ml)',
-        caseSensitive: false,
+        r'(\d+(?:\.\d+)?)\s*(MG|MCG|G|ML|IU|%)',
       ),
     ];
 
@@ -93,14 +160,14 @@ class MedicineNormalizer {
           match.group(3) != null &&
           match.group(4) != null) {
         final leftValue = match.group(1)!.replaceAll(' ', '');
-        final leftUnit = match.group(2)!.toLowerCase();
+        final leftUnit = match.group(2)!.toUpperCase();
         final rightValue = match.group(3)!.replaceAll(' ', '');
-        final rightUnit = match.group(4)!.toLowerCase();
+        final rightUnit = match.group(4)!.toUpperCase();
         return '$leftValue$leftUnit/$rightValue$rightUnit';
       }
 
       final value = match.group(1)?.replaceAll(' ', '');
-      final unit = match.group(2)?.toLowerCase();
+      final unit = match.group(2)?.toUpperCase();
 
       if (value != null && unit != null) {
         return '$value$unit';
@@ -137,58 +204,22 @@ class MedicineNormalizer {
 
     if (dosageForm != null && dosageForm.isNotEmpty) {
       for (final alias in dosageForms[dosageForm] ?? const <String>[]) {
-        text = text.replaceAll(normalize(alias), ' ');
+        text = text.replaceAll(
+          RegExp(r'\b' + RegExp.escape(normalize(alias)) + r'\b'),
+          ' ',
+        );
       }
     }
 
-    const genericNoiseWords = <String>[
-      'mg',
-      'mcg',
-      'g',
-      'ml',
-      'iu',
-      '%',
-      'tab',
-      'tabs',
-      'tablet',
-      'tablets',
-      'cap',
-      'caps',
-      'capsule',
-      'capsules',
-      'syrup',
-      'solution',
-      'suspension',
-      'drops',
-      'drop',
-      'spray',
-      'cream',
-      'ointment',
-      'gel',
-      'amp',
-      'ampoule',
-      'ampoules',
-      'vial',
-      'inhaler',
-      'suppository',
-      'suppositories',
-      'sachet',
-      'sachets',
-      'injection',
-      'injectable',
-      'powder',
-      'lotion',
-      'patch',
-      'plus',
-      'and',
-    ];
-
-    for (final word in genericNoiseWords) {
+    for (final word in _genericNoiseWords) {
       text = text.replaceAll(
         RegExp(r'\b' + RegExp.escape(word) + r'\b'),
         ' ',
       );
     }
+
+    // remove standalone numbers
+    text = text.replaceAll(RegExp(r'\b\d+\b'), ' ');
 
     text = _collapseSpaces(text);
     return text.trim();
@@ -211,13 +242,29 @@ class MedicineNormalizer {
     final bNorm = normalize(query);
 
     if (aNorm.isEmpty || bNorm.isEmpty) return false;
-    if (aNorm.contains(bNorm) || bNorm.contains(aNorm)) return true;
+
+    if (aNorm.contains(bNorm) || bNorm.contains(aNorm)) {
+      return true;
+    }
 
     final aBase = extractBaseName(aNorm);
     final bBase = extractBaseName(bNorm);
 
     if (aBase.isEmpty || bBase.isEmpty) return false;
-    return aBase.contains(bBase) || bBase.contains(aBase);
+
+    if (aBase.contains(bBase) || bBase.contains(aBase)) {
+      return true;
+    }
+
+    // important for PANADOL -> PANADOL EXTRA / PANADOL 500 MG
+    final aParts = aBase.split(' ').where((e) => e.isNotEmpty).toList();
+    final bParts = bBase.split(' ').where((e) => e.isNotEmpty).toList();
+
+    if (aParts.isNotEmpty && bParts.isNotEmpty) {
+      if (aParts.first == bParts.first) return true;
+    }
+
+    return false;
   }
 
   static List<String> generateNGrams(String input, {int n = 3}) {
@@ -291,7 +338,15 @@ class MedicineNormalizer {
     final baseY = extractBaseName(y);
 
     if (baseX.isNotEmpty && baseY.isNotEmpty && baseX == baseY) {
-      return 0.97;
+      return 0.98;
+    }
+
+    final xParts = baseX.split(' ').where((e) => e.isNotEmpty).toList();
+    final yParts = baseY.split(' ').where((e) => e.isNotEmpty).toList();
+
+    if (xParts.isNotEmpty && yParts.isNotEmpty && xParts.first == yParts.first) {
+      // PANADOL vs PANADOL EXTRA
+      return 0.92;
     }
 
     final distance = levenshteinDistance(x, y);
@@ -299,7 +354,7 @@ class MedicineNormalizer {
     final levenshteinScore = maxLen == 0 ? 1 : 1 - (distance / maxLen);
     final trigramScore = trigramSimilarity(x, y);
 
-    double finalScore = (levenshteinScore * 0.5) + (trigramScore * 0.5);
+    double finalScore = (levenshteinScore * 0.45) + (trigramScore * 0.55);
 
     if (baseX.isNotEmpty && baseY.isNotEmpty) {
       final baseDistance = levenshteinDistance(baseX, baseY);
@@ -307,70 +362,81 @@ class MedicineNormalizer {
       final baseLevenshtein =
       baseMaxLen == 0 ? 1 : 1 - (baseDistance / baseMaxLen);
       final baseTrigram = trigramSimilarity(baseX, baseY);
-      final baseScore = (baseLevenshtein * 0.5) + (baseTrigram * 0.5);
+      final baseScore = (baseLevenshtein * 0.45) + (baseTrigram * 0.55);
 
-      finalScore = (finalScore * 0.6) + (baseScore * 0.4);
+      finalScore = (finalScore * 0.55) + (baseScore * 0.45);
     }
 
     return finalScore.clamp(0, 1).toDouble();
   }
 
-  static String _normalizeArabic(String text) {
-    return text
-        .replaceAll('أ', 'ا')
-        .replaceAll('إ', 'ا')
-        .replaceAll('آ', 'ا')
-        .replaceAll('ى', 'ي')
-        .replaceAll('ة', 'ه')
-        .replaceAll('ؤ', 'و')
-        .replaceAll('ئ', 'ي')
-        .replaceAll(RegExp(r'[\u064B-\u065F]'), '');
-  }
-
   static String _normalizeEnglish(String text) {
     return text
-        .replaceAll('&', ' and ')
-        .replaceAll('+', ' plus ')
-        .replaceAll('/', '/')
+        .replaceAll('&', ' AND ')
+        .replaceAll('+', ' PLUS ')
+        .replaceAll('_', ' ')
         .replaceAll('-', ' ')
-        .replaceAll('_', ' ');
+        .replaceAll(RegExp(r'\s*/\s*'), '/')
+        .replaceAllMapped(
+      RegExp(r'([A-Z])(\d)'),
+          (m) => '${m.group(1)} ${m.group(2)}',
+    )
+        .replaceAllMapped(
+      RegExp(r'(\d)([A-Z])'),
+          (m) => '${m.group(1)} ${m.group(2)}',
+    );
   }
 
   static String _normalizeUnits(String text) {
     return text
         .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*ملغ'),
-          (m) => '${m.group(1)}mg',
+      RegExp(r'(\d+(?:\.\d+)?)\s*MG\b'),
+          (m) => '${m.group(1)}MG',
     )
         .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*مجم'),
-          (m) => '${m.group(1)}mg',
+      RegExp(r'(\d+(?:\.\d+)?)\s*MCG\b'),
+          (m) => '${m.group(1)}MCG',
     )
         .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*جم'),
-          (m) => '${m.group(1)}g',
+      RegExp(r'(\d+(?:\.\d+)?)\s*G\b'),
+          (m) => '${m.group(1)}G',
     )
         .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*مل'),
-          (m) => '${m.group(1)}ml',
+      RegExp(r'(\d+(?:\.\d+)?)\s*ML\b'),
+          (m) => '${m.group(1)}ML',
     )
         .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*ميكروجرام'),
-          (m) => '${m.group(1)}mcg',
+      RegExp(r'(\d+(?:\.\d+)?)\s*IU\b'),
+          (m) => '${m.group(1)}IU',
     )
         .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*وحده'),
-          (m) => '${m.group(1)}iu',
-    )
-        .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*%'),
+      RegExp(r'(\d+(?:\.\d+)?)\s*%\b'),
           (m) => '${m.group(1)}%',
+    )
+        .replaceAllMapped(
+      RegExp(r'(\d+(?:\.\d+)?)\s*(MG|MCG|G|ML|IU)\b'),
+          (m) => '${m.group(1)} ${m.group(2)}',
     );
+  }
+
+  static String _normalizeDosageAliases(String text) {
+    String normalized = text;
+
+    dosageForms.forEach((canonical, aliases) {
+      for (final alias in aliases) {
+        normalized = normalized.replaceAll(
+          RegExp(r'\b' + RegExp.escape(alias) + r'\b'),
+          canonical,
+        );
+      }
+    });
+
+    return normalized;
   }
 
   static String _removeNoise(String text) {
     return text.replaceAll(
-      RegExp(r'[^\p{L}\p{N}\s/%]', unicode: true),
+      RegExp(r'[^A-Z0-9\s/%]'),
       ' ',
     );
   }

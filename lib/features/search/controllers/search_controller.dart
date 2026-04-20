@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../pharmacy/models/pharmacy_model.dart';
 import '../../prescription/models/beneficiary_model.dart';
 
+import '../models/matched_medicine_result.dart';
 import '../models/medicine_search_request.dart';
 import '../models/pharmacy_search_filters.dart';
 import '../models/pharmacy_search_result.dart';
@@ -68,6 +69,56 @@ class SearchController extends GetxController {
     )
         .toList();
   }
+
+  void replaceMatchedMedicine({
+    required String pharmacyId,
+    required String requestedName,
+    required MatchedMedicineResult newSelection,
+  }) {
+    final index = results.indexWhere((r) => r.pharmacyId == pharmacyId);
+    if (index == -1) return;
+
+    final oldResult = results[index];
+
+    final updatedMatches = oldResult.matchedMedicines.map((item) {
+      if (item.requestedName == requestedName) {
+        final oldSelected = item;
+
+        final mergedAlternatives = <MatchedMedicineResult>[
+          oldSelected.copyWith(similarMatches: const []),
+          ...item.similarMatches.where(
+                (e) => e.matchedMedicineId != newSelection.matchedMedicineId,
+          ),
+        ];
+
+        return newSelection.copyWith(
+          similarMatches: mergedAlternatives,
+        );
+      }
+      return item;
+    }).toList();
+
+    final newTotalPrice = updatedMatches.fold<double>(
+      0,
+          (sum, item) => sum + item.price,
+    );
+
+    final updatedResult = oldResult.copyWith(
+      matchedMedicines: updatedMatches,
+      totalEstimatedPrice: newTotalPrice,
+    );
+
+    results[index] = updatedResult;
+
+    if (pharmaciesById.containsKey(pharmacyId)) {
+      final oldPharmacy = pharmaciesById[pharmacyId]!;
+      pharmaciesById[pharmacyId] = oldPharmacy.copyWith(
+        matchedMedicines: updatedMatches,
+        totalEstimatedPrice: newTotalPrice,
+      );
+    }
+  }
+
   void setSearchSource(String source) {
     searchSource.value = source;
   }

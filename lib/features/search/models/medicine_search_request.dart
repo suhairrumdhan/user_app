@@ -8,6 +8,11 @@ class MedicineSearchRequest {
   final String? dosageForm;
   final int quantity;
 
+  // ✅ جديدة
+  final String? baseName;
+  final List<String> searchTokens;
+  final String? resolvedDisplayName;
+
   const MedicineSearchRequest({
     required this.rawText,
     required this.normalizedText,
@@ -16,6 +21,9 @@ class MedicineSearchRequest {
     this.strength,
     this.dosageForm,
     this.quantity = 1,
+    this.baseName,
+    this.searchTokens = const [],
+    this.resolvedDisplayName,
   });
 
   MedicineSearchRequest copyWith({
@@ -26,6 +34,9 @@ class MedicineSearchRequest {
     String? strength,
     String? dosageForm,
     int? quantity,
+    String? baseName,
+    List<String>? searchTokens,
+    String? resolvedDisplayName,
   }) {
     return MedicineSearchRequest(
       rawText: rawText ?? this.rawText,
@@ -36,6 +47,9 @@ class MedicineSearchRequest {
       strength: strength ?? this.strength,
       dosageForm: dosageForm ?? this.dosageForm,
       quantity: quantity ?? this.quantity,
+      baseName: baseName ?? this.baseName,
+      searchTokens: searchTokens ?? this.searchTokens,
+      resolvedDisplayName: resolvedDisplayName ?? this.resolvedDisplayName,
     );
   }
 
@@ -51,6 +65,13 @@ class MedicineSearchRequest {
   bool get hasDosageForm =>
       dosageForm != null && dosageForm!.trim().isNotEmpty;
 
+  bool get hasBaseName =>
+      baseName != null && baseName!.trim().isNotEmpty;
+
+  bool get hasResolvedDisplayName =>
+      resolvedDisplayName != null &&
+          resolvedDisplayName!.trim().isNotEmpty;
+
   @override
   String toString() {
     return 'MedicineSearchRequest('
@@ -60,7 +81,10 @@ class MedicineSearchRequest {
         'parsedScientificName: $parsedScientificName, '
         'strength: $strength, '
         'dosageForm: $dosageForm, '
-        'quantity: $quantity'
+        'quantity: $quantity, '
+        'baseName: $baseName, '
+        'searchTokens: $searchTokens, '
+        'resolvedDisplayName: $resolvedDisplayName'
         ')';
   }
 }

@@ -162,19 +162,29 @@ class MedicineSearchService {
         '🧪 pharmacy="$pharmacyName" request="${request.rawText}" candidates=${candidates.length}',
       );
 
-      final bestMatch = MedicineMatcher.findBestMatch(
+      final topMatches = MedicineMatcher.findTopMatches(
         request: request,
         pharmacyMedicines: candidates,
+        limit: 5,
       );
 
-      if (bestMatch == null) {
+      if (topMatches.isEmpty) {
         debugPrint('   ❌ no match for "${request.rawText}" in "$pharmacyName"');
         missingMedicines.add(request.rawText);
       } else {
+        final bestMatch = topMatches.first;
+
         debugPrint(
-          '   ✅ matched "${request.rawText}" -> "${bestMatch.matchedMedicineName}" score=${bestMatch.matchScore}',
+          '   ✅ matched "${request.rawText}" -> "${bestMatch.matchedMedicineName}" '
+              'score=${bestMatch.matchScore} '
+              'alternatives=${topMatches.length - 1}',
         );
-        matchedMedicines.add(bestMatch);
+
+        matchedMedicines.add(
+          bestMatch.copyWith(
+            similarMatches: topMatches.skip(1).toList(),
+          ),
+        );
       }
     }
 
@@ -230,8 +240,11 @@ class MedicineSearchService {
     required MedicineSearchRequest request,
   }) {
     final normalizedRequest = MedicineNormalizer.normalize(request.rawText);
-    final requestBase = MedicineNormalizer.extractBaseName(request.rawText);
-    final requestTokens = MedicineNormalizer.buildSearchTokens(request.rawText);
+    final requestBase =
+        request.baseName ?? MedicineNormalizer.extractBaseName(request.rawText);
+    final requestTokens = request.searchTokens.isNotEmpty
+        ? request.searchTokens
+        : MedicineNormalizer.buildSearchTokens(request.rawText);
 
     final List<Map<String, dynamic>> exact = [];
     final List<Map<String, dynamic>> contains = [];
@@ -241,59 +254,107 @@ class MedicineSearchService {
       final name = (med['medicineName'] ?? '').toString().trim();
       final scientific = (med['scientificName'] ?? '').toString().trim();
 
+      if (name.isEmpty && scientific.isEmpty) continue;
+
       final normalizedName = MedicineNormalizer.normalize(name);
       final normalizedScientific = MedicineNormalizer.normalize(scientific);
 
       final baseName = MedicineNormalizer.extractBaseName(name);
       final baseScientific = MedicineNormalizer.extractBaseName(scientific);
 
+      bool isExact = false;
+      bool isContains = false;
+      bool isFuzzy = false;
+
+      // 1) exact / base exact
       if (normalizedRequest == normalizedName ||
           normalizedRequest == normalizedScientific ||
           (requestBase.isNotEmpty &&
               (requestBase == baseName || requestBase == baseScientific))) {
-        exact.add(med);
-        continue;
+        isExact = true;
       }
 
-      bool containsHit = false;
+      // 2) contains / family match / token hit
+      if (!isExact) {
+        if (MedicineNormalizer.containsNormalized(name, request.rawText) ||
+            MedicineNormalizer.containsNormalized(scientific, request.rawText)) {
+          isContains = true;
+        }
 
-      if (MedicineNormalizer.containsNormalized(name, request.rawText) ||
-          MedicineNormalizer.containsNormalized(scientific, request.rawText)) {
-        containsHit = true;
-      }
+        if (!isContains && requestTokens.isNotEmpty) {
+          for (final token in requestTokens) {
+            if (token.trim().length < 3) continue;
 
-      if (!containsHit) {
-        for (final token in requestTokens) {
-          if (token.trim().length < 3) continue;
-          if (normalizedName.contains(token) ||
-              normalizedScientific.contains(token)) {
-            containsHit = true;
-            break;
+            if (normalizedName.contains(token) ||
+                normalizedScientific.contains(token)) {
+              isContains = true;
+              break;
+            }
+          }
+        }
+
+        // first word family match: PANADOL -> PANADOL EXTRA
+        if (!isContains && requestBase.isNotEmpty) {
+          final reqParts =
+          requestBase.split(' ').where((e) => e.isNotEmpty).toList();
+          final nameParts =
+          baseName.split(' ').where((e) => e.isNotEmpty).toList();
+          final sciParts =
+          baseScientific.split(' ').where((e) => e.isNotEmpty).toList();
+
+          if (reqParts.isNotEmpty &&
+              ((nameParts.isNotEmpty && reqParts.first == nameParts.first) ||
+                  (sciParts.isNotEmpty && reqParts.first == sciParts.first))) {
+            isContains = true;
           }
         }
       }
 
-      if (containsHit) {
-        contains.add(med);
-        continue;
+      // 3) fuzzy fallback
+      if (!isExact && !isContains) {
+        final fuzzyName =
+        MedicineNormalizer.similarityScore(request.rawText, name);
+        final fuzzyScientific =
+        MedicineNormalizer.similarityScore(request.rawText, scientific);
+
+        if (fuzzyName >= 0.60 || fuzzyScientific >= 0.60) {
+          isFuzzy = true;
+        }
       }
 
-      final fuzzyName = MedicineNormalizer.similarityScore(request.rawText, name);
-      final fuzzyScientific =
-      MedicineNormalizer.similarityScore(request.rawText, scientific);
-
-      if (fuzzyName >= 0.60 || fuzzyScientific >= 0.60) {
+      if (isExact) {
+        exact.add(med);
+      } else if (isContains) {
+        contains.add(med);
+      } else if (isFuzzy) {
         fuzzy.add(med);
       }
     }
 
-    if (exact.isNotEmpty) return exact;
-    if (contains.isNotEmpty) return contains;
-    if (fuzzy.isNotEmpty) return fuzzy;
+    // ✅ المهم: لا نرجع bucket واحدة فقط
+    final combined = <Map<String, dynamic>>[
+      ...exact,
+      ...contains,
+      ...fuzzy,
+    ];
 
-    return [];
+    if (combined.isEmpty) return [];
+
+    // إزالة التكرار حسب medicineId أو الاسم
+    final Map<String, Map<String, dynamic>> unique = {};
+
+    for (final med in combined) {
+      final key = (med['medicineId'] ?? med['id'] ?? med['medicineName'] ?? '')
+          .toString()
+          .trim()
+          .toUpperCase();
+
+      if (key.isEmpty) continue;
+      unique.putIfAbsent(key, () => med);
+    }
+
+    return unique.values.toList();
   }
-
   double _calculateTotalEstimatedPrice(List<MatchedMedicineResult> matches) {
     double total = 0;
     for (final item in matches) {

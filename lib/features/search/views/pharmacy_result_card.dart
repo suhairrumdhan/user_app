@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../pharmacy/models/pharmacy_model.dart';
 import '../../search/models/matched_medicine_result.dart';
@@ -12,6 +13,13 @@ class PharmacyResultCard extends StatelessWidget {
   final VoidCallback? onTapOpenMap;
   final VoidCallback? onTapDetails;
 
+  /// Reactive callback from parent
+  final void Function({
+  required String pharmacyId,
+  required String requestedName,
+  required MatchedMedicineResult newSelection,
+  })? onSelectAlternative;
+
   const PharmacyResultCard({
     super.key,
     required this.pharmacy,
@@ -19,6 +27,7 @@ class PharmacyResultCard extends StatelessWidget {
     this.onTapChat,
     this.onTapOpenMap,
     this.onTapDetails,
+    this.onSelectAlternative,
   });
 
   @override
@@ -32,7 +41,7 @@ class PharmacyResultCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: SearchUiColors.primary.withOpacity(0.08),
         ),
@@ -50,9 +59,13 @@ class PharmacyResultCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildHeader(statusColor),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _buildMainStats(),
-            const SizedBox(height: 12),
+            if (pharmacy.matchedMedicines.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _buildQuickMatchesPreview(),
+            ],
+            const SizedBox(height: 8),
             _buildActions(context),
           ],
         ),
@@ -68,19 +81,49 @@ class PharmacyResultCard extends StatelessWidget {
           width: 46,
           height: 46,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [SearchUiColors.primary, SearchUiColors.secondary],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
             borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: SearchUiColors.primary.withOpacity(0.15),
+            ),
           ),
-          child: const Icon(
-            Iconsax.hospital,
-            color: Colors.white,
-            size: 22,
+          clipBehavior: Clip.antiAlias,
+          child: pharmacy.imageUrl.isNotEmpty
+              ? Image.network(
+            pharmacy.imageUrl,
+            width: 46,
+            height: 46,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [SearchUiColors.primary, SearchUiColors.secondary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: const Icon(
+                Iconsax.hospital,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+          )
+              : Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [SearchUiColors.primary, SearchUiColors.secondary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: const Icon(
+              Iconsax.hospital,
+              color: Colors.white,
+              size: 22,
+            ),
           ),
         ),
+
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -102,8 +145,10 @@ class PharmacyResultCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: statusColor.withOpacity(0.10),
                       borderRadius: BorderRadius.circular(12),
@@ -142,7 +187,7 @@ class PharmacyResultCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   InkWell(
-                    onTap: onTapOpenMap,
+                    onTap: onTapOpenMap ?? _openGoogleMaps,  // استخدام الدالة الافتراضية إذا لم يتم تمرير callback
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -176,8 +221,7 @@ class PharmacyResultCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                  ),
-                ],
+                  ),                ],
               ),
             ],
           ),
@@ -200,10 +244,8 @@ class PharmacyResultCard extends StatelessWidget {
         Expanded(
           child: _statCard(
             icon: Iconsax.box,
-            title: 'نسبة التوفر',
-            value: '${pharmacy.coveragePercent.toStringAsFixed(0)}%',
-            subtitle:
-            '${pharmacy.matchedCount}/${pharmacy.requestedCount} متوفر',
+            title: 'النتائج المتوفرة',
+            value: '${pharmacy.matchedCount}/${pharmacy.requestedCount} متوفر',
           ),
         ),
       ],
@@ -279,6 +321,87 @@ class PharmacyResultCard extends StatelessWidget {
     );
   }
 
+  Widget _buildQuickMatchesPreview() {
+    if (pharmacy.matchedMedicines.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            'أفضل التطابقات',
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+              color: SearchUiColors.darkText,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 68,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: pharmacy.matchedMedicines.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final item = pharmacy.matchedMedicines[index];
+              return Container(
+                width: 190,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: SearchUiColors.light,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: SearchUiColors.primary.withOpacity(0.08),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    _medicineImage(item.imageUrl, size: 50),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.requestedName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 10.8,
+                              fontWeight: FontWeight.w700,
+                              color: SearchUiColors.softText,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            item.matchedMedicineName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.8,
+                              fontWeight: FontWeight.w800,
+                              color: SearchUiColors.darkText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildActions(BuildContext context) {
     return Row(
       children: [
@@ -338,6 +461,9 @@ class PharmacyResultCard extends StatelessWidget {
   }
 
   void _showDetailsDialog(BuildContext context) {
+    final ValueNotifier<PharmacyModel> pharmacyNotifier =
+    ValueNotifier<PharmacyModel>(pharmacy);
+
     showDialog(
       context: context,
       builder: (_) {
@@ -349,99 +475,132 @@ class PharmacyResultCard extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               maxWidth: 560,
-              maxHeight: 640,
+              maxHeight: 680,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildDialogHeader(context),
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildDialogSummary(),
-                        const SizedBox(height: 14),
-                        if (pharmacy.matchedMedicines.isNotEmpty) ...[
-                          const Text(
-                            'الأدوية المتوفرة',
-                            style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w800,
-                              color: SearchUiColors.darkText,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          ...pharmacy.matchedMedicines
-                              .map((item) => Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: _medicineTile(item),
-                          )),
-                        ],
-                        if (pharmacy.missingMedicines.isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          const Text(
-                            'الأدوية غير المتوفرة',
-                            style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w800,
-                              color: SearchUiColors.darkText,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: pharmacy.missingMedicines
-                                .map(
-                                  (name) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 8,
+            child: ValueListenableBuilder<PharmacyModel>(
+              valueListenable: pharmacyNotifier,
+              builder: (context, currentPharmacy, __) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildDialogHeader(context, currentPharmacy),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildDialogSummary(currentPharmacy),
+                            const SizedBox(height: 14),
+                            if (currentPharmacy.matchedMedicines.isNotEmpty) ...[
+                              const Text(
+                                'الأدوية المتوفرة',
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: SearchUiColors.darkText,
                                 ),
-                                decoration: BoxDecoration(
-                                  color: SearchUiColors.danger
-                                      .withOpacity(0.08),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: SearchUiColors.danger
-                                        .withOpacity(0.16),
-                                  ),
-                                ),
-                                child: Text(
-                                  name,
-                                  style: const TextStyle(
-                                    color: SearchUiColors.danger,
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
+                              ),
+                              const SizedBox(height: 10),
+                              ...currentPharmacy.matchedMedicines.map(
+                                    (item) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: _medicineTile(
+                                    context,
+                                    item,
+                                    onChanged: (updatedItem) {
+                                      final updatedMatches =
+                                      currentPharmacy.matchedMedicines.map((m) {
+                                        if (m.requestedName == updatedItem.requestedName) {
+                                          return updatedItem;
+                                        }
+                                        return m;
+                                      }).toList();
+
+                                      final updatedTotal = updatedMatches.fold<double>(
+                                        0,
+                                            (sum, item) => sum + item.price,
+                                      );
+
+                                      final updatedPharmacy = currentPharmacy.copyWith(
+                                        matchedMedicines: updatedMatches,
+                                        totalEstimatedPrice: updatedTotal,
+                                      );
+
+                                      pharmacyNotifier.value = updatedPharmacy;
+
+                                      onSelectAlternative?.call(
+                                        pharmacyId: currentPharmacy.id,
+                                        requestedName: updatedItem.requestedName,
+                                        newSelection: updatedItem,
+                                      );
+                                    },
                                   ),
                                 ),
                               ),
-                            )
-                                .toList(),
-                          ),
-                        ],
-                      ],
+                            ],
+                            if (currentPharmacy.missingMedicines.isNotEmpty) ...[
+                              const SizedBox(height: 16),
+                              const Text(
+                                'الأدوية غير المتوفرة',
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: SearchUiColors.darkText,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: currentPharmacy.missingMedicines
+                                    .map(
+                                      (name) => Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: SearchUiColors.danger.withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: SearchUiColors.danger.withOpacity(0.16),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      name,
+                                      style: const TextStyle(
+                                        color: SearchUiColors.danger,
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                    .toList(),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             ),
           ),
         );
       },
     );
   }
-
-  Widget _buildDialogHeader(BuildContext context) {
+  Widget _buildDialogHeader(BuildContext context, PharmacyModel currentPharmacy) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 10, 12),
       child: Row(
         children: [
           Expanded(
             child: Text(
-              pharmacy.pharmacyName,
+              currentPharmacy.pharmacyName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -460,7 +619,7 @@ class PharmacyResultCard extends StatelessWidget {
     );
   }
 
-  Widget _buildDialogSummary() {
+  Widget _buildDialogSummary(PharmacyModel currentPharmacy) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -478,14 +637,14 @@ class PharmacyResultCard extends StatelessWidget {
               Expanded(
                 child: _dialogMetric(
                   'السعر الإجمالي',
-                  pharmacy.displayPrice,
+                  currentPharmacy.displayPrice,
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _dialogMetric(
                   'نسبة التوفر',
-                  '${pharmacy.coveragePercent.toStringAsFixed(0)}%',
+                  '${currentPharmacy.coveragePercent.toStringAsFixed(0)}%',
                 ),
               ),
             ],
@@ -496,14 +655,14 @@ class PharmacyResultCard extends StatelessWidget {
               Expanded(
                 child: _dialogMetric(
                   'التوفر',
-                  '${pharmacy.matchedCount}/${pharmacy.requestedCount}',
+                  '${currentPharmacy.matchedCount}/${currentPharmacy.requestedCount}',
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _dialogMetric(
                   'التأمين',
-                  pharmacy.insuranceLabel,
+                  currentPharmacy.insuranceLabel,
                 ),
               ),
             ],
@@ -549,110 +708,288 @@ class PharmacyResultCard extends StatelessWidget {
     );
   }
 
-  Widget _medicineTile(MatchedMedicineResult item) {
-    final scientific = (item.matchedScientificName ?? '').trim();
+  Widget _medicineTile(
+      BuildContext context,
+      MatchedMedicineResult item, {
+        required ValueChanged<MatchedMedicineResult> onChanged,
+      }) {
+    return StatefulBuilder(
+      builder: (context, setLocalState) {
+        MatchedMedicineResult selected = item;
+        final scientific = (selected.matchedScientificName ?? '').trim();
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: SearchUiColors.primary.withOpacity(0.08),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: SearchUiColors.primary.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Iconsax.box,
-              size: 18,
-              color: SearchUiColors.primary,
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: SearchUiColors.primary.withOpacity(0.08),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.requestedName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: SearchUiColors.darkText,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
+          child: Column(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _medicineImage(selected.imageUrl),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          selected.requestedName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: SearchUiColors.darkText,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          selected.matchedMedicineName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: SearchUiColors.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (scientific.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            scientific,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: SearchUiColors.softText,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${selected.price.toStringAsFixed(2)} د.ل',
+                        style: const TextStyle(
+                          color: SearchUiColors.darkText,
+                          fontSize: 11.8,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: SearchUiColors.primary.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${selected.matchScore.toStringAsFixed(0)}%',
+                          style: const TextStyle(
+                            color: SearchUiColors.primary,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              if (selected.similarMatches.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                const Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'النتائج المتشابهة',
+                    style: TextStyle(
+                      fontSize: 11.8,
+                      fontWeight: FontWeight.w800,
+                      color: SearchUiColors.darkText,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  item.matchedMedicineName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: SearchUiColors.primary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 98,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: selected.similarMatches.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final alt = selected.similarMatches[index];
+                      return _similarMedicineCard(
+                        item: alt,
+                        isSelected: false,
+                        onTap: () {
+                          final oldSelected = selected;
+
+                          final nextAlternatives = <MatchedMedicineResult>[
+                            oldSelected.copyWith(similarMatches: const []),
+                            ...selected.similarMatches
+                                .where((e) => e.matchedMedicineId != alt.matchedMedicineId)
+                                .toList(),
+                          ];
+
+                          final newSelected = alt.copyWith(
+                            similarMatches: nextAlternatives,
+                          );
+
+                          setLocalState(() {
+                            selected = newSelected;
+                          });
+
+                          onChanged(newSelected);
+                        },
+                      );
+                    },
                   ),
                 ),
-                if (scientific.isNotEmpty) ...[
-                  const SizedBox(height: 3),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _medicineImage(String? imageUrl, {double size = 54}) {
+    final hasImage = imageUrl != null && imageUrl.trim().isNotEmpty;
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: SearchUiColors.primary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: SearchUiColors.primary.withOpacity(0.10),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: hasImage
+          ? Image.network(
+        imageUrl!,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const Icon(
+          Iconsax.gallery,
+          size: 22,
+          color: SearchUiColors.primary,
+        ),
+      )
+          : const Icon(
+        Iconsax.gallery,
+        size: 22,
+        color: SearchUiColors.primary,
+      ),
+    );
+  }
+
+  Widget _similarMedicineCard({
+    required MatchedMedicineResult item,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 170,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? SearchUiColors.primary.withOpacity(0.08)
+              : SearchUiColors.light,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected
+                ? SearchUiColors.primary
+                : SearchUiColors.primary.withOpacity(0.08),
+          ),
+        ),
+        child: Row(
+          children: [
+            _medicineImage(item.imageUrl, size: 50),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    scientific,
+                    item.matchedMedicineName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: SearchUiColors.darkText,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${item.price.toStringAsFixed(2)} د.ل',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
+                      fontSize: 10.8,
+                      fontWeight: FontWeight.w700,
+                      color: SearchUiColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${item.matchScore.toStringAsFixed(0)}%',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 10.2,
+                      fontWeight: FontWeight.w700,
                       color: SearchUiColors.softText,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${item.price.toStringAsFixed(2)} د.ل',
-                style: const TextStyle(
-                  color: SearchUiColors.darkText,
-                  fontSize: 11.8,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: SearchUiColors.primary.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '${item.matchScore.toStringAsFixed(0)}%',
-                  style: const TextStyle(
-                    color: SearchUiColors.primary,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+  void _openGoogleMaps() {
+    final lat = pharmacy.latitude;
+    final lng = pharmacy.longitude;
+
+    if (lat == null || lng == null) return;
+
+    // فتح خرائط Google مباشرة
+    final url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+
+    // يمكنك استخدام url_launcher package
+    // لا تنس إضافة الحزمة: flutter pub add url_launcher
+    // ثم استيرادها: import 'package:url_launcher/url_launcher.dart';
+
+    _launchUrl(url);
+  }
+
+  Future<void> _launchUrl(Uri url) async {
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
   }
 }

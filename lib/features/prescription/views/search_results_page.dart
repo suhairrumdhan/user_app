@@ -11,6 +11,7 @@ import '../../orders/views/confirm_order_sheet.dart';
 import '../../orders/views/orders_page.dart';
 import '../../pharmacy/models/pharmacy_model.dart';
 import '../../search/controllers/search_controller.dart';
+import '../../search/models/matched_medicine_result.dart';
 import '../../search/models/medicine_search_request.dart';
 import '../../search/models/pharmacy_search_filters.dart';
 import '../../search/services/medicine_normalizer.dart';
@@ -32,15 +33,49 @@ class SearchResultsPage extends StatefulWidget {
   });
 
   @override
-  State<SearchResultsPage> createState() =>
-      _SearchResultsPageState();
+  State<SearchResultsPage> createState() => _SearchResultsPageState();
+}
+typedef OnWidgetSizeChange = void Function(Size size);
+
+class MeasureSize extends StatefulWidget {
+  final Widget child;
+  final OnWidgetSizeChange onChange;
+
+  const MeasureSize({
+    super.key,
+    required this.child,
+    required this.onChange,
+  });
+
+  @override
+  State<MeasureSize> createState() => _MeasureSizeState();
 }
 
+class _MeasureSizeState extends State<MeasureSize> {
+  Size? _oldSize;
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final contextSize = context.size;
+      if (contextSize == null) return;
+      if (_oldSize == contextSize) return;
+
+      _oldSize = contextSize;
+      widget.onChange(contextSize);
+    });
+
+    return widget.child;
+  }
+}
 class _SearchResultsPageState extends State<SearchResultsPage> {
   final SearchController controller = Get.find<SearchController>();
   final ChatService _chatService = ChatService();
-  late final InsuranceController? _insuranceController;
   late final PageController _pageController;
+  final Map<int, double> _cardHeights = {};
+  double _currentCardHeight = 450;
+  int _currentPage = 0;
+  late final InsuranceController? _insuranceController;
 
   double selectedDistance = 5;
   bool useInsurance = false;
@@ -49,7 +84,6 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
   String selectedSort = PharmacySearchSort.nearest;
 
   bool _isMedicinesExpanded = false;
-  int _currentPage = 0;
   bool _didAutoSearch = false;
 
   @override
@@ -78,13 +112,14 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
 
   Future<void> _runSearch() async {
     controller.setBeneficiary(widget.beneficiary);
+
     controller.updateFilters(
       controller.filters.value.copyWith(
         maxDistanceKm: selectedDistance,
         insuranceOnly: useInsurance,
         availableNowOnly: availableNowOnly,
         fullMatchOnly: fullMatchOnly,
-        alternativesAllowed: false,
+        alternativesAllowed: true,
         sortBy: selectedSort,
       ),
     );
@@ -104,44 +139,28 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
 
     if (!mounted) return;
 
-    if (controller.results.isEmpty &&
-        controller.errorMessage.value.isNotEmpty) {
+    if (controller.results.isEmpty && controller.errorMessage.value.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(controller.errorMessage.value)),
       );
-    }
-
-    setState(() {
-      _currentPage = 0;
-    });
-
-    if (_pageController.hasClients) {
-      _pageController.jumpToPage(0);
     }
   }
 
   List<String> _resolveInsuranceCodes() {
     final insuranceController = _insuranceController;
-    if (insuranceController == null) {
-      debugPrint('❌ InsuranceController is null');
-      return [];
-    }
+    if (insuranceController == null) return [];
 
     final active = insuranceController.insurances.where((item) {
       if (!item.isActive) return false;
-      if (widget.beneficiary.isSelf) {
-        return true;
-      }
+      if (widget.beneficiary.isSelf) return true;
       return item.coveredMemberIds.contains(widget.beneficiary.id);
     });
 
-    final result = active
+    return active
         .map((item) => item.companyCode.trim().toUpperCase())
         .where((code) => code.isNotEmpty)
         .toSet()
         .toList();
-
-    return result;
   }
 
   List<PharmacyModel> get _displayResults => controller.displayResults;
@@ -156,6 +175,66 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
     }
 
     return preview;
+  }
+
+  Future<void> _editMedicines() async {
+    final editedMedicines = await Navigator.push<List<MedicineModel>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ManualMedicineSearchPage(
+          initialMedicines: widget.medicines,
+          searchSource: controller.searchSource.value,
+          isReviewMode: true,
+        ),
+      ),
+    );
+
+    if (editedMedicines == null || editedMedicines.isEmpty) return;
+
+    final editedRequests = editedMedicines.map((medicine) {
+      final raw = medicine.displayName.trim();
+      return MedicineSearchRequest(
+        rawText: raw,
+        normalizedText: MedicineNormalizer.normalize(raw),
+        strength: MedicineNormalizer.extractStrength(raw),
+        dosageForm: MedicineNormalizer.extractDosageForm(raw),
+        baseName: MedicineNormalizer.extractBaseName(raw),
+        searchTokens: MedicineNormalizer.buildSearchTokens(raw),
+        resolvedDisplayName: raw,
+      );
+    }).toList();
+
+    controller.clearAll();
+    controller.setSearchSource(controller.searchSource.value);
+    controller.setBeneficiary(widget.beneficiary);
+    controller.setRequests(editedRequests);
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SearchResultsPage(
+          medicines: editedMedicines,
+          beneficiary: widget.beneficiary,
+        ),
+      ),
+    );
+  }
+
+  void _handleAlternativeSelection({
+    required String pharmacyId,
+    required String requestedName,
+    required MatchedMedicineResult newSelection,
+  }) {
+    controller.replaceMatchedMedicine(
+      pharmacyId: pharmacyId,
+      requestedName: requestedName,
+      newSelection: newSelection,
+    );
+
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
@@ -266,49 +345,11 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                 ),
               ),
               TextButton(
-                onPressed: () async {
-                  final editedMedicines = await Navigator.push<List<MedicineModel>>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ManualMedicineSearchPage(
-                        initialMedicines: widget.medicines,
-                        searchSource: controller.searchSource.value,
-                        isReviewMode: true,
-                      ),
-                    ),
-                  );
-
-                  if (editedMedicines == null || editedMedicines.isEmpty) return;
-
-                  final editedRequests = editedMedicines.map((medicine) {
-                    final raw = medicine.displayName.trim();
-                    return MedicineSearchRequest(
-                      rawText: raw,
-                      normalizedText: MedicineNormalizer.normalize(raw),
-                      strength: MedicineNormalizer.extractStrength(raw),
-                      dosageForm: MedicineNormalizer.extractDosageForm(raw),
-                    );
-                  }).toList();
-
-                  controller.clearAll();
-                  controller.setSearchSource(controller.searchSource.value);
-                  controller.setBeneficiary(widget.beneficiary);
-                  controller.setRequests(editedRequests);
-
-                  if (!mounted) return;
-
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => SearchResultsPage(
-                        medicines: editedMedicines,
-                        beneficiary: widget.beneficiary,
-                      ),
-                    ),
-                  );
-                },                style: TextButton.styleFrom(
+                onPressed: _editMedicines,
+                style: TextButton.styleFrom(
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 ),
                 child: const Text(
                   'تعديل',
@@ -388,7 +429,8 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
               });
             },
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
                   Container(
@@ -645,7 +687,6 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
     );
   }
 
-  // ✅ القسم المُصلح - النتائج
   Widget _buildSearchResultsSection() {
     if (controller.isLoading.value) {
       return Container(
@@ -680,7 +721,7 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
           child: Text(
             controller.errorMessage.value.isNotEmpty
                 ? controller.errorMessage.value
-                : 'اضغط على زر عرض الصيدليات المناسبة لبدء البحث',
+                : 'اضغط على زر تحديث نتائج الصيدليات لبدء البحث',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.grey[700],
@@ -693,8 +734,8 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
     }
 
     final results = _displayResults;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final sliderHeight = screenHeight * 0.42;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardWidth = screenWidth * 0.86;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -722,29 +763,27 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
           ],
         ),
         const SizedBox(height: 10),
-        SizedBox(
-          height: sliderHeight,
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: results.length,
-            padEnds: false,
-            onPageChanged: (index) {
-              setState(() {
-                _currentPage = index;
-              });
-            },
-            itemBuilder: (context, index) {
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: List.generate(results.length, (index) {
               final result = results[index];
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 5),
+
+              return Container(
+                width: cardWidth,
+                margin: EdgeInsets.only(
+                  left: index == 0 ? 0 : 10,
+                  right: index == results.length - 1 ? 0 : 0,
+                ),
                 child: PharmacyResultCard(
                   pharmacy: result,
+                  onSelectAlternative: _handleAlternativeSelection,
                   onTapDetails: null,
                   onTapChat: () async {
                     try {
-                      // 🔥 الصحيح
                       final chat = await _chatService.createNewChat(result);
-
                       Get.to(() => ChatDetailScreen(chat: chat));
                     } catch (e) {
                       Get.snackbar(
@@ -778,34 +817,13 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                   },
                 ),
               );
-            },
+            }),
           ),
         ),
-        const SizedBox(height: 10),
-        if (results.length > 1)
-          Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                results.length,
-                    (index) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: _currentPage == index ? 18 : 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: _currentPage == index
-                        ? SearchUiColors.primary
-                        : SearchUiColors.primary.withOpacity(0.24),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-          ),
       ],
     );
   }
+
 
   Widget _buildBottomActionBar() {
     return Container(

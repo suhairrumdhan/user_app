@@ -23,11 +23,23 @@ class MedicineMatcher {
 
     final bool isAvailable = _isAvailable(medicineData);
     if (!isAvailable) return null;
-
     final String normalizedRequest = request.normalizedText;
     final String normalizedName = MedicineNormalizer.normalize(name);
     final String normalizedScientific =
     MedicineNormalizer.normalize(scientificName);
+
+// ✅ الجديد
+    final String requestBase =
+        request.baseName ?? MedicineNormalizer.extractBaseName(normalizedRequest);
+
+    final String nameBase =
+    MedicineNormalizer.extractBaseName(normalizedName);
+
+    final List<String> requestTokens =
+    request.searchTokens.isNotEmpty
+        ? request.searchTokens
+        : MedicineNormalizer.buildSearchTokens(normalizedRequest);
+
 
     final String? medicineStrength = _extractMedicineStrength(medicineData, name);
     final String? medicineDosageForm =
@@ -37,97 +49,70 @@ class MedicineMatcher {
     String matchType = '';
     bool matched = false;
 
-    // 1) exact name
-    if (normalizedRequest.isNotEmpty && normalizedRequest == normalizedName) {
-      score = 100;
-      matchType = MedicineMatchType.exactName;
-      matched = true;
+    /// 1) BASE NAME MATCH (الأهم)
+    if (requestBase.isNotEmpty && nameBase.isNotEmpty) {
+      if (requestBase == nameBase) {
+        score = 98;
+        matchType = 'base_exact';
+        matched = true;
+      }
     }
 
-    // 2) exact scientific
-    else if (normalizedScientific.isNotEmpty &&
-        normalizedRequest == normalizedScientific) {
-      score = 95;
-      matchType = MedicineMatchType.exactScientific;
-      matched = true;
-    }
+    /// 2) FIRST WORD MATCH (PANADOL → PANADOL EXTRA)
+    if (!matched && requestBase.isNotEmpty && nameBase.isNotEmpty) {
+      final reqParts = requestBase.split(' ');
+      final nameParts = nameBase.split(' ');
 
-    // 3) contains name
-    else if (_safeContains(normalizedName, normalizedRequest)) {
-      score = 85;
-      matchType = MedicineMatchType.containsName;
-      matched = true;
-    }
-
-    // 4) contains scientific
-    else if (normalizedScientific.isNotEmpty &&
-        _safeContains(normalizedScientific, normalizedRequest)) {
-      score = 82;
-      matchType = MedicineMatchType.containsScientific;
-      matched = true;
-    }
-
-    // 5) brand hint
-    else if (request.hasBrandHint) {
-      final brandNorm =
-      MedicineNormalizer.normalize(request.parsedBrandName!.trim());
-
-      if (brandNorm.isNotEmpty && brandNorm == normalizedName) {
+      if (reqParts.isNotEmpty &&
+          nameParts.isNotEmpty &&
+          reqParts.first == nameParts.first) {
         score = 92;
-        matchType = MedicineMatchType.exactName;
-        matched = true;
-      } else if (brandNorm.isNotEmpty &&
-          _safeContains(normalizedName, brandNorm)) {
-        score = 84;
-        matchType = MedicineMatchType.containsName;
+        matchType = 'base_family';
         matched = true;
       }
     }
 
-    // 6) scientific hint
-    if (!matched && request.hasScientificHint) {
-      final scientificHint =
-      MedicineNormalizer.normalize(request.parsedScientificName!.trim());
+    /// 3) TOKENS MATCH
+    if (!matched && requestTokens.isNotEmpty) {
+      int hits = 0;
 
-      if (scientificHint.isNotEmpty && scientificHint == normalizedScientific) {
-        score = 93;
-        matchType = MedicineMatchType.exactScientific;
-        matched = true;
-      } else if (scientificHint.isNotEmpty &&
-          _safeContains(normalizedScientific, scientificHint)) {
-        score = 83;
-        matchType = MedicineMatchType.containsScientific;
+      for (final token in requestTokens) {
+        if (token.length < 3) continue;
+
+        if (normalizedName.contains(token) ||
+            normalizedScientific.contains(token)) {
+          hits++;
+        }
+      }
+
+      if (hits > 0) {
+        score = 80 + (hits * 3);
+        matchType = 'token_match';
         matched = true;
       }
     }
 
-    // 7) fuzzy on name
+    /// 4) CONTAINS (fallback)
+    if (!matched && MedicineNormalizer.containsNormalized(normalizedName, normalizedRequest)) {
+      score = 78;
+      matchType = 'contains';
+      matched = true;
+    }
+
+    /// 5) FUZZY (آخر حل)
     if (!matched) {
       final fuzzyNameScore =
       MedicineNormalizer.similarityScore(normalizedRequest, normalizedName);
 
-      if (fuzzyNameScore >= 0.86) {
-        score = 70 + (fuzzyNameScore * 20);
-        matchType = MedicineMatchType.fuzzyName;
-        matched = true;
-      }
-    }
-
-    // 8) fuzzy on scientific
-    if (!matched && normalizedScientific.isNotEmpty) {
-      final fuzzyScientificScore = MedicineNormalizer.similarityScore(
-        normalizedRequest,
-        normalizedScientific,
-      );
-
-      if (fuzzyScientificScore >= 0.86) {
-        score = 68 + (fuzzyScientificScore * 20);
-        matchType = MedicineMatchType.fuzzyScientific;
+      if (fuzzyNameScore >= 0.85) {
+        score = 60 + (fuzzyNameScore * 30);
+        matchType = 'fuzzy';
         matched = true;
       }
     }
 
     if (!matched) return null;
+
 
     // تحسين/خصم حسب التركيز والشكل الدوائي
     score = _applyStrengthAdjustment(
@@ -147,7 +132,7 @@ class MedicineMatcher {
     final double price = _resolvePrice(medicineData);
     final bool soldByPiece = medicineData['sellByPiece'] == true;
     final String? unit = medicineData['unit']?.toString();
-
+    final String? imageUrl = medicineData['imageUrl']?.toString();
     return MatchedMedicineResult(
       requestedName: request.rawText,
       pharmacyId: pharmacyId,
@@ -163,6 +148,8 @@ class MedicineMatcher {
       isAvailable: isAvailable,
       matchScore: score,
       matchType: matchType,
+      imageUrl: imageUrl,
+      similarMatches: const [],
       isAlternative: false,
     );
   }
@@ -171,7 +158,22 @@ class MedicineMatcher {
     required MedicineSearchRequest request,
     required List<Map<String, dynamic>> pharmacyMedicines,
   }) {
-    MatchedMedicineResult? best;
+    final topMatches = findTopMatches(
+      request: request,
+      pharmacyMedicines: pharmacyMedicines,
+      limit: 1,
+    );
+
+    if (topMatches.isEmpty) return null;
+    return topMatches.first;
+  }
+
+  static List<MatchedMedicineResult> findTopMatches({
+    required MedicineSearchRequest request,
+    required List<Map<String, dynamic>> pharmacyMedicines,
+    int limit = 5,
+  }) {
+    final List<MatchedMedicineResult> matches = [];
 
     for (final med in pharmacyMedicines) {
       final result = matchMedicine(
@@ -180,24 +182,56 @@ class MedicineMatcher {
       );
 
       if (result == null) continue;
+      matches.add(result);
+    }
 
-      if (best == null) {
-        best = result;
+    if (matches.isEmpty) return [];
+
+    matches.sort((a, b) {
+      final scoreCompare = b.matchScore.compareTo(a.matchScore);
+      if (scoreCompare != 0) return scoreCompare;
+
+      final availabilityCompare = b.isAvailable.toString().compareTo(a.isAvailable.toString());
+      if (availabilityCompare != 0) return availabilityCompare;
+
+      final quantityCompare = (b.availableQuantity + b.availablePieceQuantity)
+          .compareTo(a.availableQuantity + a.availablePieceQuantity);
+      if (quantityCompare != 0) return quantityCompare;
+
+      return a.price.compareTo(b.price);
+    });
+
+    // إزالة التكرار على نفس الاسم المطبع
+    final Map<String, MatchedMedicineResult> unique = {};
+
+    for (final item in matches) {
+      final key = MedicineNormalizer.normalize(item.matchedMedicineName);
+
+      if (!unique.containsKey(key)) {
+        unique[key] = item;
         continue;
       }
 
-      if (result.matchScore > best.matchScore) {
-        best = result;
+      final current = unique[key]!;
+
+      if (item.matchScore > current.matchScore) {
+        unique[key] = item;
         continue;
       }
 
-      if (result.matchScore == best.matchScore &&
-          result.price < best.price) {
-        best = result;
+      if (item.matchScore == current.matchScore && item.price < current.price) {
+        unique[key] = item;
       }
     }
 
-    return best;
+    final result = unique.values.toList()
+      ..sort((a, b) {
+        final scoreCompare = b.matchScore.compareTo(a.matchScore);
+        if (scoreCompare != 0) return scoreCompare;
+        return a.price.compareTo(b.price);
+      });
+
+    return result.take(limit).toList();
   }
 
   static bool _isAvailable(Map<String, dynamic> medicineData) {

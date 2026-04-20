@@ -1,4 +1,3 @@
-flask
-pandas
-openpyxl
-rapidfuzz
+Flask==3.0.3
+flask-cors==5.0.0
+rapidfuzz==3.9.6

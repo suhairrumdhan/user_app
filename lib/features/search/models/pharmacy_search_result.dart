@@ -30,7 +30,33 @@ class PharmacySearchResult {
     required this.missingMedicines,
     this.matchedInsuranceCodes = const [],
   });
-
+  PharmacySearchResult copyWith({
+    String? pharmacyId,
+    String? pharmacyName,
+    double? distanceKm,
+    double? rating,
+    bool? supportsInsurance,
+    bool? isOpenNow,
+    double? totalEstimatedPrice,
+    double? pharmacyScore,
+    List<MatchedMedicineResult>? matchedMedicines,
+    List<String>? missingMedicines,
+    List<String>? matchedInsuranceCodes,
+  }) {
+    return PharmacySearchResult(
+      pharmacyId: pharmacyId ?? this.pharmacyId,
+      pharmacyName: pharmacyName ?? this.pharmacyName,
+      distanceKm: distanceKm ?? this.distanceKm,
+      rating: rating ?? this.rating,
+      supportsInsurance: supportsInsurance ?? this.supportsInsurance,
+      isOpenNow: isOpenNow ?? this.isOpenNow,
+      totalEstimatedPrice: totalEstimatedPrice ?? this.totalEstimatedPrice,
+      pharmacyScore: pharmacyScore ?? this.pharmacyScore,
+      matchedMedicines: matchedMedicines ?? this.matchedMedicines,
+      missingMedicines: missingMedicines ?? this.missingMedicines,
+      matchedInsuranceCodes: matchedInsuranceCodes ?? this.matchedInsuranceCodes,
+    );
+  }
   int get matchedCount => matchedMedicines.length;
 
   int get missingCount => missingMedicines.length;
