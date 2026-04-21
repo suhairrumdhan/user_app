@@ -4,8 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
-import 'package:get/get_core/src/get_main.dart';
 import 'package:latlong2/latlong.dart';
+
 import '../../../app/controllers/main_navigation_controller.dart';
 import '../../../app/core/utils/location_utils.dart';
 import '../../../app/core/widgets/custom_bottom_navigation_bar.dart';
@@ -24,7 +24,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-
   bool _isLocationLoading = true;
   LatLng? _currentPosition;
 
@@ -37,7 +36,9 @@ class _HomePageState extends State<HomePage> {
   Get.find<MainNavigationController>();
 
   StreamSubscription<Position>? _positionStream;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _pharmaciesSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _pharmaciesSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -139,7 +140,6 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-
   Future<void> _updateCurrentLocationAndPharmacies(LatLng position) async {
     final pharmaciesWithDistance = _attachDistances(
       pharmacies: _allPharmacies,
@@ -165,7 +165,6 @@ class _HomePageState extends State<HomePage> {
       _isLocationLoading = false;
     });
   }
-
 
   Future<void> _startLiveLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -278,9 +277,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-
-
-
   List<Widget> get pages => [
     HomeTabContent(
       currentPosition: _currentPosition,
@@ -291,9 +287,8 @@ class _HomePageState extends State<HomePage> {
       selectedDistance: _selectedDistance,
       onDistanceChanged: _filterPharmaciesByDistance,
     ),
-    const ChatsScreen(),
+    ChatsScreen(),
     OrdersPage(),
-
     const NotificationsPage(),
     const ProfilePage(),
   ];

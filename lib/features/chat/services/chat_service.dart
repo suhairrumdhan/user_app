@@ -1,15 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import 'package:user_application/features/pharmacy/models/pharmacy_model.dart';
-
-import '../models/chat_models.dart';
 import '../../profile/controllers/user_controller.dart';
+import '../models/chat_thread_model.dart';
+import '../models/message_model.dart';
 
 class ChatService {
-  static final ChatService _instance = ChatService._internal();
-  factory ChatService() => _instance;
   ChatService._internal();
+  static final ChatService instance = ChatService._internal();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -25,282 +22,231 @@ class ChatService {
     return user;
   }
 
-  /// =============================
-  /// 🔥 تحميل الصيدلية كاملة (صح)
-  /// =============================
-  Future<PharmacyModel> _getPharmacyFull(String pharmacyId) async {
-    final doc = await _firestore
-        .collection('pharmacies')
-        .doc(pharmacyId)
-        .get();
+  CollectionReference<Map<String, dynamic>> get _chatsRef =>
+      _firestore.collection('chats');
 
-    if (!doc.exists) {
-      throw Exception('Pharmacy not found');
-    }
+  CollectionReference<Map<String, dynamic>> _messagesRef(String chatId) =>
+      _chatsRef.doc(chatId).collection('messages');
 
-    return PharmacyModel.fromFirestore(doc);
-  }
-
-  /// =============================
-  /// 🔍 البحث
-  /// =============================
-  Future<List<PharmacyModel>> searchPharmacies(String query) async {
-    if (query.trim().isEmpty) return [];
-
-    try {
-      final normalizedQuery = query.trim();
-
-      final directSearch = await _firestore
-          .collection('pharmacies')
-          .where('pharmacyName', isGreaterThanOrEqualTo: normalizedQuery)
-          .where('pharmacyName', isLessThan: '$normalizedQuery\uf8ff')
-          .get();
-
-      if (directSearch.docs.isNotEmpty) {
-        return directSearch.docs
-            .map((doc) => PharmacyModel.fromFirestore(doc))
-            .toList();
-      }
-
-      final allPharmacies = await _firestore.collection('pharmacies').get();
-
-      return allPharmacies.docs.where((doc) {
-        final name =
-            doc.data()['pharmacyName']?.toString().toLowerCase() ?? '';
-        return name.contains(normalizedQuery.toLowerCase());
-      }).map((doc) => PharmacyModel.fromFirestore(doc)).toList();
-    } catch (e) {
-      debugPrint('Error searching pharmacies: $e');
-      return [];
-    }
-  }
-
-  /// =============================
-  /// 💬 إنشاء دردشة
-  /// =============================
-  Future<Chat> createNewChat(PharmacyModel pharmacy) async {
-    try {
-      final currentUser = _requireCurrentUser();
-      final userId = currentUser.id;
-
-      final existingChat = await _firestore
-          .collection('chats')
-          .where('userId', isEqualTo: userId)
-          .where('pharmacyId', isEqualTo: pharmacy.id)
-          .limit(1)
-          .get();
-
-      if (existingChat.docs.isNotEmpty) {
-        final doc = existingChat.docs.first;
-        final data = doc.data();
-
-        return Chat(
-          id: doc.id,
-          pharmacy: pharmacy,
-          lastMessage: data['lastMessage'] ?? '',
-          lastMessageTime:
-          (data['lastMessageTime'] as Timestamp?)?.toDate() ??
-              DateTime.now(),
-          userUnreadCount: data['userUnreadCount'] ?? 0,
-        );
-      }
-
-      final chatDoc = await _firestore.collection('chats').add({
-        'userId': userId,
-        'pharmacyId': pharmacy.id,
-        'userName': currentUser.name,
-        'userImage': currentUser.profileImageUrl,
-        'pharmacyName': pharmacy.pharmacyName,
-        'pharmacyIsOnline': pharmacy.isOnline,
-        'pharmacyImageUrl': pharmacy.imageUrl,
-        'pharmacyAddress': pharmacy.address,
-        'lastMessage': 'بدأ المحادثة',
-        'lastMessageType': 'text',
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'userUnreadCount': 0,
-      });
-
-      return Chat(
-        id: chatDoc.id,
-        pharmacy: pharmacy,
-        lastMessage: 'بدأ المحادثة',
-        lastMessageTime: DateTime.now(),
-        userUnreadCount: 0,
-      );
-    } catch (e) {
-      debugPrint('Error creating chat: $e');
-      rethrow;
-    }
-  }
-
-  /// =============================
-  /// 📩 إرسال رسالة
-  /// =============================
-  Future<void> sendMessage({
-    required String chatId,
-    required String text,
-  }) async {
-    try {
-      final currentUser = _requireCurrentUser();
-
-      await _firestore
-          .collection('chats')
-          .doc(chatId)
-          .collection('messages')
-          .add({
-        'senderId': currentUser.id,
-        'senderName': currentUser.name,
-        'senderType': 'user',
-        'text': text,
-        'timestamp': FieldValue.serverTimestamp(),
-        'type': 'text',
-        'status': 'sent',
-        'isRead': false,
-      });
-
-      await _firestore.collection('chats').doc(chatId).update({
-        'lastMessage': text,
-        'lastMessageType': 'text',
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'pharmacyUnreadCount': FieldValue.increment(1),  // Fixed increment syntax
-      });
-    } catch (e) {
-      debugPrint('Error sending message: $e');
-      rethrow;
-    }
-  }
-
-  /// =============================
-  /// 📥 جلب المحادثات (Stream)
-  /// =============================
-  Stream<List<Chat>> getUserChatsStream() {
+  Stream<List<ChatThread>> getUserChatsStream() {
     final userId = _userController.user.value?.id;
     if (userId == null) return Stream.value([]);
 
-    return _firestore
-        .collection('chats')
+    return _chatsRef
         .where('userId', isEqualTo: userId)
         .orderBy('lastMessageTime', descending: true)
         .snapshots()
-        .asyncMap((snapshot) async {
-      final List<Chat> chats = [];
-
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final pharmacyId = data['pharmacyId'];
-
-        PharmacyModel pharmacy;
-
-        try {
-          pharmacy = await _getPharmacyFull(pharmacyId);
-        } catch (_) {
-          /// fallback سريع بدون crash
-          pharmacy = PharmacyModel(
-            id: pharmacyId,
-            email: '',
-            pharmacyName: data['pharmacyName'] ?? 'صيدلية',
-            ownerName: '',
-            licenseNumber: '',
-            licenseFileUrl: '',
-            ownerIdFileUrl: '',
-            ownerIdNumber: '',
-            phoneNumber: '',
-            imageUrl: data['pharmacyImageUrl'] ?? '',
-            status: 'approved',
-            is24Hours: false,
-            isOnline: data['pharmacyIsOnline'] ?? false,
-
-            location: const {},
-            categories: const [],
-            acceptedInsuranceCodes: const [],
-          );
-        }
-
-        chats.add(
-          Chat(
-            id: doc.id,
-            pharmacy: pharmacy,
-            lastMessage: data['lastMessage'] ?? '',
-            lastMessageTime:
-            (data['lastMessageTime'] as Timestamp?)?.toDate() ??
-                DateTime.now(),
-            userUnreadCount: data['userUnreadCount'] ?? 0,
-          ),
-        );
-      }
-
-      return chats;
-    });
+        .map(
+          (snapshot) => snapshot.docs
+          .map((doc) => ChatThread.fromFirestore(doc.data(), doc.id))
+          .toList(),
+    );
   }
 
-  /// =============================
-  /// 📨 الرسائل
-  /// =============================
-  Stream<List<Message>> getMessagesStream(String chatId) {
-    return _firestore
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .orderBy('timestamp')
+  Stream<List<MessageModel>> getMessagesStream(String chatId) {
+    final currentUser = _userController.user.value;
+
+    return _messagesRef(chatId)
+        .orderBy('timestamp', descending: false)
         .snapshots()
-        .map((snapshot) {
-      final currentUser = _userController.user.value;
-
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-
-        return Message.fromFirestore(
-          data,
+        .map(
+          (snapshot) => snapshot.docs.map((doc) {
+        return MessageModel.fromFirestore(
+          doc.data(),
           doc.id,
           chatId,
           currentUser?.id ?? '',
         );
-      }).toList();
+      }).toList(),
+    );
+  }
+
+  Future<void> sendTextMessage({
+    required String chatId,
+    required String text,
+  }) async {
+    final currentUser = _requireCurrentUser();
+    final value = text.trim();
+    if (value.isEmpty) return;
+
+    await _messagesRef(chatId).add({
+      'senderId': currentUser.id,
+      'senderName': currentUser.name,
+      'senderType': 'user',
+      'type': 'text',
+      'text': value,
+      'status': 'sent',
+      'isRead': false,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    await _chatsRef.doc(chatId).update({
+      'lastMessage': value,
+      'lastMessageType': 'text',
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'pharmacyUnreadCount': FieldValue.increment(1),
     });
   }
 
-  /// =============================
-  /// ✔️ قراءة الرسائل
-  /// =============================
+  Future<void> sendImageMessage({
+    required String chatId,
+    required String imageUrl,
+    String caption = '',
+  }) async {
+    final currentUser = _requireCurrentUser();
+
+    await _messagesRef(chatId).add({
+      'senderId': currentUser.id,
+      'senderName': currentUser.name,
+      'senderType': 'user',
+      'type': 'image',
+      'text': caption.trim(),
+      'imageUrl': imageUrl,
+      'status': 'sent',
+      'isRead': false,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    await _chatsRef.doc(chatId).update({
+      'lastMessage': caption.trim().isNotEmpty ? caption.trim() : 'صورة',
+      'lastMessageType': 'image',
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'pharmacyUnreadCount': FieldValue.increment(1),
+    });
+  }
+
+  Future<void> sendFileMessage({
+    required String chatId,
+    required String fileUrl,
+    required String fileName,
+    String? fileExtension,
+    String? mimeType,
+    required int fileSizeBytes,
+    String caption = '',
+  }) async {
+    final currentUser = _requireCurrentUser();
+
+    await _messagesRef(chatId).add({
+      'senderId': currentUser.id,
+      'senderName': currentUser.name,
+      'senderType': 'user',
+      'type': 'file',
+      'text': caption.trim(),
+      'fileUrl': fileUrl,
+      'fileName': fileName,
+      'fileExtension': fileExtension,
+      'mimeType': mimeType,
+      'fileSizeBytes': fileSizeBytes,
+      'status': 'sent',
+      'isRead': false,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    await _chatsRef.doc(chatId).update({
+      'lastMessage': caption.trim().isNotEmpty ? caption.trim() : fileName,
+      'lastMessageType': 'file',
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'pharmacyUnreadCount': FieldValue.increment(1),
+    });
+  }
+
   Future<void> markChatAsRead(String chatId) async {
-    await _firestore.collection('chats').doc(chatId).update({
+    final batch = _firestore.batch();
+
+    batch.update(_chatsRef.doc(chatId), {
       'userUnreadCount': 0,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+
+    final unreadMessages = await _messagesRef(chatId)
+        .where('senderType', isEqualTo: 'pharmacy')
+        .where('isRead', isEqualTo: false)
+        .get();
+
+    for (final doc in unreadMessages.docs) {
+      batch.update(doc.reference, {
+        'isRead': true,
+        'status': 'read',
+      });
+    }
+
+    await batch.commit();
   }
 
   Stream<int> getUnreadCountStream() {
     final userId = _userController.user.value?.id;
     if (userId == null) return Stream.value(0);
 
-    return _firestore
-        .collection('chats')
-        .where('userId', isEqualTo: userId)
-        .snapshots()
-        .map((snapshot) {
+    return _chatsRef.where('userId', isEqualTo: userId).snapshots().map((s) {
       int total = 0;
-
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        total += (data['userUnreadCount'] ?? 0) as int;
+      for (final doc in s.docs) {
+        total += (doc.data()['userUnreadCount'] ?? 0) as int;
       }
-
       return total;
     });
   }
 
-  /// =============================
-  /// ❌ حذف
-  /// =============================
   Future<void> deleteChat(String chatId) async {
-    try {
-      await _firestore.collection('chats').doc(chatId).delete();
-    } catch (e) {
-      debugPrint('Error deleting chat: $e');
-      rethrow;
+    final messages = await _messagesRef(chatId).get();
+    final batch = _firestore.batch();
+
+    for (final doc in messages.docs) {
+      batch.delete(doc.reference);
     }
+
+    batch.delete(_chatsRef.doc(chatId));
+    await batch.commit();
+  }
+
+  List<ParticipatingPharmacySummary> buildPharmacySummaries(
+      List<ChatThread> threads,
+      ) {
+    final Map<String, List<ChatThread>> grouped = {};
+
+    for (final thread in threads) {
+      grouped.putIfAbsent(thread.pharmacyId, () => []).add(thread);
+    }
+
+    final result = grouped.entries.map((entry) {
+      final pharmacyThreads = [...entry.value]
+        ..sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+
+      final latest = pharmacyThreads.first;
+      final unread = pharmacyThreads.fold<int>(
+        0,
+            (sum, t) => sum + t.userUnreadCount,
+      );
+
+      return ParticipatingPharmacySummary(
+        pharmacyId: latest.pharmacyId,
+        pharmacyName: latest.pharmacyName,
+        pharmacyImageUrl: latest.pharmacyImageUrl,
+        pharmacyIsOnline: latest.pharmacyIsOnline,
+        totalThreads: pharmacyThreads.length,
+        unreadCount: unread,
+        lastMessageTime: latest.lastMessageTime,
+        latestThread: latest,
+      );
+    }).toList()
+      ..sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+
+    return result;
+  }
+
+  Map<String, List<ChatThread>> groupThreadsByPharmacy(List<ChatThread> threads) {
+    final Map<String, List<ChatThread>> grouped = {};
+
+    for (final thread in threads) {
+      grouped.putIfAbsent(thread.pharmacyId, () => []).add(thread);
+    }
+
+    for (final entry in grouped.entries) {
+      entry.value.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+    }
+
+    return grouped;
   }
 }

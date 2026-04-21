@@ -612,6 +612,9 @@ class OrderStatusLog {
 
 class OrderModel {
   final String id;
+  final String? orderNumber;
+  final String? orderDateKey;
+  final int? dailySequence;
   final OrderUserSnapshot user;
   final OrderPharmacySnapshot pharmacy;
   final OrderBeneficiarySnapshot beneficiary;
@@ -642,6 +645,9 @@ class OrderModel {
 
   const OrderModel({
     this.id = '',
+    this.orderNumber,
+    this.orderDateKey,
+    this.dailySequence,
     required this.user,
     required this.pharmacy,
     required this.beneficiary,
@@ -678,6 +684,11 @@ class OrderModel {
   factory OrderModel.fromMap(String id, Map<String, dynamic> map) {
     return OrderModel(
       id: id,
+      orderNumber: map['orderNumber']?.toString(),
+      orderDateKey: map['orderDateKey']?.toString(),
+      dailySequence: map['dailySequence'] is int
+          ? map['dailySequence'] as int
+          : int.tryParse('${map['dailySequence']}'),
       user: OrderUserSnapshot.fromMap(
         Map<String, dynamic>.from(map['user'] ?? {}),
       ),
@@ -730,6 +741,9 @@ class OrderModel {
   Map<String, dynamic> toMap() {
     return {
       'user': user.toMap(),
+      'orderNumber': orderNumber,
+      'orderDateKey': orderDateKey,
+      'dailySequence': dailySequence,
       'pharmacy': pharmacy.toMap(),
       'beneficiary': beneficiary.toMap(),
       'insurance': insurance.toMap(),
@@ -766,6 +780,9 @@ class OrderModel {
 
   OrderModel copyWith({
     String? id,
+    String? orderNumber,
+    String? orderDateKey,
+    int? dailySequence,
     OrderUserSnapshot? user,
     OrderPharmacySnapshot? pharmacy,
     OrderBeneficiarySnapshot? beneficiary,
@@ -796,6 +813,9 @@ class OrderModel {
   }) {
     return OrderModel(
       id: id ?? this.id,
+      orderNumber: orderNumber ?? this.orderNumber,
+      orderDateKey: orderDateKey ?? this.orderDateKey,
+      dailySequence: dailySequence ?? this.dailySequence,
       user: user ?? this.user,
       pharmacy: pharmacy ?? this.pharmacy,
       beneficiary: beneficiary ?? this.beneficiary,

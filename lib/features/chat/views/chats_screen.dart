@@ -1,11 +1,14 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:user_application/features/pharmacy/models/pharmacy_model.dart';
+import 'package:get/get.dart';
 
-import '../services/chat_service.dart';
-import '../models/chat_models.dart';
+import '../../pharmacy/models/pharmacy_model.dart';
+import '../controllers/chats_controller.dart';
+import '../models/chat_thread_model.dart';
+import '../services/chat_pharmacy_service.dart';
+import '../widgets/chat_list_item.dart';
+import '../widgets/participating_pharmacies_strip.dart';
 import 'chat_detail_screen.dart';
-import '../widgets/pharmacy_search.dart';
+import 'chat_search_delegate.dart';
 
 class ChatsScreen extends StatefulWidget {
   const ChatsScreen({super.key});
@@ -15,274 +18,360 @@ class ChatsScreen extends StatefulWidget {
 }
 
 class _ChatsScreenState extends State<ChatsScreen> {
-  final ChatService _chatService = ChatService();
+  final ChatsController controller = Get.put(ChatsController());
   final Color _primaryColor = const Color(0xFF5EABD6);
 
-  /// 🔥 FIX: استخدام PharmacyModel الصحيح
-  Stream<List<PharmacyModel>> getAllPharmacies() {
-    return FirebaseFirestore.instance
-        .collection('pharmacies')
-        .where('status', isEqualTo: 'approved')
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => PharmacyModel.fromFirestore(doc))
-          .toList();
+  final Set<String> _expandedPharmacyIds = <String>{};
+
+  bool _isExpanded(String pharmacyId) => _expandedPharmacyIds.contains(pharmacyId);
+
+  void _toggleExpanded(String pharmacyId) {
+    setState(() {
+      if (_expandedPharmacyIds.contains(pharmacyId)) {
+        _expandedPharmacyIds.remove(pharmacyId);
+      } else {
+        _expandedPharmacyIds.add(pharmacyId);
+      }
     });
   }
 
-  /// 🔥 فتح المحادثة + تصفير unread
-  void _navigateToChat(Chat chat) async {
-    await _chatService.markChatAsRead(chat.id);
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ChatDetailScreen(chat: chat),
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline_rounded,
+              size: 60,
+              color: _primaryColor.withOpacity(0.45),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'لا توجد دردشات حالياً',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'ستظهر هنا فقط الدردشات المرتبطة بالطلبات التي تم إنشاؤها فعلياً.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[700],
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  void _showSearch(BuildContext context) {
-    showSearch(
-      context: context,
-      delegate: PharmacySearch(chatService: _chatService),
+  Widget _buildGroupedCard({
+    required BuildContext context,
+    required String pharmacyId,
+    required List<ChatThread> threads,
+  }) {
+    final latest = threads.first;
+    final unreadCount = threads.fold<int>(
+      0,
+          (sum, t) => sum + t.userUnreadCount,
+    );
+
+    final isExpanded = _isExpanded(pharmacyId);
+
+    return StreamBuilder<PharmacyModel?>(
+      stream: ChatPharmacyService.instance.watchPharmacyById(pharmacyId),
+      builder: (context, pharmacySnapshot) {
+        final pharmacy = pharmacySnapshot.data;
+
+        final pharmacyName = pharmacy?.displayName ?? latest.pharmacyName;
+        final pharmacyImageUrl = pharmacy?.imageUrl ?? latest.pharmacyImageUrl;
+        final pharmacyIsOnline = pharmacy?.isOnline ?? latest.pharmacyIsOnline;
+        final hasImage = pharmacyImageUrl.trim().isNotEmpty;
+
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeInOut,
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(
+              color: isExpanded
+                  ? _primaryColor.withOpacity(0.22)
+                  : const Color(0xFFE7EEF6),
+              width: isExpanded ? 1.2 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _primaryColor.withOpacity(isExpanded ? 0.09 : 0.05),
+                blurRadius: isExpanded ? 24 : 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () => _toggleExpanded(pharmacyId),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                  child: Row(
+                    children: [
+                      Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: const Color(0xFFF4F8FC),
+                            backgroundImage:
+                            hasImage ? NetworkImage(pharmacyImageUrl) : null,
+                            child: !hasImage
+                                ? Icon(Icons.local_pharmacy, color: _primaryColor)
+                                : null,
+                          ),
+                          if (pharmacyIsOnline)
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                width: 11,
+                                height: 11,
+                                decoration: BoxDecoration(
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              pharmacyName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 15.8,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 9,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _primaryColor.withOpacity(0.10),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    '${threads.length} طلب',
+                                    style: const TextStyle(
+                                      color: Color(0xFF5EABD6),
+                                      fontSize: 10.8,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  isExpanded
+                                      ? 'إخفاء الطلبات'
+                                      : 'عرض الطلبات داخل الكارد',
+                                  style: TextStyle(
+                                    color: Colors.grey[700],
+                                    fontSize: 12.1,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (unreadCount > 0) ...[
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _primaryColor,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            unreadCount > 99 ? '99+' : unreadCount.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(width: 6),
+                      AnimatedRotation(
+                        turns: isExpanded ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 220),
+                        child: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: _primaryColor,
+                          size: 28,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              AnimatedCrossFade(
+                duration: const Duration(milliseconds: 220),
+                crossFadeState: isExpanded
+                    ? CrossFadeState.showSecond
+                    : CrossFadeState.showFirst,
+                firstChild: const SizedBox.shrink(),
+                secondChild: Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Column(
+                    children: List.generate(threads.length, (index) {
+                      final thread = threads[index];
+
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          bottom: index == threads.length - 1 ? 0 : 8,
+                        ),
+                        child: ChatListItem(
+                          thread: thread,
+                          primaryColor: _primaryColor,
+                          onTap: () {
+                            Get.to(() => ChatDetailScreen(thread: thread));
+                          },
+                          onDelete: () async {
+                            await controller.deleteThread(thread.chatId);
+                          },
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  String _formatTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
+  Widget _buildGroupedList(BuildContext context) {
+    return Obx(() {
+      final grouped = controller.groupedVisibleThreads;
 
-    if (difference.inDays == 0) {
-      return '${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
-    } else if (difference.inDays == 1) {
-      return 'أمس';
-    } else if (difference.inDays < 7) {
-      const days = ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
-      return days[dateTime.weekday - 1];
-    } else {
-      return '${dateTime.day}/${dateTime.month}';
-    }
+      if (grouped.isEmpty) {
+        return _buildEmptyState();
+      }
+
+      final groups = grouped.entries.toList()
+        ..sort(
+              (a, b) => b.value.first.lastMessageTime.compareTo(
+            a.value.first.lastMessageTime,
+          ),
+        );
+
+      return ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+        itemCount: groups.length,
+        itemBuilder: (_, index) {
+          final entry = groups[index];
+          return _buildGroupedCard(
+            context: context,
+            pharmacyId: entry.key,
+            threads: entry.value,
+          );
+        },
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final Size screenSize = MediaQuery.of(context).size;
-    final double screenWidth = screenSize.width;
-    final bool isTablet = screenWidth > 600;
-    final bool isSmallScreen = screenWidth < 350;
-
-    final double padding = screenWidth * 0.04;
-
     return Scaffold(
       backgroundColor: _primaryColor,
       appBar: AppBar(
         backgroundColor: _primaryColor,
-        title: const Text('الدردشات', style: TextStyle(color: Colors.white)),
+        elevation: 0,
+        title: const Text(
+          'الدردشات',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search, color: Colors.white),
-            onPressed: () => _showSearch(context),
+            icon: const Icon(Icons.search_rounded, color: Colors.white),
+            onPressed: () {
+              showSearch(
+                context: context,
+                delegate: ChatSearchDelegate(
+                  controller: controller,
+                  primaryColor: _primaryColor,
+                ),
+              );
+            },
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
-              ),
-              child: Column(
-                children: [
+      body: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF7FAFD),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(34)),
+        ),
+        child: Column(
+          children: [
+            Obx(
+                  () => ParticipatingPharmaciesStrip(
+                pharmacies: controller.pharmacies,
+                selectedPharmacyId: controller.selectedPharmacyId.value,
+                onSelected: (pharmacyId) {
+                  controller.selectPharmacy(pharmacyId);
 
-                  /// 🔥 قائمة الصيدليات (أعلى)
-                  SizedBox(
-                    height: 120,
-                    child: StreamBuilder<List<PharmacyModel>>(
-                      stream: getAllPharmacies(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
-                          return Center(child: CircularProgressIndicator(color: _primaryColor));
-                        }
-
-                        final pharmacies = snapshot.data!;
-
-                        return ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: pharmacies.length,
-                          itemBuilder: (context, index) {
-                            final pharmacy = pharmacies[index];
-
-                            return GestureDetector(
-                              onTap: () async {
-                                final chat = await _chatService.createNewChat(pharmacy);
-                                _navigateToChat(chat);
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: Column(
-                                  children: [
-                                    Stack(
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 28,
-                                          backgroundImage: pharmacy.hasImage
-                                              ? NetworkImage(pharmacy.imageUrl!)
-                                              : null,
-                                          child: !pharmacy.hasImage
-                                              ? const Icon(Icons.local_pharmacy)
-                                              : null,
-                                        ),
-                                        if (pharmacy.isOnline)
-                                          Positioned(
-                                            right: 2,
-                                            bottom: 2,
-                                            child: Container(
-                                              width: 10,
-                                              height: 10,
-                                              decoration: BoxDecoration(
-                                                color: Colors.green,
-                                                shape: BoxShape.circle,
-                                                border: Border.all(color: Colors.white),
-                                              ),
-                                            ),
-                                          )
-                                      ],
-                                    ),
-                                    const SizedBox(height: 5),
-                                    SizedBox(
-                                      width: 60,
-                                      child: Text(
-                                        pharmacy.displayName,
-                                        textAlign: TextAlign.center,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 10),
-                                      ),
-                                    )
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-
-                  /// 🔥 قائمة المحادثات
-                  Expanded(
-                    child: StreamBuilder<List<Chat>>(
-                      stream: _chatService.getUserChatsStream(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
-                          return Center(child: CircularProgressIndicator(color: _primaryColor));
-                        }
-
-                        final chats = snapshot.data!;
-
-                        return ListView.builder(
-                          itemCount: chats.length,
-                          itemBuilder: (context, index) {
-                            final chat = chats[index];
-
-                            return Dismissible(
-                              key: Key(chat.id),
-                              direction: DismissDirection.endToStart,
-                              background: Container(
-                                alignment: Alignment.centerRight,
-                                padding: const EdgeInsets.symmetric(horizontal: 20),
-                                color: Colors.red,
-                                child: const Icon(Icons.delete, color: Colors.white),
-                              ),
-                              onDismissed: (_) {
-                                _chatService.deleteChat(chat.id);
-                              },
-                              child: ListTile(
-                                onTap: () => _navigateToChat(chat),
-
-                                leading: Stack(
-                                  children: [
-                                    CircleAvatar(
-                                      backgroundImage: chat.pharmacy.hasImage
-                                          ? NetworkImage(chat.pharmacy.imageUrl!)
-                                          : null,
-                                      child: !chat.pharmacy.hasImage
-                                          ? const Icon(Icons.local_pharmacy)
-                                          : null,
-                                    ),
-                                    if (chat.pharmacy.isOnline)
-                                      Positioned(
-                                        right: 0,
-                                        bottom: 0,
-                                        child: Container(
-                                          width: 10,
-                                          height: 10,
-                                          decoration: BoxDecoration(
-                                            color: Colors.green,
-                                            shape: BoxShape.circle,
-                                            border: Border.all(color: Colors.white),
-                                          ),
-                                        ),
-                                      )
-                                  ],
-                                ),
-
-                                title: Text(chat.pharmacy.displayName),
-
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      chat.lastMessagePreview,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    if (chat.pharmacy.address != null)
-                                      Text(
-                                        chat.pharmacy.displayAddress,
-                                        style: const TextStyle(fontSize: 10),
-                                      ),
-                                  ],
-                                ),
-
-                                trailing: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(_formatTime(chat.lastMessageTime)),
-
-                                    if (chat.hasUnread)
-                                      Container(
-                                        margin: const EdgeInsets.only(top: 5),
-                                        padding: const EdgeInsets.all(6),
-                                        decoration: BoxDecoration(
-                                          color: _primaryColor,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Text(
-                                          chat.userUnreadCount.toString(),
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
+                  if (pharmacyId != null && pharmacyId.trim().isNotEmpty) {
+                    setState(() {
+                      _expandedPharmacyIds.add(pharmacyId);
+                    });
+                  }
+                },
+                primaryColor: _primaryColor,
               ),
             ),
-          ),
-        ],
+            Expanded(
+              child: Obx(() {
+                if (controller.isLoading.value) {
+                  return Center(
+                    child: CircularProgressIndicator(color: _primaryColor),
+                  );
+                }
+                return _buildGroupedList(context);
+              }),
+            ),
+          ],
+        ),
       ),
     );
   }

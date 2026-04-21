@@ -1,6 +1,6 @@
-// custom_bottom_navigation_bar.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
 import '../constants/icons.dart';
 import 'package:user_application/features/chat/services/chat_service.dart';
 import 'package:user_application/features/notifications/services/notifications_service.dart';
@@ -11,8 +11,9 @@ class CustomBottomNavigationBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
 
-  final ChatService _chatService = ChatService();
+  final ChatService _chatService = ChatService.instance;
   final NotificationsService _notificationsService = NotificationsService();
+
   CustomBottomNavigationBar({
     super.key,
     required this.currentIndex,
@@ -22,7 +23,6 @@ class CustomBottomNavigationBar extends StatelessWidget {
   Widget _buildAnimatedIcon({
     required String svgString,
     required bool isActive,
-    required int badgeCount,
   }) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -106,12 +106,10 @@ class CustomBottomNavigationBar extends StatelessWidget {
                   icon: _buildAnimatedIcon(
                     svgString: homeIconSvg,
                     isActive: false,
-                    badgeCount: 0,
                   ),
                   activeIcon: _buildAnimatedIcon(
                     svgString: homeIconSvg,
                     isActive: true,
-                    badgeCount: 0,
                   ),
                   label: "الرئيسية",
                 ),
@@ -121,7 +119,6 @@ class CustomBottomNavigationBar extends StatelessWidget {
                     icon: _buildAnimatedIcon(
                       svgString: chatIcon,
                       isActive: false,
-                      badgeCount: chatUnreadCount,
                     ),
                   ),
                   activeIcon: _buildBadgeIcon(
@@ -129,7 +126,6 @@ class CustomBottomNavigationBar extends StatelessWidget {
                     icon: _buildAnimatedIcon(
                       svgString: chatIcon,
                       isActive: true,
-                      badgeCount: chatUnreadCount,
                     ),
                   ),
                   label: "الدردشات",
@@ -138,12 +134,10 @@ class CustomBottomNavigationBar extends StatelessWidget {
                   icon: _buildAnimatedIcon(
                     svgString: ordersIcon,
                     isActive: false,
-                    badgeCount: 0,
                   ),
                   activeIcon: _buildAnimatedIcon(
                     svgString: ordersIcon,
                     isActive: true,
-                    badgeCount: 0,
                   ),
                   label: "الطلبات",
                 ),
@@ -153,7 +147,6 @@ class CustomBottomNavigationBar extends StatelessWidget {
                     icon: _buildAnimatedIcon(
                       svgString: notificationIcon,
                       isActive: false,
-                      badgeCount: notificationsUnreadCount,
                     ),
                   ),
                   activeIcon: _buildBadgeIcon(
@@ -161,7 +154,6 @@ class CustomBottomNavigationBar extends StatelessWidget {
                     icon: _buildAnimatedIcon(
                       svgString: notificationIcon,
                       isActive: true,
-                      badgeCount: notificationsUnreadCount,
                     ),
                   ),
                   label: "الإشعارات",
@@ -170,12 +162,10 @@ class CustomBottomNavigationBar extends StatelessWidget {
                   icon: _buildAnimatedIcon(
                     svgString: userIcon,
                     isActive: false,
-                    badgeCount: 0,
                   ),
                   activeIcon: _buildAnimatedIcon(
                     svgString: userIcon,
                     isActive: true,
-                    badgeCount: 0,
                   ),
                   label: "الملف الشخصي",
                 ),
@@ -187,6 +177,7 @@ class CustomBottomNavigationBar extends StatelessWidget {
     );
   }
 }
+
 _OrderNotificationContent buildOrderStatusNotificationContent({
   required String status,
   required String statusLabel,

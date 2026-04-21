@@ -1,1 +1,42 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"pharma-apps","appId":"1:657034913156:android:4339d08b7cf787fe8769d1","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"pharma-apps","configurations":{"android":"1:657034913156:android:4339d08b7cf787fe8769d1","ios":"1:657034913156:ios:f3c14711ff76a45b8769d1","macos":"1:657034913156:ios:f3c14711ff76a45b8769d1","web":"1:657034913156:web:6cf3497ff0d637328769d1","windows":"1:657034913156:web:d70e535499e6b2c58769d1"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "pharma-apps",
+          "appId": "1:657034913156:android:4339d08b7cf787fe8769d1",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "pharma-apps",
+          "configurations": {
+            "android": "1:657034913156:android:4339d08b7cf787fe8769d1",
+            "ios": "1:657034913156:ios:f3c14711ff76a45b8769d1",
+            "macos": "1:657034913156:ios:f3c14711ff76a45b8769d1",
+            "web": "1:657034913156:web:6cf3497ff0d637328769d1",
+            "windows": "1:657034913156:web:d70e535499e6b2c58769d1"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run lint"
+      ]
+    }
+  ]
+}

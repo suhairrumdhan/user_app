@@ -135,7 +135,10 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
         colorText: Colors.white,
         margin: const EdgeInsets.all(12),
       );
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('❌ ConfirmOrderSheet submit failed: $e');
+      debugPrintStack(stackTrace: st);
+
       if (!mounted) return;
 
       Get.snackbar(

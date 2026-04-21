@@ -4,7 +4,6 @@ import 'package:iconsax/iconsax.dart';
 
 import '../../../app/core/utils/location_utils.dart';
 import '../../chat/services/chat_service.dart';
-import '../../chat/views/chat_detail_screen.dart';
 import '../../insurance/controllers/insurance_controller.dart';
 import '../../orders/models/order_status.dart';
 import '../../orders/views/confirm_order_sheet.dart';
@@ -72,7 +71,7 @@ class _MeasureSizeState extends State<MeasureSize> {
 
 class _SearchResultsPageState extends State<SearchResultsPage> {
   final SearchController controller = Get.find<SearchController>();
-  final ChatService _chatService = ChatService();
+  final ChatService _chatService = ChatService.instance;
 
   late final PageController _pageController;
   final Map<int, double> _cardHeights = {};
@@ -246,6 +245,18 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
 
     if (!mounted) return;
     setState(() {});
+  }
+
+  void _showChatUnavailableBeforeOrder() {
+    Get.snackbar(
+      'المحادثة غير متاحة الآن',
+      'يمكن فتح المحادثة بعد إنشاء الطلب فقط',
+      backgroundColor: Colors.orange,
+      colorText: Colors.white,
+      snackPosition: SnackPosition.BOTTOM,
+      margin: const EdgeInsets.all(12),
+      duration: const Duration(seconds: 3),
+    );
   }
 
   @override
@@ -785,25 +796,12 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                 width: cardWidth,
                 margin: EdgeInsets.only(
                   left: index == 0 ? 0 : 10,
-                  right: index == results.length - 1 ? 0 : 0,
                 ),
                 child: PharmacyResultCard(
                   pharmacy: result,
                   onSelectAlternative: _handleAlternativeSelection,
                   onTapDetails: null,
-                  onTapChat: () async {
-                    try {
-                      final chat = await _chatService.createNewChat(result);
-                      Get.to(() => ChatDetailScreen(chat: chat));
-                    } catch (e) {
-                      Get.snackbar(
-                        'خطأ',
-                        'فشل في فتح المحادثة',
-                        backgroundColor: Colors.red,
-                        colorText: Colors.white,
-                      );
-                    }
-                  },
+                  onTapChat: _showChatUnavailableBeforeOrder,
                   onTapOrder: () async {
                     final order = await showModalBottomSheet(
                       context: context,
