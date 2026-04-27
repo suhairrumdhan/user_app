@@ -172,12 +172,6 @@ class RemindersPage extends StatelessWidget {
                         }),
                       ),
                       const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () async {
-                          await LocalNotificationService.showScheduledTestAfter1Minute();
-                        },
-                        child: const Text('Test Scheduled 1 Min'),
-                      ),
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: 20),
                         decoration: BoxDecoration(

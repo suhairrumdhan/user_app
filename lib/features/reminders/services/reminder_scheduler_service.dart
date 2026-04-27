@@ -50,7 +50,7 @@ class ReminderSchedulerService {
           'حان وقت تناول الدواء لـ ${reminder.owner.name}',
           scheduledAt,
           LocalNotificationService.medicationDetails(),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
           matchDateTimeComponents: DateTimeComponents.time,
           uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
@@ -109,7 +109,7 @@ class ReminderSchedulerService {
         'لديك موعد قريب لـ ${reminder.owner.name}',
         LocalNotificationService.fromDateTime(scheduledAt),
         LocalNotificationService.appointmentDetails(),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
         UILocalNotificationDateInterpretation.absoluteTime,
         payload: 'type=appointment;id=${reminder.id}',
@@ -153,7 +153,7 @@ class ReminderSchedulerService {
       body,
       LocalNotificationService.fromDateTime(target),
       LocalNotificationService.snoozeDetails(),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
       UILocalNotificationDateInterpretation.absoluteTime,
       payload: 'type=snooze;id=$reminderLocalId',

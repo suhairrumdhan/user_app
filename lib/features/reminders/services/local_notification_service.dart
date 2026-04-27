@@ -31,33 +31,11 @@ class LocalNotificationService {
     final android = plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
 
+    await android?.requestNotificationsPermission();
+
     final enabled = await android?.areNotificationsEnabled();
     debugPrint('🔔 notifications enabled: $enabled');
     await _createAndroidChannels();
-  }
-  static Future<void> showScheduledTestAfter1Minute() async {
-    final target = tz.TZDateTime.now(tz.local).add(const Duration(minutes: 2));
-
-    debugPrint('🧪 scheduled test target = $target');
-
-
-    await plugin.zonedSchedule(
-      888888,
-      'اختبار مجدول',
-      'إذا ظهر هذا فالمشكلة ليست في scheduler',
-      target,
-      medicationDetails(),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-      UILocalNotificationDateInterpretation.absoluteTime,
-      payload: 'type=scheduled_test',
-    );
-
-    final pending = await plugin.pendingNotificationRequests();
-    debugPrint('🧪 pending after scheduled test = ${pending.length}');
-    for (final p in pending) {
-      debugPrint('🧪 pending -> id=${p.id}, title=${p.title}');
-    }
   }
 
 
