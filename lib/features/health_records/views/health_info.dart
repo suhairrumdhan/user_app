@@ -129,8 +129,6 @@ class _HealthInfoScreenState extends State<HealthInfoScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 8),
-            const Text('البيانات الصحية', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
             const Text('(اختياري - يمكنك تخطي هذه الخطوة)', style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 20),
 
@@ -180,33 +178,14 @@ class _HealthInfoScreenState extends State<HealthInfoScreen> {
               inputType: TextInputType.text,
               onChanged: (val) => medications = val,
             ),
-            const SizedBox(height: 24),
-
-            const Text('الأمراض المزمنة', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: commonDiseases.map((disease) {
-                final selected = chronicDiseases.contains(disease);
-                return FilterChip(
-                  label: Text(disease),
-                  selected: selected,
-                  onSelected: (_) => _toggleDisease(disease),
-                  selectedColor: colorScheme.primary,
-                  checkmarkColor: Colors.white,
-                );
-              }).toList(),
-            ),
             const SizedBox(height: 16),
 
             CustomTextField(
               controller: otherDiseaseController,
-              label: 'أمراض أخرى',
+              label: 'الأمراض المزمنة والحالات الصحية',
               inputType: TextInputType.text,
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 16),
 
             ElevatedButton.icon(
               onPressed: _saveHealthInfo,

@@ -215,20 +215,6 @@ class MapTab extends StatelessWidget {
                 ),
               ],
             ),
-            child: Row(
-              children: [
-                const Icon(Iconsax.radar, size: 16, color: Color(0xFF5EABD6)),
-                const SizedBox(width: 4),
-                Text(
-                  "نطاق: ${selectedDistance.toStringAsFixed(0)} كم",
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF5EABD6),
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ],

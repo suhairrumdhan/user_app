@@ -62,7 +62,7 @@ class _OrdersPageState extends State<OrdersPage> {
               return const _OrdersMessageState(
                 icon: Iconsax.box,
                 title: 'لا توجد طلبات بعد',
-                subtitle: 'عند إرسال أول طلب سيظهر هنا لتتمكني من متابعته.',
+                subtitle: 'عند إرسال أول طلب سيظهر هنا لتتمكن من متابعته.',
               );
             }
 
@@ -134,7 +134,7 @@ class _OrdersShell extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Icon(
-                    Iconsax.shopping_cart4,
+                    Iconsax.box,
                     color: Colors.white,
                     size: 25,
                   ),

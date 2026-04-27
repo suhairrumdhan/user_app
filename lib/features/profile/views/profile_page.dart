@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:user_application/features/profile/views/edit_profile_page.dart';
 import 'package:user_application/features/health_records/views/health_record_page.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -71,7 +72,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   const SizedBox(width: 8),
                   const Text(
-                    "الصفحة الشخصية",
+                    "الملف الشخصي",
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -213,42 +214,36 @@ class _ProfilePageState extends State<ProfilePage> {
                                   Get.to(() => FamilyPage());
                                 },
                               ),
-                              ProfileMenuCard(
-                                icon: Icons.description_outlined,
-                                title: "الوصفات الطبية",
-                                subTitle: "عرض وإدارة وصفاتك الطبية",
-                              ),
 
                               ProfileMenuCard(
                                 icon: Icons.history_outlined,
-                                title: "الأدوية السابقة",
-                                subTitle: "سجل الأدوية السابقة للمستخدم وأفراد العائلة وربطها بالتذكيرات",
+                                title: "سجل الأدوية",
+                                subTitle: "سجل الأدوية  لك وأفراد العائلة ",
                                 onTap: () {
                                   Get.to(() => const PreviousMedicationsPage());
                                 },
                               ),
                               ProfileMenuCard(
                                 icon: Icons.alarm_outlined,
-                                title: "التذكيرات الصحية",
-                                subTitle: "إدارة تنبيهات الأدوية والمواعيد الصحية",
+                                title: "التذكيرات",
+                                subTitle: "إدارة تنبيهات الأدوية والمواعيد",
                                 onTap: () {
                                   Get.to(() => const RemindersPage());
                                 },
                               ),
+
                               ProfileMenuCard(
-                                icon: Icons.monitor_heart,
-                                title: "السجلات الصحية",
-                                subTitle: " تصفح البيانات الصحية لك ولأفراد عائلتك",
+                                icon: Iconsax.save_2,
+                                title: "وصفاتك المحفوظة",
+                                subTitle: " تصفح الوصفات التي قمت بحفظها",
                                 onTap: () {
-                                  Get.put(FamilyController());         // أول واحد
-                                  Get.put(HealthRecordController());   // بعده
-                                  Get.to(() => HealthRecordsPage());
+
                                 },
                               ),
                               ProfileMenuCard(
                                 icon: Icons.health_and_safety_outlined,
                                 title: "التأمين الصحي",
-                                subTitle: "عرض وإدارة شركات التأمين والتغطية",
+                                subTitle: "عرض وإدارة شركات التأمين ",
                                 onTap: () {
                                   Get.to(() => InsurancePage());
                                 },

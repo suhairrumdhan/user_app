@@ -119,7 +119,7 @@ void showImageSourceDialog({
                 iconColor: const Color(0xFFDC2626),
                 iconBg: const Color(0xFFFEF2F2),
                 title: 'رفع ملف PDF',
-                subtitle: 'إرفاق وصفة بصيغة PDF لتحليلها',
+                subtitle: 'إرفاق ملف الوصفة بصيغة PDF ',
                 onTap: () {
                   Navigator.pop(context);
                   onPickPDF();

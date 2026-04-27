@@ -47,12 +47,13 @@ class RemindersPage extends StatelessWidget {
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
-                        'التذكيرات الصحية',
+                        'التذكيرات ',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
                         ),
+
                       ),
                     ),
                     GestureDetector(
@@ -126,9 +127,9 @@ class RemindersPage extends StatelessWidget {
                             child: Column(
                               children: [
                                 const ReminderSectionHeader(
-                                  title: 'نظام التذكيرات الصحية',
+                                  title: 'نظام التذكيرات ',
                                   subTitle:
-                                  'إدارة تذكيرات الأدوية والمواعيد والسجل اليومي',
+                                  'إدارة تذكيرات الأدوية والمواعيد ',
                                   titleColor: Colors.white,
                                   subTitleColor: Colors.white,
                                   icon: Iconsax.notification_bing,

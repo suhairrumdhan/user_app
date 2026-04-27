@@ -64,7 +64,7 @@ class NotificationsHeader extends StatelessWidget {
                         ),
                         SizedBox(height: 4),
                         Text(
-                          'تابعي آخر التحديثات والتنبيهات المهمة',
+                          'تابع آخر التحديثات والتنبيهات المهمة',
                           style: TextStyle(
                             color: Colors.white70,
                             fontSize: 13,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
+
 import '../controllers/health_record_controller.dart';
 import '../../profile/controllers/user_controller.dart';
 import '../../family/controllers/family_controller.dart';
@@ -36,6 +37,9 @@ class HealthInfoCard extends StatefulWidget {
 class _HealthInfoCardState extends State<HealthInfoCard> {
   final TextEditingController _itemController = TextEditingController();
   List<String> _tempItems = [];
+
+  static const Color _textPrimary = Color(0xFF2C3E50);
+  static const Color _textSecondary = Color(0xFF7F8C8D);
 
   @override
   void dispose() {
@@ -90,98 +94,114 @@ class _HealthInfoCardState extends State<HealthInfoCard> {
       }
 
       return Container(
-        margin: const EdgeInsets.only(bottom: 16),
+        margin: const EdgeInsets.only(bottom: 14),
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.white,
-              widget.color.withOpacity(0.03),
-            ],
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-          ),
-          borderRadius: BorderRadius.circular(24),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: widget.color.withOpacity(0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 15,
+              offset: const Offset(0, 4),
             ),
           ],
           border: Border.all(
-            color: widget.color.withOpacity(0.08),
+            color: widget.color.withOpacity(0.10),
           ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(),
+            _buildHeader(currentItems.length),
             const SizedBox(height: 14),
             _buildContent(currentItems),
-            const SizedBox(height: 16),
-            _buildEditButton(currentItems),
+            if (widget.fieldType != 'bloodType') ...[
+              const SizedBox(height: 16),
+              _buildEditButton(currentItems),
+            ],
           ],
         ),
       );
     });
   }
 
-  /// 🔹 Header حديث
-  Widget _buildHeader() {
+  Widget _buildHeader(int count) {
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: widget.color.withOpacity(0.1),
+            color: widget.color.withOpacity(0.10),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Icon(widget.icon, color: widget.color, size: 22),
+          child: Icon(widget.icon, color: widget.color, size: 20),
         ),
         const SizedBox(width: 10),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2C3E50),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: _textPrimary,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              "يمكنك تعديل البيانات",
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[500],
+              const SizedBox(height: 3),
+              Text(
+                widget.fieldType == 'bloodType'
+                    ? 'يمكنك تعديلها مباشرة'
+                    : count > 0
+                    ? '$count عنصر مسجل'
+                    : 'لا توجد بيانات مسجلة',
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  color: _textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
   }
 
-  /// 🔹 المحتوى (Chips)
-  /// 🔹 المحتوى (Chips)
   Widget _buildContent(List<String> items) {
-    // ✅ تعديل: عرض Dropdown لفصيلة الدم حتى لو كانت فارغة
     if (widget.fieldType == 'bloodType') {
       return _buildBloodType(items);
     }
 
     if (items.isEmpty) {
-      return Center(
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FBFE),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: widget.color.withOpacity(0.08),
+          ),
+        ),
         child: Column(
           children: [
-            Icon(widget.icon, color: Colors.black26, size: 40),
+            Icon(
+              widget.icon,
+              color: Colors.grey[400],
+              size: 28,
+            ),
             const SizedBox(height: 8),
             Text(
               widget.emptyMessage,
-              style: TextStyle(color: Colors.black26),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[500],
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -193,17 +213,20 @@ class _HealthInfoCardState extends State<HealthInfoCard> {
       runSpacing: 8,
       children: items.map((item) {
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           decoration: BoxDecoration(
             color: widget.color.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: widget.color.withOpacity(0.10),
+            ),
           ),
           child: Text(
             item,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: widget.color,
+              fontWeight: FontWeight.w600,
+              color: _textPrimary,
             ),
           ),
         );
@@ -211,13 +234,13 @@ class _HealthInfoCardState extends State<HealthInfoCard> {
     );
   }
 
-  /// 🩸 فصيلة الدم - تعديل ليعرض القائمة حتى لو كانت فارغة
   Widget _buildBloodType(List<String> items) {
     final bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
     final selected = items.isNotEmpty ? items.first : null;
 
     return DropdownButtonFormField<String>(
       value: selected,
+      isExpanded: true,
       hint: Text(
         'اختر فصيلة الدم',
         style: TextStyle(
@@ -227,13 +250,26 @@ class _HealthInfoCardState extends State<HealthInfoCard> {
       ),
       decoration: InputDecoration(
         filled: true,
-        fillColor: Colors.grey[50],
+        fillColor: const Color(0xFFF8FBFE),
+        prefixIcon: Icon(Iconsax.drop3, color: widget.color, size: 20),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        prefixIcon: Icon(Iconsax.drop, color: widget.color, size: 20),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(
+            color: widget.color.withOpacity(0.10),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(
+            color: widget.color.withOpacity(0.30),
+          ),
+        ),
+        contentPadding:
+        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
       items: bloodTypes.map((e) {
         return DropdownMenuItem(
@@ -249,35 +285,41 @@ class _HealthInfoCardState extends State<HealthInfoCard> {
       },
     );
   }
-  /// 🔹 زر التعديل
-  Widget _buildEditButton(List<String> items) {
-    if (widget.fieldType == 'bloodType') return const SizedBox();
 
+  Widget _buildEditButton(List<String> items) {
     return SizedBox(
       width: double.infinity,
-      child: Obx(() => ElevatedButton(
-        onPressed: widget.controller.isUpdating.value
-            ? null
-            : () => _showDialog(items),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: widget.color,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+      child: Obx(
+            () => ElevatedButton(
+          onPressed:
+          widget.controller.isUpdating.value ? null : () => _showDialog(items),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: widget.color,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
           ),
-        ),
-        child: widget.controller.isUpdating.value
-            ? const CircularProgressIndicator(color: Colors.white)
-            : const Text(
-            'تعديل',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
+          child: widget.controller.isUpdating.value
+              ? const SizedBox(
+            height: 18,
+            width: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
               color: Colors.white,
             ),
+          )
+              : const Text(
+            'تعديل',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
         ),
-      )),
+      ),
     );
   }
 
@@ -293,16 +335,20 @@ class _HealthInfoCardState extends State<HealthInfoCard> {
   }
 
   void _addItem(void Function(void Function()) setDialogState) {
-    if (_itemController.text.trim().isEmpty) return;
+    final value = _itemController.text.trim();
+    if (value.isEmpty) return;
+    if (_tempItems.contains(value)) {
+      _itemController.clear();
+      return;
+    }
 
     setDialogState(() {
-      _tempItems.add(_itemController.text.trim());
+      _tempItems.add(value);
     });
 
     _itemController.clear();
   }
 
-  /// 🧾 Dialog التعديل
   void _showDialog(List<String> current) {
     _tempItems = List.from(current);
     _itemController.clear();
@@ -318,7 +364,7 @@ class _HealthInfoCardState extends State<HealthInfoCard> {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: widget.color.withOpacity(0.15),
+                color: widget.color.withOpacity(0.12),
                 blurRadius: 25,
                 offset: const Offset(0, 10),
               ),
@@ -329,14 +375,12 @@ class _HealthInfoCardState extends State<HealthInfoCard> {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-
-                  /// 🔹 الهيدر
                   Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: widget.color.withOpacity(0.1),
+                          color: widget.color.withOpacity(0.10),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(widget.icon, color: widget.color, size: 20),
@@ -344,23 +388,21 @@ class _HealthInfoCardState extends State<HealthInfoCard> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          "تعديل ${widget.title}",
+                          'تعديل ${widget.title}',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
+                            color: _textPrimary,
                           ),
                         ),
                       ),
                       IconButton(
                         onPressed: () => Get.back(),
                         icon: const Icon(Icons.close),
-                      )
+                      ),
                     ],
                   ),
-
                   const SizedBox(height: 16),
-
-                  /// 🔹 الإدخال
                   Row(
                     children: [
                       Expanded(
@@ -368,14 +410,28 @@ class _HealthInfoCardState extends State<HealthInfoCard> {
                           controller: _itemController,
                           textAlign: TextAlign.right,
                           decoration: InputDecoration(
-                            hintText: "أدخل قيمة...",
+                            hintText: 'أدخل قيمة...',
                             filled: true,
-                            fillColor: Colors.grey[100],
+                            fillColor: const Color(0xFFF8FBFE),
                             contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 10),
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
                               borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: widget.color.withOpacity(0.08),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: widget.color.withOpacity(0.28),
+                              ),
                             ),
                           ),
                           onSubmitted: (_) => _addItem(setDialogState),
@@ -392,43 +448,56 @@ class _HealthInfoCardState extends State<HealthInfoCard> {
                           ),
                           child: const Icon(Icons.add, color: Colors.white),
                         ),
-                      )
+                      ),
                     ],
                   ),
-
                   const SizedBox(height: 16),
-
-                  /// 🔹 العناصر (Chips)
-                  if (_tempItems.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      child: Text(
-                        "لا توجد عناصر",
-                        style: TextStyle(color: Colors.grey[400]),
+                  Container(
+                    width: double.infinity,
+                    constraints: const BoxConstraints(maxHeight: 220),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FBFE),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: widget.color.withOpacity(0.08),
+                      ),
+                    ),
+                    child: _tempItems.isEmpty
+                        ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text(
+                          'لا توجد عناصر',
+                          style: TextStyle(color: Colors.grey[400]),
+                        ),
                       ),
                     )
-                  else
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _tempItems.map((item) {
-                        return Chip(
-                          label: Text(item),
-                          backgroundColor: widget.color.withOpacity(0.1),
-                          labelStyle: TextStyle(color: widget.color),
-                          deleteIcon: const Icon(Icons.close, size: 18),
-                          onDeleted: () {
-                            setDialogState(() {
-                              _tempItems.remove(item);
-                            });
-                          },
-                        );
-                      }).toList(),
+                        : SingleChildScrollView(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _tempItems.map((item) {
+                          return Chip(
+                            label: Text(item),
+                            backgroundColor: widget.color.withOpacity(0.10),
+                            labelStyle: const TextStyle(
+                              color: _textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            deleteIcon:
+                            const Icon(Icons.close, size: 18),
+                            onDeleted: () {
+                              setDialogState(() {
+                                _tempItems.remove(item);
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
                     ),
-
+                  ),
                   const SizedBox(height: 20),
-
-                  /// 🔹 الأزرار
                   Row(
                     children: [
                       Expanded(
@@ -439,36 +508,44 @@ class _HealthInfoCardState extends State<HealthInfoCard> {
                               borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                          child: const Text("إلغاء"),
+                          child: const Text('إلغاء'),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Obx(() => ElevatedButton(
-                          onPressed: widget.controller.isUpdating.value
-                              ? null
-                              : _saveItems,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: widget.color,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                        child: Obx(
+                              () => ElevatedButton(
+                            onPressed:
+                            widget.controller.isUpdating.value ? null : _saveItems,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: widget.color,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              padding:
+                              const EdgeInsets.symmetric(vertical: 14),
                             ),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            child: widget.controller.isUpdating.value
+                                ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                                : const Text(
+                              'حفظ',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
-                          child: widget.controller.isUpdating.value
-                              ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                              : const Text("حفظ"),
-                        )),
+                        ),
                       ),
                     ],
-                  )
+                  ),
                 ],
               );
             },

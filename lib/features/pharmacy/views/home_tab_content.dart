@@ -230,15 +230,16 @@ class _HomeTabContentState extends State<HomeTabContent> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 18),
                   child: Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(18),
                       border: Border.all(
                         color: Colors.white.withOpacity(0.3),
                       ),
                     ),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
@@ -246,89 +247,48 @@ class _HomeTabContentState extends State<HomeTabContent> {
                             const Icon(
                               Iconsax.location,
                               color: Colors.white,
-                              size: 20,
+                              size: 18,
                             ),
                             const SizedBox(width: 8),
                             Text(
                               "المسافة: ${widget.selectedDistance.toStringAsFixed(0)} كم",
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 14,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Slider(
-                                value: _tempDistance,
-                                min: 1,
-                                max: 20,
-                                divisions: 19,
-                                label: _tempDistance.toStringAsFixed(0),
-                                activeColor: Colors.white,
-                                inactiveColor: Colors.white38,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _tempDistance = value;
-                                  });
-                                },
-                                onChangeEnd: (value) {
-                                  widget.onDistanceChanged(value);
-                                },
-                              ),
-                            ),
-                            PopupMenuButton<double>(
-                              icon: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Row(
-                                  children: const [
-                                    Icon(
-                                      Iconsax.arrow_down_1,
-                                      color: Color(0xFF5EABD6),
-                                      size: 16,
-                                    ),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      "اختر",
-                                      style: TextStyle(
-                                        color: Color(0xFF5EABD6),
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              onSelected: (value) {
-                                setState(() {
-                                  _tempDistance = value;
-                                });
-                                widget.onDistanceChanged(value);
-                              },
-                              itemBuilder: (context) => _distanceOptions.map((distance) {
-                                return PopupMenuItem(
-                                  value: distance,
-                                  child: Text("${distance.toStringAsFixed(0)} كم"),
-                                );
-                              }).toList(),
-                            ),
-                          ],
+                        const SizedBox(height: 2),
+                        SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            trackHeight: 3,
+                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                          ),
+                          child: Slider(
+                            value: _tempDistance,
+                            min: 1,
+                            max: 20,
+                            divisions: 19,
+                            label: _tempDistance.toStringAsFixed(0),
+                            activeColor: Colors.white,
+                            inactiveColor: Colors.white38,
+                            onChanged: (value) {
+                              setState(() {
+                                _tempDistance = value;
+                              });
+                            },
+                            onChangeEnd: (value) {
+                              widget.onDistanceChanged(value);
+                            },
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 16),
 
                 // القسم العلوي (البطاقات)
@@ -340,10 +300,16 @@ class _HomeTabContentState extends State<HomeTabContent> {
                       Row(
                         children: [
                           const SizedBox(width: 8),
+                          const Icon(
+                            Iconsax.radar,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
                           Text(
-                            "الصيدليات القريبة (${widget.pharmacies.length})",
+                            "الصيدليات القريبة",
                             style: const TextStyle(
-                              fontSize: 20,
+                              fontSize: 13,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:iconsax/iconsax.dart';
 
 import '../../pharmacy/models/pharmacy_model.dart';
 import '../controllers/chats_controller.dart';
 import '../models/chat_thread_model.dart';
 import '../services/chat_pharmacy_service.dart';
 import '../widgets/chat_list_item.dart';
+import '../widgets/chats_header.dart';
 import '../widgets/participating_pharmacies_strip.dart';
 import 'chat_detail_screen.dart';
 import 'chat_search_delegate.dart';
@@ -35,6 +37,23 @@ class _ChatsScreenState extends State<ChatsScreen> {
     });
   }
 
+  void _openSearch() {
+    showSearch(
+      context: context,
+      delegate: ChatSearchDelegate(
+        controller: controller,
+        primaryColor: _primaryColor,
+      ),
+    );
+  }
+
+  int _totalUnreadCount() {
+    return controller.visibleThreads.fold<int>(
+      0,
+          (sum, thread) => sum + thread.userUnreadCount,
+    );
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -43,8 +62,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.chat_bubble_outline_rounded,
-              size: 60,
+              Iconsax.messages,
+              size: 62,
               color: _primaryColor.withOpacity(0.45),
             ),
             const SizedBox(height: 14),
@@ -57,11 +76,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'ستظهر هنا فقط الدردشات المرتبطة بالطلبات التي تم إنشاؤها فعلياً.',
+              'ستظهر هنا فقط الدردشات المرتبطة بالطلبات مع الصيدليات.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey[700],
-                height: 1.4,
+                height: 1.45,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -190,14 +210,18 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
-                                  isExpanded
-                                      ? 'إخفاء الطلبات'
-                                      : 'عرض الطلبات داخل الكارد',
-                                  style: TextStyle(
-                                    color: Colors.grey[700],
-                                    fontSize: 12.1,
-                                    fontWeight: FontWeight.w600,
+                                Expanded(
+                                  child: Text(
+                                    isExpanded
+                                        ? 'إخفاء المحادثات'
+                                        : 'عرض المحادثات داخل الكارد',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.grey[700],
+                                      fontSize: 12.1,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -312,66 +336,57 @@ class _ChatsScreenState extends State<ChatsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _primaryColor,
-      appBar: AppBar(
-        backgroundColor: _primaryColor,
-        elevation: 0,
-        title: const Text(
-          'الدردشات',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search_rounded, color: Colors.white),
-            onPressed: () {
-              showSearch(
-                context: context,
-                delegate: ChatSearchDelegate(
-                  controller: controller,
-                  primaryColor: _primaryColor,
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFFF7FAFD),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(34)),
-        ),
-        child: Column(
-          children: [
-            Obx(
-                  () => ParticipatingPharmaciesStrip(
-                pharmacies: controller.pharmacies,
-                selectedPharmacyId: controller.selectedPharmacyId.value,
-                onSelected: (pharmacyId) {
-                  controller.selectPharmacy(pharmacyId);
+      body: Column(
+        children: [
+          Obx(() {
+            final totalCount = controller.visibleThreads.length;
+            final unreadCount = _totalUnreadCount();
 
-                  if (pharmacyId != null && pharmacyId.trim().isNotEmpty) {
-                    setState(() {
-                      _expandedPharmacyIds.add(pharmacyId);
-                    });
-                  }
-                },
-                primaryColor: _primaryColor,
+            return ChatsHeader(
+              totalCount: totalCount,
+              unreadCount: unreadCount,
+              onSearchTap: _openSearch,
+            );
+          }),
+          Expanded(
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFFF7FAFD),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(34)),
+              ),
+              child: Column(
+                children: [
+                  Obx(
+                        () => ParticipatingPharmaciesStrip(
+                      pharmacies: controller.pharmacies,
+                      selectedPharmacyId: controller.selectedPharmacyId.value,
+                      onSelected: (pharmacyId) {
+                        controller.selectPharmacy(pharmacyId);
+
+                        if (pharmacyId != null && pharmacyId.trim().isNotEmpty) {
+                          setState(() {
+                            _expandedPharmacyIds.add(pharmacyId);
+                          });
+                        }
+                      },
+                      primaryColor: _primaryColor,
+                    ),
+                  ),
+                  Expanded(
+                    child: Obx(() {
+                      if (controller.isLoading.value) {
+                        return Center(
+                          child: CircularProgressIndicator(color: _primaryColor),
+                        );
+                      }
+                      return _buildGroupedList(context);
+                    }),
+                  ),
+                ],
               ),
             ),
-            Expanded(
-              child: Obx(() {
-                if (controller.isLoading.value) {
-                  return Center(
-                    child: CircularProgressIndicator(color: _primaryColor),
-                  );
-                }
-                return _buildGroupedList(context);
-              }),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

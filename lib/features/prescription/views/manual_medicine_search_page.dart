@@ -380,7 +380,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => _addMedicine(),
             decoration: InputDecoration(
-              hintText: 'اكتبي اسم الدواء هنا',
+              hintText: 'اكتب اسم الدواء باللغة الانجليزية',
               prefixIcon: Icon(Iconsax.document_text, color: pPrimaryColor),
               suffixIcon: IconButton(
                 onPressed: _addMedicine,
@@ -527,7 +527,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
           Text(
             widget.isReviewMode
                 ? 'يمكنك تعديل النتائج المستخرجة قبل متابعة البحث'
-                : 'ابدئي بكتابة اسم الدواء ثم اضغطي على زر الإضافة',
+                : 'اكتب اسم الدواء ثم اضغط على زر الإضافة',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.grey[600],

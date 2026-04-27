@@ -42,6 +42,7 @@ class InsurancePage extends StatelessWidget {
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
+
                   ),
                   const Spacer(),
                   GestureDetector(

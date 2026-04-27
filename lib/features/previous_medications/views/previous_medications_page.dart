@@ -156,17 +156,11 @@ class _HeaderSection extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.16),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: const Icon(
-                    Iconsax.hospital,
+                IconButton(
+                  onPressed: () => Get.back(),
+                  icon: const Icon(
+                    Iconsax.arrow_left_2,
                     color: Colors.white,
-                    size: 25,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -175,31 +169,14 @@ class _HeaderSection extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'الأدوية السابقة',
+                        'سجل الأدوية',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      SizedBox(height: 4),
-                      Text(
-                        'سجل الأدوية للمستخدم وأفراد العائلة مع تحكم الظهور للصيدلي',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          height: 1.5,
-                        ),
-                      ),
                     ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Get.back(),
-                  icon: const Icon(
-                    Iconsax.arrow_left_2,
-                    color: Colors.white,
                   ),
                 ),
               ],

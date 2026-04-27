@@ -77,7 +77,7 @@ flutter:
     - assets/images/BG.jpg
     - assets/images/Quran.jpg
     - assets/icons/
-
+    - assets/images/welcome_medicine.png
 
 flutter_launcher_icons:
   android: true

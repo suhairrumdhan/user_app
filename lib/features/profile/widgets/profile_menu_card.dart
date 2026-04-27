@@ -44,7 +44,7 @@ class _ProfileMenuCardState extends State<ProfileMenuCard>
             borderRadius: BorderRadius.circular(16),
             onTap: _handleTap,
             child: Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -59,14 +59,14 @@ class _ProfileMenuCardState extends State<ProfileMenuCard>
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: primaryColor.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
                       widget.icon,
-                      size: 24,
+                      size: 22,
                       color: primaryColor,
                     ),
                   ),
@@ -79,25 +79,25 @@ class _ProfileMenuCardState extends State<ProfileMenuCard>
                           widget.title,
                           maxLines: 1,
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.bold,
                             color: Colors.black,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
                           widget.subTitle,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             color: Colors.black.withOpacity(0.6),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   if (widget.expandableChild != null)
                     AnimatedRotation(
                       turns: _isExpanded ? 0.5 : 0, // يدور السهم 180°
