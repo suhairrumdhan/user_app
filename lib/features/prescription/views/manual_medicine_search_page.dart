@@ -11,17 +11,25 @@ import '../models/beneficiary_model.dart';
 import '../models/medicine_model.dart';
 import '../widgets/beneficiary_selector_sheet.dart';
 import 'search_results_page.dart';
+import 'dart:io';
 
+import '../../saved_prescriptions/services/saved_prescription_service.dart';
 class ManualMedicineSearchPage extends StatefulWidget {
   final List<MedicineModel>? initialMedicines;
   final String searchSource; // manual | prescription
   final bool isReviewMode;
+
+  // ✅ جديد: ملف الوصفة لو البحث من صورة/PDF
+  final File? prescriptionFile;
+  final String? prescriptionFileType; // image | pdf
 
   const ManualMedicineSearchPage({
     super.key,
     this.initialMedicines,
     this.searchSource = 'manual',
     this.isReviewMode = false,
+    this.prescriptionFile,
+    this.prescriptionFileType,
   });
 
   @override
@@ -126,13 +134,13 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
       return;
     }
 
-    // ✅ في وضع المراجعة: فقط نرجع القائمة المعدلة
-    if (widget.isReviewMode) {
+    // تعديل الأدوية من صفحة النتائج فقط
+    if (widget.isReviewMode && !_isPrescriptionMode) {
       Navigator.pop(context, List<MedicineModel>.from(_medicines));
       return;
     }
 
-    // ✅ في الوضع العادي: نكمل اختيار المستفيد ثم النتائج
+    // وصفة من ملف/صورة حتى لو ReviewMode لازم تفتح اختيار المستفيد والحفظ
     _openBeneficiarySelector();
   }
 
@@ -184,13 +192,50 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
       builder: (_) {
         return BeneficiarySelectorSheet(
           beneficiaries: beneficiaries,
-          onSelected: (beneficiary) {
+          showSaveOption: true,
+          initialSaveValue: widget.searchSource == 'prescription',
+          onSelected: (result) async {
+            final beneficiary = result.beneficiary;
+            final savePrescription = result.savePrescription;
+
             final requests = _buildRequestsFromMedicines();
 
             _searchController.clearAll();
             _searchController.setSearchSource(widget.searchSource);
             _searchController.setBeneficiary(beneficiary);
             _searchController.setRequests(requests);
+
+            if (savePrescription) {
+              try {
+                await SavedPrescriptionService.instance.savePrescription(
+                  beneficiary: beneficiary,
+                  medicines: List<MedicineModel>.from(_medicines),
+                  source: widget.searchSource,
+                  originalFile: widget.prescriptionFile,
+                  originalFileType: widget.prescriptionFileType,
+                );
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('تم حفظ الوصفة بنجاح'),
+                      backgroundColor: Color(0xFF4CAF50),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('تعذر حفظ الوصفة: $e'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              }
+            }
+
+            if (!mounted) return;
 
             Navigator.push(
               context,
@@ -206,7 +251,6 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
       },
     );
   }
-
   String get _pageTitle {
     if (widget.isReviewMode && _isPrescriptionMode) {
       return 'مراجعة الأدوية المستخرجة';

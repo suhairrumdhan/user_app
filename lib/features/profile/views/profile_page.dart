@@ -8,6 +8,7 @@ import '../../family/controllers/family_controller.dart';
 import '../../health_records/controllers/health_record_controller.dart';
 import '../../insurance/views/insurance_page.dart';
 import '../../previous_medications/views/previous_medications_page.dart';
+import '../../saved_prescriptions/views/saved_prescriptions_page.dart';
 import '../controllers/user_controller.dart';
 import '../widgets/profile_menu_card.dart';
 import '../../../app/core/services/profile_image_service.dart';
@@ -197,7 +198,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           child: Column(
                             children: [
                               ProfileMenuCard(
-                                icon: Icons.person_outline,
+                                icon: Icons.settings,
                                 title: "إعدادات الحساب",
                                 subTitle: "تعديل بياناتك الشخصية، معلومات الاتصال، كلمة المرور ",
                                 //expandableChild:  // الفورم الذي يظهر عند الضغط
@@ -235,9 +236,19 @@ class _ProfilePageState extends State<ProfilePage> {
                               ProfileMenuCard(
                                 icon: Iconsax.save_2,
                                 title: "وصفاتك المحفوظة",
-                                subTitle: " تصفح الوصفات التي قمت بحفظها",
+                                subTitle: "تصفح الوصفات التي قمت بحفظها",
                                 onTap: () {
-
+                                  Get.to(() => const SavedPrescriptionsPage());
+                                },
+                              ),
+                              ProfileMenuCard(
+                                icon: Icons.monitor_heart,
+                                title: "السجلات الصحية",
+                                subTitle: " تصفح البيانات الصحية لك ولأفراد عائلتك",
+                                onTap: () {
+                                  Get.put(FamilyController());         // أول واحد
+                                  Get.put(HealthRecordController());   // بعده
+                                  Get.to(() => HealthRecordsPage());
                                 },
                               ),
                               ProfileMenuCard(

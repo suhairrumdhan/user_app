@@ -3,15 +3,9 @@ import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 import 'dart:io';
 import 'package:latlong2/latlong.dart';
-import '../../prescription/models/beneficiary_model.dart';
-import '../../prescription/models/medicine_model.dart';
 import '../../prescription/services/drug_parser.dart';
 import '../../prescription/services/prescription_api_service.dart';
 import '../../prescription/views/manual_medicine_search_page.dart';
-import '../../prescription/views/search_results_page.dart';
-import '../../prescription/widgets/beneficiary_selector_sheet.dart';
-import '../../search/models/medicine_search_request.dart';
-import '../../search/services/medicine_normalizer.dart';
 import '../models/pharmacy_model.dart';
 import 'map_tab.dart';
 import '../../prescription/views/preview_screen.dart';
@@ -97,8 +91,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
         throw Exception('فشل تحليل الأدوية');
       }
 
-      final searchController =
-      Get.isRegistered<app_search.SearchController>()
+      final searchController = Get.isRegistered<app_search.SearchController>()
           ? Get.find<app_search.SearchController>()
           : Get.put(app_search.SearchController());
 
@@ -109,83 +102,15 @@ class _HomeTabContentState extends State<HomeTabContent> {
 
       if (!mounted) return;
 
-      /// 1) مراجعة/تعديل الأدوية عبر نفس صفحة المانول
-      final reviewedMedicines = await Navigator.push<List<MedicineModel>>(
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => ManualMedicineSearchPage(
             initialMedicines: parsedMedicines,
             searchSource: 'prescription',
             isReviewMode: true,
-          ),
-        ),
-      );
-
-      if (reviewedMedicines == null || reviewedMedicines.isEmpty) {
-        throw Exception('لم يتم اعتماد أي دواء');
-      }
-
-      /// 2) إعادة بناء requests من النسخة المعدلة
-      final reviewedRequests = reviewedMedicines.map((medicine) {
-        final raw = medicine.displayName.trim();
-
-        return MedicineSearchRequest(
-          rawText: raw,
-          normalizedText: MedicineNormalizer.normalize(raw),
-          strength: MedicineNormalizer.extractStrength(raw),
-          dosageForm: MedicineNormalizer.extractDosageForm(raw),
-          baseName: MedicineNormalizer.extractBaseName(raw),
-          searchTokens: MedicineNormalizer.buildSearchTokens(raw),
-          resolvedDisplayName: raw,
-        );
-      }).toList();
-
-      searchController.clearAll();
-      searchController.setSearchSource('prescription');
-      searchController.setExtractedText(text);
-      searchController.setRequests(reviewedRequests);
-
-      /// 3) اختيار المستفيد بنفس السلكتور
-      final beneficiaries = [
-        const BeneficiaryModel(
-          id: 'self',
-          name: 'أنا',
-          relation: 'أنا',
-          type: 'self',
-        ),
-        ..._familyController.members.map(
-              (member) => BeneficiaryModel(
-            id: member.id,
-            name: member.name,
-            relation: member.relation ?? 'فرد من العائلة',
-            type: 'family',
-          ),
-        ),
-      ];
-
-      final beneficiary = await showModalBottomSheet<BeneficiaryModel>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) {
-          return BeneficiarySelectorSheet(
-            beneficiaries: beneficiaries,
-          );
-        },
-      );
-
-      if (beneficiary == null) return;
-
-      searchController.setBeneficiary(beneficiary);
-
-      if (!mounted) return;
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => SearchResultsPage(
-            medicines: reviewedMedicines,
-            beneficiary: beneficiary,
+            prescriptionFile: _selectedFile,
+            prescriptionFileType: _fileType,
           ),
         ),
       );
