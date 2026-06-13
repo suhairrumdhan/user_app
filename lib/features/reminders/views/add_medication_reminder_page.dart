@@ -9,6 +9,7 @@ import '../../prescription/models/beneficiary_model.dart';
 import '../../profile/controllers/user_controller.dart';
 import '../controllers/add_medication_reminder_controller.dart';
 import '../widgets/time_chip.dart';
+import '../../previous_medications/services/previous_medications_service.dart';
 
 class AddMedicationReminderPage extends StatefulWidget {
   const AddMedicationReminderPage({super.key});
@@ -31,7 +32,8 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
   late final HealthRecordController healthRecordController;
 
   final _formKey = GlobalKey<FormState>();
-
+  final PreviousMedicationsService previousMedicationsService =
+  PreviousMedicationsService();
   @override
   void initState() {
     super.initState();
@@ -264,7 +266,9 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
     }
   }
 
-  Future<void> _syncMedicationToHealthRecord() async {
+  Future<void> _syncMedicationToHealthRecord({
+    int? linkedReminderLocalId,
+  }) async {
     if (!controller.saveToHealthRecord.value) return;
 
     final beneficiary = controller.selectedBeneficiary.value;
@@ -296,6 +300,20 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
         currentMedications: meds,
       );
     }
+
+    await previousMedicationsService.addFromMedicationReminder(
+      ownerBeneficiaryId: beneficiary.id,
+      ownerName: beneficiary.name,
+      ownerType: beneficiary.type,
+      ownerRelation: beneficiary.relation,
+      medicineName: medicineName,
+      dosage: controller.dosageController.text.trim(),
+      route: controller.routeController.text.trim(),
+      notes: controller.notesController.text.trim(),
+      treatmentStartDate: controller.startDate.value,
+      treatmentEndDate: controller.endDate.value,
+      linkedReminderLocalId: linkedReminderLocalId,
+    );
   }
 
   Future<void> _save() async {
@@ -320,10 +338,12 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
       return;
     }
 
-    final success = await controller.saveReminder();
-    if (!success) return;
+    final reminder = await controller.saveReminder();
+    if (reminder == null) return;
 
-    await _syncMedicationToHealthRecord();
+    await _syncMedicationToHealthRecord(
+      linkedReminderLocalId: reminder.id,
+    );
 
     if (!mounted) return;
     Get.back();

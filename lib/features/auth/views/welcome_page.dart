@@ -127,32 +127,29 @@ class WelcomeScreen extends StatelessWidget {
                         width: double.infinity,
                         height: bannerHeight,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
+                          // [CHANGE 1] Reduced transparency (more solid) and slightly darker base
+                          color: Colors.black.withOpacity(0.22),
                           borderRadius: BorderRadius.circular(isTablet ? 34 : 28),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.12),
+                            color: Colors.white.withOpacity(0.2), // Slightly more visible border
                             width: 1.2,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.10),
+                              color: Colors.black.withOpacity(0.15),
                               blurRadius: 24,
                               offset: const Offset(0, 14),
                             ),
                           ],
                         ),
+                        // [CHANGE 2] Made ClipRRect wrap the image directly, removing the inner Padding
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(isTablet ? 34 : 28),
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: math.max(6, width * 0.012),
-                              vertical: math.max(6, width * 0.012),
-                            ),
-                            child: Image.asset(
-                              'assets/images/welcome_medicine.png',
-                              fit: BoxFit.cover,
-                              alignment: Alignment.center,
-                            ),
+                          child: Image.asset(
+                            'assets/images/welcome_medicine.png',
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                            // No more inner padding, image touches the border directly
                           ),
                         ),
                       ),
@@ -258,8 +255,7 @@ class WelcomeScreen extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
+    );  }
 
   Widget _decorCircle({
     required double size,

@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../app/core/utils/location_utils.dart';
-import '../../chat/services/chat_service.dart';
 import '../../insurance/controllers/insurance_controller.dart';
 import '../../orders/models/order_status.dart';
 import '../../orders/views/confirm_order_sheet.dart';
@@ -71,8 +70,6 @@ class _MeasureSizeState extends State<MeasureSize> {
 
 class _SearchResultsPageState extends State<SearchResultsPage> {
   final SearchController controller = Get.find<SearchController>();
-  final ChatService _chatService = ChatService.instance;
-
   late final PageController _pageController;
   final Map<int, double> _cardHeights = {};
   double _currentCardHeight = 450;

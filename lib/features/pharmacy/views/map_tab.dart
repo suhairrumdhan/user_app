@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../models/pharmacy_model.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MapTab extends StatelessWidget {
   final LatLng? currentPosition;
@@ -11,6 +12,7 @@ class MapTab extends StatelessWidget {
   final List<PharmacyModel> allPharmacies;
   final VoidCallback onRefresh;
   final double selectedDistance;
+  final MapController mapController;
 
   const MapTab({
     super.key,
@@ -19,6 +21,7 @@ class MapTab extends StatelessWidget {
     required this.allPharmacies,
     required this.onRefresh,
     required this.selectedDistance,
+    required this.mapController,
   });
 
   LatLng? _getPharmacyLocation(PharmacyModel pharmacy) {
@@ -39,6 +42,140 @@ class MapTab extends StatelessWidget {
     final km = distance / 1000;
     return '${km.toStringAsFixed(1)} كم';
   }
+
+  Future<void> _openInGoogleMaps(PharmacyModel pharmacy) async {
+    final lat = pharmacy.latitude;
+    final lng = pharmacy.longitude;
+
+    if (lat == null || lng == null || lat == 0.0 || lng == 0.0) {
+      return;
+    }
+
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+    );
+
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+    }
+  }
+  bool _isPharmacyOpen(PharmacyModel pharmacy) {
+    if (pharmacy.is24Hours) return true;
+
+    final today = _getTodayWeekday();
+    final rawHours = pharmacy.workingHours?[today];
+
+    final range = _parseBusinessHoursRange(rawHours);
+    if (range == null) return false;
+
+    return _isTimeBetween(TimeOfDay.now(), range.open, range.close);
+  }
+
+  String _getTodayWeekday() {
+    const days = [
+      'sunday',
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+    ];
+
+    return days[DateTime.now().weekday % 7];
+  }
+
+  _BusinessHourRange? _parseBusinessHoursRange(dynamic value) {
+    if (value == null) return null;
+
+    final text = value.toString().trim();
+    if (text.isEmpty) return null;
+
+    final lowerText = text.toLowerCase();
+
+    if (lowerText == 'closed' ||
+        lowerText == 'close' ||
+        lowerText == 'مغلق' ||
+        lowerText == 'مغلق اليوم') {
+      return null;
+    }
+
+    if (lowerText == '24 hours' || lowerText == '24 ساعة') {
+      return const _BusinessHourRange(
+        open: TimeOfDay(hour: 0, minute: 0),
+        close: TimeOfDay(hour: 23, minute: 59),
+      );
+    }
+
+    final parts = text.split(RegExp(r'\s*-\s*'));
+    if (parts.length != 2) return null;
+
+    final open = _parseFlexibleTime(parts[0]);
+    final close = _parseFlexibleTime(parts[1]);
+
+    if (open == null || close == null) return null;
+
+    return _BusinessHourRange(open: open, close: close);
+  }
+
+  TimeOfDay? _parseFlexibleTime(String? value) {
+    if (value == null) return null;
+
+    var text = value.trim();
+    if (text.isEmpty) return null;
+
+    final isArabicPm = text.contains('م');
+    final isArabicAm = text.contains('ص');
+    final isEnglishPm = text.toLowerCase().contains('pm');
+    final isEnglishAm = text.toLowerCase().contains('am');
+
+    text = text
+        .replaceAll('ص', '')
+        .replaceAll('م', '')
+        .replaceAll('AM', '')
+        .replaceAll('PM', '')
+        .replaceAll('am', '')
+        .replaceAll('pm', '')
+        .trim();
+
+    final parts = text.split(':');
+    if (parts.isEmpty) return null;
+
+    int? hour = int.tryParse(parts[0].trim());
+    int minute = 0;
+
+    if (parts.length > 1) {
+      minute = int.tryParse(parts[1].trim()) ?? 0;
+    }
+
+    if (hour == null) return null;
+
+    final isPm = isArabicPm || isEnglishPm;
+    final isAm = isArabicAm || isEnglishAm;
+
+    if (isPm && hour < 12) hour += 12;
+    if (isAm && hour == 12) hour = 0;
+
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  bool _isTimeBetween(TimeOfDay now, TimeOfDay start, TimeOfDay end) {
+    final nowInMinutes = now.hour * 60 + now.minute;
+    final startInMinutes = start.hour * 60 + start.minute;
+    final endInMinutes = end.hour * 60 + end.minute;
+
+    if (startInMinutes <= endInMinutes) {
+      return nowInMinutes >= startInMinutes && nowInMinutes <= endInMinutes;
+    }
+
+    return nowInMinutes >= startInMinutes || nowInMinutes <= endInMinutes;
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +201,7 @@ class MapTab extends StatelessWidget {
       ),
     );
 
+
     // 🏥 الصيدليات
     for (final pharmacy in allPharmacies) {
       final point = _getPharmacyLocation(pharmacy);
@@ -71,63 +209,146 @@ class MapTab extends StatelessWidget {
 
       final name = pharmacy.displayName;
       final isNearby = nearbyIds.contains(pharmacy.id);
-      final isOpen247 = pharmacy.is24Hours;
       final distanceText = isNearby ? _getFormattedDistance(pharmacy) : null;
+
+      final isOpen = _isPharmacyOpen(pharmacy);
+
+      final markerColor = isOpen ? const Color(0xFF2E7D32) : const Color(0xFFD32F2F);
+      final softColor = isOpen ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE);
 
       markers.add(
         Marker(
           point: point,
-          width: isNearby ? 45 : 40,
-          height: isNearby ? 45 : 40,
+          width: 76,
+          height: 86,
           child: Tooltip(
             message: isNearby && distanceText != null
-                ? '$name (ضمن ${selectedDistance.toStringAsFixed(0)} كم - $distanceText)'
+                ? '$name - $distanceText'
                 : name,
             child: Stack(
+              clipBehavior: Clip.none,
               alignment: Alignment.center,
               children: [
-                Icon(
-                  isOpen247 ? Iconsax.health : Iconsax.hospital,
-                  color: isNearby
-                      ? Colors.red
-                      : (isOpen247 ? Colors.orange : Colors.grey),
-                  size: isNearby ? 35 : 30,
+                // زر فتح Google Maps
+                Positioned(
+                  top: 0,
+                  right: 8,
+                  child: GestureDetector(
+                    onTap: () => _openInGoogleMaps(pharmacy),
+                    child: Container(
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: markerColor.withOpacity(0.25),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.14),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.map_outlined,
+                        color: markerColor,
+                        size: 15,
+                      ),
+                    ),
+                  ),
                 ),
 
-                if (isOpen247 && !isNearby)
-                  Positioned(
-                    top: -8,
-                    right: -8,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: Colors.orange,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.5),
-                      ),
-                      child: const Icon(
-                        Iconsax.clock,
+                // أيقونة الصيدلية الأساسية
+                Positioned(
+                  top: 20,
+                  child: Container(
+                    width: isNearby ? 46 : 42,
+                    height: isNearby ? 46 : 42,
+                    decoration: BoxDecoration(
+                      color: softColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(
                         color: Colors.white,
-                        size: 10,
+                        width: 3,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: markerColor.withOpacity(0.35),
+                          blurRadius: 12,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.local_pharmacy_rounded,
+                      color: markerColor,
+                      size: isNearby ? 26 : 24,
+                    ),
+                  ),
+                ),
+
+                // شارة 24 ساعة
+                if (pharmacy.is24Hours)
+                  Positioned(
+                    top: 18,
+                    left: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2E7D32),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white, width: 1.2),
+                      ),
+                      child: const Text(
+                        '24h',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
 
+                // نقطة حالة مفتوح/مغلق
+                Positioned(
+                  top: 52,
+                  right: 17,
+                  child: Container(
+                    width: 11,
+                    height: 11,
+                    decoration: BoxDecoration(
+                      color: markerColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                  ),
+                ),
+
+                // المسافة
                 if (isNearby && distanceText != null)
                   Positioned(
-                    bottom: -12,
+                    bottom: 0,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 3,
+                        horizontal: 7,
+                        vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(12),
+                        color: markerColor,
+                        borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
+                            color: Colors.black.withOpacity(0.14),
+                            blurRadius: 6,
+                            offset: const Offset(0, 3),
                           ),
                         ],
                       ),
@@ -137,9 +358,9 @@ class MapTab extends StatelessWidget {
                           const Icon(
                             Iconsax.location,
                             color: Colors.white,
-                            size: 8,
+                            size: 9,
                           ),
-                          const SizedBox(width: 2),
+                          const SizedBox(width: 3),
                           Text(
                             distanceText,
                             style: const TextStyle(
@@ -158,12 +379,12 @@ class MapTab extends StatelessWidget {
         ),
       );
     }
-
     return Stack(
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: FlutterMap(
+            mapController: mapController,
             options: MapOptions(
               center: currentPosition!,
               zoom: 15.0,
@@ -220,4 +441,13 @@ class MapTab extends StatelessWidget {
       ],
     );
   }
+}
+class _BusinessHourRange {
+  final TimeOfDay open;
+  final TimeOfDay close;
+
+  const _BusinessHourRange({
+    required this.open,
+    required this.close,
+  });
 }

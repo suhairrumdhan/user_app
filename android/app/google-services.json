@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:657034913156:android:4339d08b7cf787fe8769d1",
+        "mobilesdk_app_id": "1:657034913156:android:45f24f62150c3de98769d1",
         "android_client_info": {
-          "package_name": "com.example.user_application"
+          "package_name": "com.example.pharmacy_desktop"
         }
       },
       "oauth_client": [
@@ -29,6 +29,57 @@
             {
               "client_id": "657034913156-sg2ln6ge94ckda9elbsu3qfv1ltejlct.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "657034913156-15v4tp1u5itnjd30k70u5hiqfqp6hrp6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.userApplication"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:657034913156:android:4339d08b7cf787fe8769d1",
+        "android_client_info": {
+          "package_name": "com.example.user_application"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "657034913156-0c7ek1o9ahp0ad635m38lu6ooh10jul9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.user_application",
+            "certificate_hash": "5343142374a3c95d55ac265dcc6e85a3c7ccbcca"
+          }
+        },
+        {
+          "client_id": "657034913156-sg2ln6ge94ckda9elbsu3qfv1ltejlct.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAZuHBzN1X9kfQNSCXkWb70FbGXDT8e7V8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "657034913156-sg2ln6ge94ckda9elbsu3qfv1ltejlct.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "657034913156-15v4tp1u5itnjd30k70u5hiqfqp6hrp6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.userApplication"
+              }
             }
           ]
         }

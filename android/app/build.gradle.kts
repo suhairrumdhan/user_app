@@ -20,20 +20,32 @@ android {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
+    // ✅ تعديل الـ signingConfig الموجود بدلاً من إنشاء واحد جديد
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("my-new-keystore.jks")
+            storePassword = "123456"
+            keyAlias = "my-key-alias"
+            keyPassword = "123456"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.example.user_application"
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
     buildTypes {
-        release {
+        getByName("release") {
             signingConfig = signingConfigs.getByName("debug")
-
             isMinifyEnabled = false
             isShrinkResources = false
+        }
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 }

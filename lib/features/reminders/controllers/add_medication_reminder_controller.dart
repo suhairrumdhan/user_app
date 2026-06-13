@@ -194,8 +194,8 @@ class AddMedicationReminderController extends GetxController {
 
   // ========= Save =========
 
-  Future<bool> saveReminder() async {
-    if (!validateAll()) return false;
+  Future<MedicationReminderModel?> saveReminder() async {
+    if (!validateAll()) return null;
 
     try {
       isSaving.value = true;
@@ -203,19 +203,18 @@ class AddMedicationReminderController extends GetxController {
       final reminder = buildReminderModel();
       await remindersController.addMedicationReminder(reminder);
 
-      return true;
+      return reminder;
     } catch (e) {
       Get.snackbar(
         'خطأ',
         'فشل في حفظ التذكير: $e',
         snackPosition: SnackPosition.BOTTOM,
       );
-      return false;
+      return null;
     } finally {
       isSaving.value = false;
     }
   }
-
   // ========= Reset =========
 
   void resetForm() {

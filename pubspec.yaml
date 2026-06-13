@@ -66,6 +66,7 @@ dev_dependencies:
   build_runner: ^2.4.13
   flutter_lints: ^6.0.0
   analyzer: ^5.13.0  # This version is compatible (>=4.6.0 <6.0.0)
+  patch_package: ^0.0.8
 
 flutter:
 
@@ -82,4 +83,5 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icons/roshita.png"
+  image_path: "assets/icons/appicon.png"
+

@@ -15,6 +15,7 @@ class AuthService {
 
   // ---------- تسجيل مستخدم جديد ----------
   // ---------- تسجيل مستخدم جديد ----------
+  // في auth_services.dart - تحسين رسائل الخطأ
   Future<void> registerWithEmail({
     required BuildContext context,
     required String email,
@@ -40,7 +41,6 @@ class AuthService {
       );
 
       final uid = credential.user!.uid;
-
       await credential.user!.updateDisplayName(name.trim());
 
       final newUser = UserModel(
@@ -55,27 +55,39 @@ class AuthService {
       await FirebaseFirestore.instance.collection('users').doc(uid).set(newUser.toJson());
       final userController = Get.find<UserController>();
       await userController.loadUser(uid);
+
       if (!context.mounted) return;
       Get.offAll(() => const HealthInfoScreen());
 
     } on FirebaseAuthException catch (e) {
       String message = "حدث خطأ";
+      print('🔥 FirebaseAuthException code: ${e.code}'); // للتتبع
+
       if (e.code == 'email-already-in-use') {
-        message = "البريد الإلكتروني مستخدم بالفعل";
+        message = "❌ هذا البريد الإلكتروني مسجل بالفعل. يرجى استخدام بريد آخر أو تسجيل الدخول";
       } else if (e.code == 'weak-password') {
-        message = "كلمة المرور ضعيفة (6 أحرف على الأقل)";
+        message = "❌ كلمة المرور ضعيفة جداً. يرجى استخدام كلمة مرور أقوى (أكثر من 6 أحرف، تحتوي على أرقام ورموز وحروف)";
       } else if (e.code == 'invalid-email') {
-        message = "بريد إلكتروني غير صالح";
+        message = "❌ البريد الإلكتروني غير صالح";
       }
-      print('❌ خطأ في التسجيل: $message');
+
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     } catch (e) {
       print('❌ خطأ غير متوقع في التسجيل: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("حدث خطأ غير متوقع: ${e.toString()}")),
+          SnackBar(
+            content: Text("حدث خطأ غير متوقع: ${e.toString()}"),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -83,112 +95,289 @@ class AuthService {
     }
   }
 
-  // ---------- تسجيل الدخول بالبريد وكلمة المرور ----------
+// تحديث دالة loginWithEmail في AuthService
   Future<void> loginWithEmail({
     required BuildContext context,
     required String email,
     required String password,
     required Function(bool) setLoading,
+    Function(String)? onError,
   }) async {
+    // تحقق أولي قبل الإرسال
+    if (email.isEmpty) {
+      onError?.call("❌ يرجى إدخال البريد الإلكتروني");
+      return;
+    }
+
+    if (password.isEmpty) {
+      onError?.call("❌ يرجى إدخال كلمة المرور");
+      return;
+    }
+
     setLoading(true);
+
     try {
+      print('📧 محاولة تسجيل الدخول للبريد: $email');
+
       await _auth.signInWithEmailAndPassword(
         email: email.trim(),
         password: password.trim(),
       );
 
+      print('✅ تم تسجيل الدخول بنجاح');
+
       final user = _auth.currentUser;
       if (user != null) {
+        print('📁 جلب بيانات المستخدم من Firestore...');
         final doc = await FirebaseFirestore.instance.collection("users").doc(user.uid).get();
+
         if (!context.mounted) return;
 
         if (doc.exists && doc.data()?['healthInfoCompleted'] == true) {
+          print('🏠 التوجه إلى HomePage');
           Get.offAll(() => const HomePage());
         } else {
+          print('🏥 التوجه إلى HealthInfoScreen');
           Get.offAll(() => const HealthInfoScreen());
         }
 
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("تم تسجيل الدخول بنجاح")),
+            const SnackBar(
+              content: Text("✅ تم تسجيل الدخول بنجاح"),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
           );
         }
       }
     } on FirebaseAuthException catch (e) {
-      String message = "حدث خطأ";
-      if (e.code == 'user-not-found') {
-        message = "البريد الإلكتروني غير مسجل";
-      } else if (e.code == 'wrong-password') {
-        message = "كلمة المرور غير صحيحة";
-      } else if (e.code == 'invalid-email') {
-        message = "البريد الإلكتروني غير صالح";
+      print('🔥 FirebaseAuthException: ${e.code} - ${e.message}');
+
+      String message = "";
+
+      // معالجة جميع حالات الخطأ الممكنة
+      switch (e.code) {
+        case 'invalid-credential':
+        case 'user-not-found':
+        case 'wrong-password':
+          message = " البريد الإلكتروني أو كلمة المرور غير صحيحة\n يرجى التأكد من بيانات الدخول";
+          break;
+        case 'invalid-email':
+          message = " صيغة البريد الإلكتروني غير صحيحة\n مثال: name@example.com";
+          break;
+        case 'user-disabled':
+          message = " هذا الحساب معطل\n يرجى الاتصال بالدعم الفني";
+          break;
+        case 'too-many-requests':
+          message = "⚠️ تم تجاوز عدد المحاولات المسموحة\n يرجى المحاولة لاحقاً";
+          break;
+        case 'network-request-failed':
+          message = "⚠️ مشكلة في الاتصال بالإنترنت\n يرجى التحقق من اتصالك بالإنترنت";
+          break;
+        default:
+          message = " خطأ: ${e.message}\n يرجى المحاولة مرة أخرى";
       }
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-      }
-    } catch (e) {
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("حدث خطأ غير متوقع: ${e.toString()}")),
+          SnackBar(
+            content: Text(message, textAlign: TextAlign.center),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
         );
       }
+      onError?.call(message);
+
+    } catch (e, stackTrace) {
+      print('========================================');
+      print(' خطأ غير متوقع:');
+      print('نوع الخطأ: ${e.runtimeType}');
+      print('الرسالة: $e');
+      print('========================================');
+
+      String message = " حدث خطأ: ${e.toString()}\n يرجى المحاولة مرة أخرى";
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message, textAlign: TextAlign.center),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      onError?.call(message);
+
     } finally {
       setLoading(false);
     }
   }
-
   // ---------- تسجيل الدخول بجوجل ----------
+  // ---------- تسجيل الدخول بجوجل (المصلحة) ----------
   Future<void> signInWithGoogle(
       BuildContext context,
       Function(bool) setLoading,
       ) async {
     setLoading(true);
-    try {
-      final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
-      final googleUser = await googleSignIn.signIn();
-      if (googleUser == null) return;
 
-      final googleAuth = await googleUser.authentication;
+    try {
+      print('🌐 بدء عملية تسجيل الدخول بجوجل...');
+
+      // ✅ أضف Web Client ID هنا
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        scopes: ['email', 'profile'],
+        clientId: '657034913156-sg2ln6ge94ckda9elbsu3qfv1ltejlct.apps.googleusercontent.com',
+      );
+
+      // تسجيل الخروج من أي حساب سابق لضمان ظهور شاشة الاختيار
+      await googleSignIn.signOut();
+
+      print('📱 جاري اختيار حساب Google...');
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
+      if (googleUser == null) {
+        print('❌ المستخدم ألغى عملية تسجيل الدخول');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("تم إلغاء تسجيل الدخول بجوجل"),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      print('✅ تم اختيار الحساب: ${googleUser.email}');
+      print('🔐 جاري الحصول على معلومات المصادقة...');
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      final userCredential = await _auth.signInWithCredential(credential);
-      final user = userCredential.user;
-      if (user == null) return;
+      print('🔥 جاري تسجيل الدخول إلى Firebase...');
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      final User? user = userCredential.user;
 
-      final doc = await FirebaseFirestore.instance.collection("users").doc(user.uid).get();
-      if (!doc.exists) {
-        await FirebaseFirestore.instance.collection("users").doc(user.uid).set({
-          'uid': user.uid,
-          'email': user.email,
-          'name': user.displayName,
-          'photoUrl': user.photoURL,
-          'phone': user.phoneNumber,
-          'createdAt': Timestamp.now(),
-          'provider': 'google.com',
-        }, SetOptions(merge: true));
+      if (user == null) {
+        print('❌ فشل تسجيل الدخول إلى Firebase');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("فشل تسجيل الدخول، يرجى المحاولة مرة أخرى"),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
       }
 
-      if (doc.exists && doc.data()?['healthInfoCompleted'] == true) {
+      print('✅ تم تسجيل الدخول بنجاح: ${user.uid}');
+
+      print('📁 التحقق من وجود المستخدم في Firestore...');
+      final doc = await FirebaseFirestore.instance.collection("users").doc(user.uid).get();
+
+      if (!doc.exists) {
+        print('📝 إنشاء مستخدم جديد في Firestore...');
+        await FirebaseFirestore.instance.collection("users").doc(user.uid).set({
+          'id': user.uid,
+          'uid': user.uid,
+          'email': user.email,
+          'name': user.displayName ?? 'مستخدم Google',
+          'photoUrl': user.photoURL ?? '',
+          'phone': user.phoneNumber ?? '',
+          'createdAt': Timestamp.now(),
+          'provider': 'google.com',
+          'healthInfoCompleted': false,
+        });
+        print('✅ تم إنشاء مستخدم جديد في Firestore');
+      } else {
+        print('✅ المستخدم موجود مسبقاً في Firestore');
+      }
+
+      final healthInfoCompleted = doc.data()?['healthInfoCompleted'] ?? false;
+      print('📊 healthInfoCompleted: $healthInfoCompleted');
+
+      if (!context.mounted) return;
+
+      if (healthInfoCompleted) {
+        print('🏠 التوجه إلى HomePage');
         Get.offAll(() => const HomePage());
       } else {
+        print('🏥 التوجه إلى HealthInfoScreen');
         Get.offAll(() => const HealthInfoScreen());
       }
 
-    } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Google sign-in failed: ${e.toString()}")),
+          const SnackBar(
+            content: Text("✅ تم تسجيل الدخول بنجاح"),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
         );
       }
-      debugPrint('Google sign-in error: $e');
+
+    } on FirebaseAuthException catch (e) {
+      print('🔥 FirebaseAuthException في Google Sign-In: ${e.code}');
+      print('📝 تفاصيل: ${e.message}');
+
+      String message = "";
+      switch (e.code) {
+        case 'account-exists-with-different-credential':
+          message = "هذا البريد مرتبط بحساب آخر. يرجى تسجيل الدخول باستخدام الطريقة الأخرى.";
+          break;
+        case 'invalid-credential':
+          message = "بيانات الاعتماد غير صالحة. يرجى المحاولة مرة أخرى.";
+          break;
+        case 'operation-not-allowed':
+          message = "تسجيل الدخول بجوجل غير مفعل. يرجى مراجعة الدعم الفني.";
+          break;
+        default:
+          message = "خطأ في تسجيل الدخول: ${e.message}";
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+
+    } catch (e, stackTrace) {
+      print('========================================');
+      print('❌ خطأ غير متوقع في Google Sign-In:');
+      print('نوع الخطأ: ${e.runtimeType}');
+      print('الرسالة: $e');
+      print('Stack trace: $stackTrace');
+      print('========================================');
+
+      String message = "حدث خطأ غير متوقع: ${e.toString()}";
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+
     } finally {
       setLoading(false);
     }
   }
-
   // ---------- تسجيل الخروج ----------
   Future<void> signOut() async {
     try {

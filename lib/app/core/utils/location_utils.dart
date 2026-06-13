@@ -112,7 +112,7 @@ class LocationUtils {
       final pharmacies = <PharmacyModel>[];
 
       for (final doc in snapshot.docs) {
-        final pharmacy = PharmacyModel.fromFirestore(doc);
+        final pharmacy = await getPharmacyWithBusinessHours(doc);
 
         debugPrint(
           '🏪 Pharmacy: ${pharmacy.displayName}, '
@@ -140,7 +140,23 @@ class LocationUtils {
       return [];
     }
   }
+  static Future<PharmacyModel> getPharmacyWithBusinessHours(
+      DocumentSnapshot<Map<String, dynamic>> doc,
+      ) async {
+    final hoursDoc = await _firestore
+        .collection('pharmacies')
+        .doc(doc.id)
+        .collection('settings')
+        .doc('businessHours')
+        .get();
 
+    final businessHours = hoursDoc.data();
+
+    return PharmacyModel.fromFirestore(
+      doc,
+      workingHours: businessHours,
+    );
+  }
   // حساب المسافة بين نقطتين بالمتر
   static double calculateDistance(LatLng start, LatLng end) {
     const Distance distance = Distance();

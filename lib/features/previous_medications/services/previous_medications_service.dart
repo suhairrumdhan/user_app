@@ -203,6 +203,88 @@ class PreviousMedicationsService {
         .doc(model.id)
         .set(model.toMap(includeServerTimestamp: true));
   }
+  Future<PreviousMedicationModel> addFromMedicationReminder({
+    String? userId,
+    required String ownerBeneficiaryId,
+    required String ownerName,
+    required String ownerType,
+    required String ownerRelation,
+    required String medicineName,
+    String? dosage,
+    String? route,
+    String? notes,
+    DateTime? treatmentStartDate,
+    DateTime? treatmentEndDate,
+    int? linkedReminderLocalId,
+  }) async {
+    final resolvedUserId = resolveUserId(userId);
+    final now = DateTime.now();
+
+    final recordId = _buildReminderRecordId(
+      ownerBeneficiaryId: ownerBeneficiaryId,
+      medicineName: medicineName,
+      linkedReminderLocalId: linkedReminderLocalId,
+    );
+
+    final record = PreviousMedicationModel(
+      id: recordId,
+      userId: resolvedUserId,
+      ownerBeneficiaryId: ownerBeneficiaryId,
+      ownerName: ownerName,
+      ownerType: ownerType,
+      ownerRelation: ownerRelation,
+      medicineName: medicineName.trim(),
+      dosage: _readNullableString(dosage),
+      route: _readNullableString(route),
+      notes: _readNullableString(notes),
+      pharmacyId: null,
+      pharmacyName: null,
+      orderId: null,
+      addedFromNotificationId: null,
+      takenAt: now,
+      treatmentStartDate: treatmentStartDate,
+      treatmentEndDate: treatmentEndDate,
+      showToPharmacistFrom: now,
+      showToPharmacistUntil: treatmentEndDate,
+      isVisibleToPharmacist: true,
+      reminderStatus: linkedReminderLocalId == null
+          ? PreviousMedicationReminderStatus.none
+          : PreviousMedicationReminderStatus.linked,
+      linkedReminderLocalId: linkedReminderLocalId,
+      status: _resolveInitialStatus(treatmentEndDate),
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    await addOrUpdateRecord(record, userId: resolvedUserId, merge: true);
+    return record;
+  }
+
+  String _buildReminderRecordId({
+    required String ownerBeneficiaryId,
+    required String medicineName,
+    int? linkedReminderLocalId,
+  }) {
+    final safeOwner = _safeDocPart(ownerBeneficiaryId);
+    final safeMedicine = _safeDocPart(medicineName);
+    final reminderPart = linkedReminderLocalId?.toString() ?? 'manual';
+
+    return 'reminder_${reminderPart}_${safeOwner}_$safeMedicine';
+  }
+
+  String _safeDocPart(String value) {
+    final cleaned = value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\u0600-\u06FF]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_');
+
+    if (cleaned.isEmpty) {
+      return DateTime.now().millisecondsSinceEpoch.toString();
+    }
+
+    return cleaned.length > 60 ? cleaned.substring(0, 60) : cleaned;
+  }
 
   Future<void> addOrUpdateRecord(
       PreviousMedicationModel model, {

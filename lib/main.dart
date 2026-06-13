@@ -49,6 +49,7 @@ Future<void> main() async {
 
   runApp(const MyApp());
 }
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -62,7 +63,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Cairo',
       ),
-      home: const AuthWrapper(),
+      home: const AuthWrapper(), // ✅ رجعناها مثل ما كانت
     );
   }
 }
@@ -76,7 +77,11 @@ class AuthWrapper extends StatelessWidget {
 
     return Obx(() {
       if (authController.isLoading.value) {
-        return const SplashScreen();
+        return const Scaffold(
+          body: Center(
+            child: CircularProgressIndicator(),
+          ),
+        ); // ✅ مؤشر تحميل بسيط بدون سبلاش
       }
 
       if (authController.user.value != null) {
@@ -85,71 +90,5 @@ class AuthWrapper extends StatelessWidget {
 
       return const WelcomeScreen();
     });
-  }
-}
-
-class SplashScreen extends StatelessWidget {
-  const SplashScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(
-            'assets/images/Quran.jpg.jpg',
-            fit: BoxFit.cover,
-          ),
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withOpacity(0.3),
-                  Colors.white.withOpacity(0.5),
-                  Colors.black.withOpacity(0.3),
-                ],
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Center(
-              child: Column(
-                children: [
-                  const Spacer(),
-                  Text(
-                    'صيدليتك بين يديك',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontFamily: 'Cairo',
-                      shadows: [
-                        Shadow(
-                          blurRadius: 10,
-                          color: Colors.black54,
-                          offset: Offset(2, 2),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: 30,
-                    height: 30,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const Spacer(),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

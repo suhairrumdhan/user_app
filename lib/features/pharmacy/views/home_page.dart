@@ -50,7 +50,21 @@ class _HomePageState extends State<HomePage> {
     await _refreshLocation();
     await _startLiveLocation();
   }
+  Future<PharmacyModel> _pharmacyFromDocWithBusinessHours(
+      DocumentSnapshot<Map<String, dynamic>> doc,
+      ) async {
+    final hoursDoc = await FirebaseFirestore.instance
+        .collection('pharmacies')
+        .doc(doc.id)
+        .collection('settings')
+        .doc('businessHours')
+        .get();
 
+    return PharmacyModel.fromFirestore(
+      doc,
+      workingHours: hoursDoc.data(),
+    );
+  }
   Future<void> _listenToPharmacies() async {
     await _pharmaciesSubscription?.cancel();
 
@@ -59,10 +73,10 @@ class _HomePageState extends State<HomePage> {
         .where('status', isEqualTo: 'approved')
         .snapshots()
         .listen(
-          (snapshot) {
-        final pharmacies = snapshot.docs
-            .map((doc) => PharmacyModel.fromFirestore(doc))
-            .toList();
+          (snapshot) async {
+        final pharmacies = await Future.wait(
+          snapshot.docs.map((doc) => _pharmacyFromDocWithBusinessHours(doc)),
+        );
 
         final pharmaciesWithDistance = _currentPosition == null
             ? pharmacies

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 import 'dart:io';
@@ -45,19 +46,40 @@ class _HomeTabContentState extends State<HomeTabContent> {
   String? _fileType;
   String _extractedText = '';
   bool _isLoading = false;
+  final MapController _mapController = MapController();
+  final FamilyController _familyController =
+  Get.isRegistered<FamilyController>()
+      ? Get.find<FamilyController>()
+      : Get.put(FamilyController());
 
   final PageController _pageController = PageController(viewportFraction: 0.78);
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
   final List<double> _distanceOptions = [1, 2, 3, 4, 5, 10, 15, 20];
   double _tempDistance = 4;
 
-  // استخدام FamilyController
-  final FamilyController _familyController = Get.put(FamilyController());
+
 
   @override
   void initState() {
     super.initState();
     _tempDistance = widget.selectedDistance;
+  }
+
+  void _focusPharmacyOnMap(PharmacyModel pharmacy) {
+    final lat = pharmacy.latitude;
+    final lng = pharmacy.longitude;
+
+    if (lat == null || lng == null || lat == 0.0 || lng == 0.0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('موقع الصيدلية غير متوفر')),
+      );
+      return;
+    }
+
+    _mapController.move(
+      LatLng(lat, lng),
+      17.0,
+    );
   }
 
   Future<bool> _showPreviewDialog(File file, String type) async {
@@ -259,8 +281,13 @@ class _HomeTabContentState extends State<HomeTabContent> {
                                       return AnimatedScale(
                                         scale: currentIndex == index ? 1 : 0.88,
                                         duration: const Duration(milliseconds: 300),
-                                        child: PharmacyGlassCard(
-                                          pharmacy: widget.pharmacies[index],
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            _focusPharmacyOnMap(widget.pharmacies[index]);
+                                          },
+                                          child: PharmacyGlassCard(
+                                            pharmacy: widget.pharmacies[index],
+                                          ),
                                         ),
                                       );
                                     },
@@ -340,6 +367,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
                         allPharmacies: widget.allPharmacies,
                         onRefresh: widget.onRefresh,
                         selectedDistance: widget.selectedDistance,
+                        mapController: _mapController,
                       ),
                     ),
                   ),

@@ -13,20 +13,17 @@ class PharmacyGlassCard extends StatelessWidget {
   String get workingStatus {
     if (is24Hours) return 'مفتوح 24 ساعة';
 
-    final now = TimeOfDay.now();
     final today = _getTodayWeekday();
-    final hours = pharmacy.workingHours?[today];
-    if (hours != null && hours['isOpen'] == true) {
-      final openTime = _parseTime(hours['open']);
-      final closeTime = _parseTime(hours['close']);
-      final isOpen = _isTimeBetween(now, openTime, closeTime);
+    final rawHours = pharmacy.workingHours?[today];
 
-      return isOpen ? 'مفتوح الآن' : 'مغلق الآن';
-    }
+    final range = _parseBusinessHoursRange(rawHours);
+    if (range == null) return 'مغلق الآن';
 
-    return 'مغلق الآن';
+    final now = TimeOfDay.now();
+    final isOpen = _isTimeBetween(now, range.open, range.close);
+
+    return isOpen ? 'مفتوح الآن' : 'مغلق الآن';
   }
-
   Color get statusColor {
     switch (workingStatus) {
       case 'مفتوح الآن':
@@ -356,6 +353,101 @@ class PharmacyGlassCard extends StatelessWidget {
     );
   }
 
+  _BusinessHourRange? _parseBusinessHoursRange(dynamic value) {
+    if (value == null) return null;
+
+    // يدعم الشكل القديم لو كان Map
+    if (value is Map) {
+      final isOpen = value['isOpen'] == true;
+      if (!isOpen) return null;
+
+      final open = _parseFlexibleTime(value['open']?.toString());
+      final close = _parseFlexibleTime(value['close']?.toString());
+
+      if (open == null || close == null) return null;
+
+      return _BusinessHourRange(open: open, close: close);
+    }
+
+    // يدعم الشكل الموجود عندك: "09:00 - 18:00" أو "3:00 ص - 6:00 م"
+    final text = value.toString().trim();
+
+    if (text.isEmpty) return null;
+
+    final lowerText = text.toLowerCase();
+
+    if (
+    lowerText == 'closed' ||
+        lowerText == 'مغلق' ||
+        lowerText == 'مغلق اليوم' ||
+        lowerText == 'close'
+    ) {
+      return null;
+    }
+
+    final parts = text.split(RegExp(r'\s*-\s*'));
+    if (parts.length != 2) return null;
+
+    final open = _parseFlexibleTime(parts[0]);
+    final close = _parseFlexibleTime(parts[1]);
+
+    if (open == null || close == null) return null;
+
+    return _BusinessHourRange(open: open, close: close);
+  }
+
+  TimeOfDay? _parseFlexibleTime(String? value) {
+    if (value == null) return null;
+
+    var text = value.trim();
+    if (text.isEmpty) return null;
+
+    final isArabicPm = text.contains('م');
+    final isArabicAm = text.contains('ص');
+
+    final isEnglishPm = text.toLowerCase().contains('pm');
+    final isEnglishAm = text.toLowerCase().contains('am');
+
+    text = text
+        .replaceAll('ص', '')
+        .replaceAll('م', '')
+        .replaceAll('AM', '')
+        .replaceAll('PM', '')
+        .replaceAll('am', '')
+        .replaceAll('pm', '')
+        .trim();
+
+    final parts = text.split(':');
+
+    if (parts.isEmpty) return null;
+
+    int? hour = int.tryParse(parts[0].trim());
+    int minute = 0;
+
+    if (parts.length > 1) {
+      minute = int.tryParse(parts[1].trim()) ?? 0;
+    }
+
+    if (hour == null) return null;
+
+    final isPm = isArabicPm || isEnglishPm;
+    final isAm = isArabicAm || isEnglishAm;
+
+    if (isPm && hour < 12) {
+      hour += 12;
+    }
+
+    if (isAm && hour == 12) {
+      hour = 0;
+    }
+
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      return null;
+    }
+
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
   IconData _getStatusIcon() {
     switch (workingStatus) {
       case 'مفتوح الآن':
@@ -392,16 +484,31 @@ class PharmacyGlassCard extends StatelessWidget {
     final startInMinutes = start.hour * 60 + start.minute;
     final endInMinutes = end.hour * 60 + end.minute;
 
-    return nowInMinutes >= startInMinutes && nowInMinutes <= endInMinutes;
+    // دوام عادي في نفس اليوم
+    if (startInMinutes <= endInMinutes) {
+      return nowInMinutes >= startInMinutes && nowInMinutes <= endInMinutes;
+    }
+
+    // دوام يعبر منتصف الليل
+    return nowInMinutes >= startInMinutes || nowInMinutes <= endInMinutes;
   }
 
   String _getWorkingHoursText() {
     final today = _getTodayWeekday();
-    final hours = pharmacy.workingHours?[today];
-    if (hours != null && hours['isOpen'] == true) {
-      return '${hours['open']} - ${hours['close']}';
-    }
+    final rawHours = pharmacy.workingHours?[today];
 
-    return 'مغلق اليوم';
+    final range = _parseBusinessHoursRange(rawHours);
+    if (range == null) return 'مغلق اليوم';
+
+    return rawHours.toString();
   }
+}
+class _BusinessHourRange {
+  final TimeOfDay open;
+  final TimeOfDay close;
+
+  const _BusinessHourRange({
+    required this.open,
+    required this.close,
+  });
 }

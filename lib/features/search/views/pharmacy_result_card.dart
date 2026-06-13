@@ -428,23 +428,6 @@ class PharmacyResultCard extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: ElevatedButton.icon(
-            onPressed: onTapChat,
-            icon: const Icon(Iconsax.message, size: 17),
-            label: const Text('مراسلة'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: SearchUiColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
           child: OutlinedButton.icon(
             onPressed: onTapDetails ?? () => _showDetailsDialog(context),
             icon: const Icon(Iconsax.eye, size: 17),

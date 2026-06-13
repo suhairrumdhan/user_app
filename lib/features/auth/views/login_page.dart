@@ -7,11 +7,13 @@ import 'package:user_application/features/auth/services/auth_services.dart';
 
 // Controller للـ Login
 class LoginController extends GetxController {
-  String email = '';
-  String password = '';
-  var isLoading = false.obs;
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  var isLoading = false.obs;
+
+  // متغيرات للتحقق المباشر
+  final emailError = ''.obs;
+  final passwordError = ''.obs;
 
   final authService = AuthService();
 
@@ -19,12 +21,74 @@ class LoginController extends GetxController {
     isLoading.value = value;
   }
 
-  // إضافة دالة لتنظيف الحقول
+  // دالة التحقق من البريد الإلكتروني
+  String? validateEmail(String value) {
+    if (value.isEmpty) {
+      return "❌ يرجى إدخال البريد الإلكتروني";
+    }
+
+    // تحقق من وجود @ و . بعدها
+    if (!value.contains('@')) {
+      return "❌ البريد الإلكتروني يجب أن يحتوي على @";
+    }
+
+    final parts = value.split('@');
+    if (parts.length != 2) {
+      return "❌ البريد الإلكتروني غير صالح";
+    }
+
+    if (parts[0].isEmpty) {
+      return "❌ يرجى إدخال الجزء الأول من البريد الإلكتروني";
+    }
+
+    if (!parts[1].contains('.')) {
+      return "❌ البريد الإلكتروني يجب أن يحتوي على دومين صحيح (مثال: gmail.com)";
+    }
+
+    final domainParts = parts[1].split('.');
+    if (domainParts.length < 2 || domainParts.any((p) => p.isEmpty)) {
+      return "❌ صيغة الدومين غير صحيحة";
+    }
+
+    return null;
+  }
+
+  // دالة التحقق من كلمة المرور
+  String? validatePassword(String value) {
+    if (value.isEmpty) {
+      return "❌ يرجى إدخال كلمة المرور";
+    }
+
+    if (value.length < 6) {
+      return "❌ كلمة المرور يجب أن تكون 6 أحرف على الأقل";
+    }
+
+    return null;
+  }
+
+  // دالة تنظيف الحقول والأخطاء
   void clearFields() {
     emailController.clear();
     passwordController.clear();
-    email = '';
-    password = '';
+    emailError.value = '';
+    passwordError.value = '';
+  }
+
+  // دالة مساعدة لإظهار رسائل الخطأ من السيرفر
+  void showServerError(String message, {bool isError = true}) {
+    Get.snackbar(
+      isError ? "خطأ" : "تنبيه",
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: isError ? Colors.red[50] : Colors.orange[50],
+      colorText: isError ? Colors.red[800]! : Colors.orange[800]!,
+      duration: const Duration(seconds: 3),
+      margin: const EdgeInsets.all(16),
+      borderRadius: 12,
+      snackStyle: SnackStyle.FLOATING,
+      icon: Icon(isError ? Icons.error_outline : Icons.warning_amber_rounded,
+          color: isError ? Colors.red[800] : Colors.orange[800]),
+    );
   }
 
   @override
@@ -51,8 +115,6 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    // استخدام Get.put مع tag فريد لضمان إنشاء نسخة جديدة
-    // أو استخدام Get.find إذا كانت موجودة بالفعل
     if (Get.isRegistered<LoginController>()) {
       controller = Get.find<LoginController>();
     } else {
@@ -62,11 +124,51 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
-    // تنظيف الحقول عند مغادرة الصفحة
     controller.clearFields();
-    // إزالة الـ Controller من الذاكرة إذا أردت
-    // Get.delete<LoginController>();
     super.dispose();
+  }
+
+  // دالة معالجة تسجيل الدخول مع Validation كامل
+  void handleLogin() {
+    // إخفاء لوحة المفاتيح
+    FocusScope.of(context).unfocus();
+
+    // التحقق من صحة النموذج
+    if (_formKey.currentState!.validate()) {
+      // التحقق الإضافي من البريد وكلمة المرور قبل الإرسال
+      final email = controller.emailController.text.trim();
+      final password = controller.passwordController.text;
+
+      // تحقق إضافي (لأمان إضافي)
+      if (email.isEmpty) {
+        controller.showServerError("يرجى إدخال البريد الإلكتروني");
+        return;
+      }
+
+      if (password.isEmpty) {
+        controller.showServerError("يرجى إدخال كلمة المرور");
+        return;
+      }
+
+      if (password.length < 6) {
+        controller.showServerError("كلمة المرور يجب أن تكون 6 أحرف على الأقل");
+        return;
+      }
+
+      // تنفيذ عملية تسجيل الدخول
+      controller.authService.loginWithEmail(
+        context: context,
+        email: email,
+        password: password,
+        setLoading: controller.setLoading,
+        onError: (errorMessage) {
+          controller.showServerError(errorMessage);
+        },
+      );
+    } else {
+      // إذا فشل الـ validation، نعرض رسالة عامة
+      controller.showServerError("يرجى التأكد من إدخال البريد الإلكتروني وكلمة المرور بشكل صحيح");
+    }
   }
 
   @override
@@ -75,7 +177,6 @@ class _LoginPageState extends State<LoginPage> {
 
     return WillPopScope(
       onWillPop: () async {
-        // تنظيف الحقول عند الضغط على زر الرجوع
         controller.clearFields();
         return true;
       },
@@ -113,18 +214,23 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         const SizedBox(height: 24),
 
-                        // البريد الإلكتروني
+                        // البريد الإلكتروني مع Validation متقدم
                         CustomTextField(
                           controller: controller.emailController,
                           label: "البريد الإلكتروني",
                           inputType: TextInputType.emailAddress,
-                          onChanged: (value) => controller.email = value,
-                          validator: (value) => value == null || !value.contains("@")
-                              ? "بريد إلكتروني غير صالح"
-                              : null,
+                          onChanged: (value) {
+                            // مسح الخطأ عند الكتابة
+                            if (controller.emailError.value.isNotEmpty) {
+                              controller.emailError.value = '';
+                            }
+                          },
+                          validator: (value) => controller.validateEmail(value ?? ''),
                         ),
 
-                        // كلمة المرور مع زر العين
+                        const SizedBox(height: 16),
+
+                        // كلمة المرور مع Validation
                         CustomTextField(
                           controller: controller.passwordController,
                           label: "كلمة المرور",
@@ -133,18 +239,17 @@ class _LoginPageState extends State<LoginPage> {
                           onVisibilityToggle: () {
                             setState(() => showPassword = !showPassword);
                           },
-                          onChanged: (value) => controller.password = value,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return "يرجى إدخال كلمة المرور";
-                            } else if (value.length < 6) {
-                              return "كلمة المرور يجب أن تكون 6 أحرف على الأقل";
+                          onChanged: (value) {
+                            // مسح الخطأ عند الكتابة
+                            if (controller.passwordError.value.isNotEmpty) {
+                              controller.passwordError.value = '';
                             }
-                            return null;
                           },
+                          validator: (value) => controller.validatePassword(value ?? ''),
                         ),
 
-                        const SizedBox(height: 24),
+
+                        const SizedBox(height: 16),
 
                         // زر تسجيل الدخول
                         Obx(() => Container(
@@ -164,16 +269,7 @@ class _LoginPageState extends State<LoginPage> {
                           child: ElevatedButton(
                             onPressed: controller.isLoading.value
                                 ? null
-                                : () {
-                              if (_formKey.currentState!.validate()) {
-                                controller.authService.loginWithEmail(
-                                  context: context,
-                                  email: controller.email,
-                                  password: controller.password,
-                                  setLoading: controller.setLoading,
-                                );
-                              }
-                            },
+                                : handleLogin,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF5EABD6),
                               elevation: 0,
@@ -221,7 +317,7 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             icon: const Icon(Bootstrap.google, color: Colors.red),
                             label: const Text(
-                              "التسجيل باستخدام Google",
+                              "تسجيل الدخول باستخدام Google",
                               style: TextStyle(
                                 color: Color(0xFF2C3E50),
                                 fontWeight: FontWeight.w500,
@@ -236,7 +332,6 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ),
                         )),
-                        const SizedBox(height: 20),
                       ],
                     ),
                   ),

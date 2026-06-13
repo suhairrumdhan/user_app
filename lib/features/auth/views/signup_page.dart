@@ -14,10 +14,71 @@ class SignUpController extends GetxController {
   final confirmPasswordController = TextEditingController();
   final isLoading = false.obs;
 
+  // متغير بسيط لعرض رسالة قوة كلمة المرور
+  final passwordStrengthMessage = ''.obs;
+
   final authService = AuthService();
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   GlobalKey<FormState> get formKey => _formKey;
+
+  // دالة بسيطة لفحص قوة كلمة المرور وعرض رسالة
+  void checkPasswordStrength(String password) {
+    if (password.isEmpty) {
+      passwordStrengthMessage.value = '';
+      return;
+    }
+
+    bool hasMinLength = password.length >= 6;
+    bool hasUpperCase = password.contains(RegExp(r'[A-Z]'));
+    bool hasLowerCase = password.contains(RegExp(r'[a-z]'));
+    bool hasNumber = password.contains(RegExp(r'[0-9]'));
+    bool hasSpecialChar = password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+
+    int count = 0;
+    if (hasMinLength) count++;
+    if (hasUpperCase) count++;
+    if (hasLowerCase) count++;
+    if (hasNumber) count++;
+    if (hasSpecialChar) count++;
+
+    if (count == 5) {
+      passwordStrengthMessage.value = '✓ كلمة مرور قوية';
+    } else if (count >= 3) {
+      passwordStrengthMessage.value = '⚠️ كلمة مرور متوسطة';
+    } else {
+      passwordStrengthMessage.value = '❌ كلمة مرور ضعيفة';
+    }
+  }
+
+  // دالة التحقق المخصصة لكلمة المرور
+  String? validatePassword(String value) {
+    if (value.isEmpty) {
+      return "يرجى إدخال كلمة المرور";
+    }
+
+    if (value.length <= 6) {
+      return "❌ كلمة المرور يجب أن تكون أكثر من 6 أحرف";
+    }
+
+    if (!value.contains(RegExp(r'[0-9]'))) {
+      return "❌ كلمة المرور يجب أن تحتوي على أرقام";
+    }
+
+    if (!value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+      return "❌ كلمة المرور يجب أن تحتوي على رموز";
+    }
+
+    if (!value.contains(RegExp(r'[A-Z]'))) {
+      return "❌ كلمة المرور يجب أن تحتوي على حروف كبيرة";
+    }
+
+    if (!value.contains(RegExp(r'[a-z]'))) {
+      return "❌ كلمة المرور يجب أن تحتوي على حروف صغيرة";
+    }
+
+    return null;
+  }
 
   // دالة لتنظيف جميع الحقول
   void clearFields() {
@@ -26,6 +87,7 @@ class SignUpController extends GetxController {
     phoneController.clear();
     passwordController.clear();
     confirmPasswordController.clear();
+    passwordStrengthMessage.value = '';
   }
 
   void register(BuildContext context) {
@@ -76,17 +138,20 @@ class _SignUpPageState extends State<SignUpPage> {
   @override
   void initState() {
     super.initState();
-    // التحقق إذا كان الـ Controller موجوداً مسبقاً
     if (Get.isRegistered<SignUpController>()) {
       controller = Get.find<SignUpController>();
     } else {
       controller = Get.put(SignUpController());
     }
+
+    // إضافة مستمع للتغيرات في حقل كلمة المرور
+    controller.passwordController.addListener(() {
+      controller.checkPasswordStrength(controller.passwordController.text);
+    });
   }
 
   @override
   void dispose() {
-    // تنظيف جميع الحقول عند مغادرة الصفحة
     controller.clearFields();
     super.dispose();
   }
@@ -97,7 +162,6 @@ class _SignUpPageState extends State<SignUpPage> {
 
     return WillPopScope(
       onWillPop: () async {
-        // تنظيف الحقول عند الضغط على زر الرجوع
         controller.clearFields();
         return true;
       },
@@ -151,29 +215,56 @@ class _SignUpPageState extends State<SignUpPage> {
                       controller: controller.emailController,
                       label: "البريد الإلكتروني",
                       inputType: TextInputType.emailAddress,
-                      validator: (value) =>
-                      value == null || !value.contains("@")
-                          ? "بريد إلكتروني غير صالح"
-                          : null,
-                    ),
-
-                    CustomTextField(
-                      controller: controller.passwordController,
-                      label: "كلمة المرور",
-                      isPasswordField: true,
-                      showPassword: showPassword,
-                      onVisibilityToggle: () {
-                        setState(() => showPassword = !showPassword);
-                      },
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return "يرجى إدخال كلمة المرور";
-                        } else if (value.length < 6) {
-                          return "كلمة المرور يجب أن تكون 6 أحرف على الأقل";
+                          return "يرجى إدخال البريد الإلكتروني";
+                        }
+                        if (!value.contains("@")) {
+                          return "بريد إلكتروني غير صالح";
                         }
                         return null;
                       },
                     ),
+
+                    // حقل كلمة المرور
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CustomTextField(
+                          controller: controller.passwordController,
+                          label: "كلمة المرور",
+                          isPasswordField: true,
+                          showPassword: showPassword,
+                          onVisibilityToggle: () {
+                            setState(() => showPassword = !showPassword);
+                          },
+                          validator: (value) => controller.validatePassword(value ?? ''),
+                        ),
+
+                        // رسالة قوة كلمة المرور البسيطة
+                        Obx(() {
+                          if (controller.passwordStrengthMessage.value.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          return Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              controller.passwordStrengthMessage.value,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: controller.passwordStrengthMessage.value.contains('قوية')
+                                    ? Colors.green
+                                    : controller.passwordStrengthMessage.value.contains('متوسطة')
+                                    ? Colors.orange
+                                    : Colors.red,
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
 
                     CustomTextField(
                       controller: controller.confirmPasswordController,
