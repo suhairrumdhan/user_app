@@ -6,7 +6,53 @@ from services.dictionary_builder import build_dictionary_from_csvs, build_search
 from services.analyzer import analyze_text
 
 app = Flask(__name__)
-CORS(app)
+
+DEFAULT_CORS_ALLOWED_ORIGINS = (
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8080",
+)
+
+
+def load_cors_allowed_origins() -> list[str]:
+    configured_origins = os.getenv("CORS_ALLOWED_ORIGINS", "")
+    origins = (
+        configured_origins.split(",")
+        if configured_origins.strip()
+        else DEFAULT_CORS_ALLOWED_ORIGINS
+    )
+
+    allowed_origins = []
+    for origin in origins:
+        normalized_origin = origin.strip().rstrip("/")
+        if not normalized_origin:
+            continue
+        if normalized_origin == "*":
+            raise ValueError(
+                "CORS_ALLOWED_ORIGINS must contain explicit origins; '*' is not allowed."
+            )
+        if not normalized_origin.startswith(("http://", "https://")):
+            raise ValueError(
+                "Each CORS_ALLOWED_ORIGINS entry must start with http:// or https://."
+            )
+        allowed_origins.append(normalized_origin)
+
+    if not allowed_origins:
+        raise ValueError("CORS_ALLOWED_ORIGINS must contain at least one origin.")
+
+    return allowed_origins
+
+
+CORS_ALLOWED_ORIGINS = load_cors_allowed_origins()
+
+CORS(
+    app,
+    resources={r"/*": {"origins": CORS_ALLOWED_ORIGINS}},
+    methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+    supports_credentials=False,
+    max_age=600,
+)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
