@@ -14,15 +14,14 @@ import '../widgets/chat_order_header.dart';
 class ChatDetailScreen extends StatelessWidget {
   final ChatThread thread;
 
-  ChatDetailScreen({
-    super.key,
-    required this.thread,
-  });
+  ChatDetailScreen({super.key, required this.thread});
 
   final Color _primaryColor = const Color(0xFF5EABD6);
 
   bool _isLockedStatus(String status) {
-    return status == 'completed' || status == 'cancelled';
+    return status == 'completed' ||
+        status == 'cancelled' ||
+        status == 'rejected';
   }
 
   String _lockedMessage(String status) {
@@ -31,6 +30,8 @@ class ChatDetailScreen extends StatelessWidget {
         return 'تم إيقاف المراسلة لأن الطلب مكتمل.';
       case 'cancelled':
         return 'تم إيقاف المراسلة لأن الطلب ملغي.';
+      case 'rejected':
+        return 'تم إيقاف المراسلة لأن الطلب مرفوض.';
       default:
         return 'المراسلة غير متاحة.';
     }
@@ -72,8 +73,9 @@ class ChatDetailScreen extends StatelessWidget {
                         CircleAvatar(
                           radius: 21,
                           backgroundColor: Colors.white,
-                          backgroundImage:
-                          hasImage ? NetworkImage(pharmacyImageUrl) : null,
+                          backgroundImage: hasImage
+                              ? NetworkImage(pharmacyImageUrl)
+                              : null,
                           child: !hasImage
                               ? Icon(Icons.local_pharmacy, color: _primaryColor)
                               : null,
@@ -88,8 +90,10 @@ class ChatDetailScreen extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: Colors.green,
                                 shape: BoxShape.circle,
-                                border:
-                                Border.all(color: Colors.white, width: 2),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
                               ),
                             ),
                           ),
@@ -143,16 +147,15 @@ class ChatDetailScreen extends StatelessWidget {
                           return const Center(
                             child: Text(
                               'لا توجد رسائل بعد',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: TextStyle(fontWeight: FontWeight.w600),
                             ),
                           );
                         }
 
                         return ListView.builder(
                           controller: controller.scrollController,
-                          padding: const EdgeInsets.fromLTRB(8, 10, 8, 14),                          itemCount: messages.length,
+                          padding: const EdgeInsets.fromLTRB(8, 10, 8, 14),
+                          itemCount: messages.length,
                           itemBuilder: (_, index) {
                             return ChatMessageBubble(
                               message: messages[index],
@@ -168,8 +171,9 @@ class ChatDetailScreen extends StatelessWidget {
                         padding: const EdgeInsets.fromLTRB(8, 10, 8, 14),
                         decoration: const BoxDecoration(
                           color: Colors.white,
-                          borderRadius:
-                          BorderRadius.vertical(top: Radius.circular(24)),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(24),
+                          ),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black12,
@@ -179,7 +183,8 @@ class ChatDetailScreen extends StatelessWidget {
                           ],
                         ),
                         child: Obx(() {
-                          final busy = controller.isUploading.value ||
+                          final busy =
+                              controller.isUploading.value ||
                               controller.isSending.value;
 
                           return Column(
@@ -227,25 +232,25 @@ class ChatDetailScreen extends StatelessWidget {
                                     onPressed: busy || isLocked
                                         ? null
                                         : () {
-                                      showModalBottomSheet(
-                                        context: context,
-                                        backgroundColor:
-                                        Colors.transparent,
-                                        builder: (_) =>
-                                            AttachmentPickerSheet(
-                                              onImageTap: () async {
-                                                Navigator.pop(context);
-                                                await controller
-                                                    .pickAndSendImage();
-                                              },
-                                              onFileTap: () async {
-                                                Navigator.pop(context);
-                                                await controller
-                                                    .pickAndSendFile();
-                                              },
-                                            ),
-                                      );
-                                    },
+                                            showModalBottomSheet(
+                                              context: context,
+                                              backgroundColor:
+                                                  Colors.transparent,
+                                              builder: (_) =>
+                                                  AttachmentPickerSheet(
+                                                    onImageTap: () async {
+                                                      Navigator.pop(context);
+                                                      await controller
+                                                          .pickAndSendImage();
+                                                    },
+                                                    onFileTap: () async {
+                                                      Navigator.pop(context);
+                                                      await controller
+                                                          .pickAndSendFile();
+                                                    },
+                                                  ),
+                                            );
+                                          },
                                     icon: Icon(
                                       Icons.add_circle_outline_rounded,
                                       color: (busy || isLocked)
@@ -261,7 +266,8 @@ class ChatDetailScreen extends StatelessWidget {
                                         borderRadius: BorderRadius.circular(24),
                                       ),
                                       child: TextField(
-                                        controller: controller.messageController,
+                                        controller:
+                                            controller.messageController,
                                         minLines: 1,
                                         maxLines: 4,
                                         enabled: !isLocked && !busy,
@@ -277,10 +283,10 @@ class ChatDetailScreen extends StatelessWidget {
                                               : 'اكتب رسالة...',
                                           border: InputBorder.none,
                                           contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 12,
-                                          ),
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 16,
+                                                vertical: 12,
+                                              ),
                                         ),
                                       ),
                                     ),
@@ -301,16 +307,16 @@ class ChatDetailScreen extends StatelessWidget {
                                       ),
                                       child: busy
                                           ? const Padding(
-                                        padding: EdgeInsets.all(12),
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2.2,
-                                          color: Colors.white,
-                                        ),
-                                      )
+                                              padding: EdgeInsets.all(12),
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.2,
+                                                color: Colors.white,
+                                              ),
+                                            )
                                           : const Icon(
-                                        Icons.send_rounded,
-                                        color: Colors.white,
-                                      ),
+                                              Icons.send_rounded,
+                                              color: Colors.white,
+                                            ),
                                     ),
                                   ),
                                 ],

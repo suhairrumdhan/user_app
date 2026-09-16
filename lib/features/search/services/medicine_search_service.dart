@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -8,12 +7,14 @@ import '../models/pharmacy_search_result.dart';
 import '../models/matched_medicine_result.dart';
 import 'medicine_matcher.dart';
 import 'medicine_normalizer.dart';
+import 'pharmacy_distance.dart';
+import '../../../shared/availability_policy.dart';
 
 class MedicineSearchService {
   final FirebaseFirestore _firestore;
 
   MedicineSearchService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   Future<List<PharmacySearchResult>> searchPharmacies({
     required List<MedicineSearchRequest> requests,
@@ -35,21 +36,9 @@ class MedicineSearchService {
       );
     }
 
-    final indexSnapshot = await _firestore
-        .collection('medicine_search_index')
-        .where('available', isEqualTo: true)
-        .get();
-
-    debugPrint('📦 index docs fetched: ${indexSnapshot.docs.length}');
-
-    if (indexSnapshot.docs.isEmpty) return [];
-
-    final List<Map<String, dynamic>> indexDocs = indexSnapshot.docs
-        .map((doc) => {
-      'id': doc.id,
-      ...doc.data(),
-    })
-        .toList();
+    final indexDocs = await _fetchCandidateIndexDocuments(requests);
+    debugPrint('📦 candidate index docs fetched: ${indexDocs.length}');
+    if (indexDocs.isEmpty) return [];
 
     final Map<String, List<Map<String, dynamic>>> groupedByPharmacy = {};
 
@@ -61,15 +50,22 @@ class MedicineSearchService {
 
     debugPrint('🏥 grouped pharmacies: ${groupedByPharmacy.length}');
 
+    final pharmacyMetadata = await _loadApprovedPharmacyMetadata(
+      groupedByPharmacy.keys.toList(),
+    );
+
     final List<PharmacySearchResult> results = [];
 
     for (final entry in groupedByPharmacy.entries) {
       final pharmacyId = entry.key;
       final pharmacyMedicines = entry.value;
+      final pharmacyData = pharmacyMetadata[pharmacyId];
+      if (pharmacyData == null) continue;
 
       final result = _evaluatePharmacyFromIndex(
         pharmacyId: pharmacyId,
         pharmacyMedicines: pharmacyMedicines,
+        pharmacyData: pharmacyData,
         requests: requests,
         filters: filters,
         userInsuranceCodes: userInsuranceCodes,
@@ -86,9 +82,98 @@ class MedicineSearchService {
     return _sortResults(results, filters.sortBy);
   }
 
+  Future<List<Map<String, dynamic>>> _fetchCandidateIndexDocuments(
+    List<MedicineSearchRequest> requests,
+  ) async {
+    final tokens = <String>{};
+    for (final request in requests) {
+      tokens.addAll(request.searchTokens);
+      tokens.addAll(MedicineNormalizer.buildSearchTokens(request.rawText));
+      final base =
+          request.baseName ??
+          MedicineNormalizer.extractBaseName(request.rawText);
+      if (base.trim().isNotEmpty) tokens.add(base.trim());
+    }
+
+    final normalizedTokens = tokens
+        .map(MedicineNormalizer.normalize)
+        .where((token) => token.length >= 2)
+        .toSet()
+        .toList();
+    if (normalizedTokens.isEmpty) return [];
+
+    final candidates = <String, Map<String, dynamic>>{};
+    const chunkSize = 30;
+    for (var i = 0; i < normalizedTokens.length; i += chunkSize) {
+      final chunk = normalizedTokens.skip(i).take(chunkSize).toList();
+      final snapshot = await _firestore
+          .collection('medicine_search_index')
+          .where('searchTokens', arrayContainsAny: chunk)
+          .get();
+      for (final doc in snapshot.docs) {
+        final data = <String, dynamic>{'id': doc.id, ...doc.data()};
+        if (_isAvailableIndexItem(data)) candidates[doc.id] = data;
+      }
+    }
+    return candidates.values.toList();
+  }
+
+  Future<Map<String, Map<String, dynamic>>> _loadApprovedPharmacyMetadata(
+    List<String> pharmacyIds,
+  ) async {
+    final approved = <String, Map<String, dynamic>>{};
+    const chunkSize = 10;
+    for (var i = 0; i < pharmacyIds.length; i += chunkSize) {
+      final chunk = pharmacyIds.skip(i).take(chunkSize).toList();
+      final snapshot = await _firestore
+          .collection('pharmacies')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+
+      await Future.wait(
+        snapshot.docs.map((doc) async {
+          final data = doc.data();
+          if (!pharmacyVisibleInSearch(data)) {
+            return;
+          }
+          Map<String, dynamic>? hoursData;
+          try {
+            final hours = await doc.reference
+                .collection('settings')
+                .doc('businessHours')
+                .get();
+            hoursData = hours.data();
+          } on FirebaseException catch (error) {
+            debugPrint(
+              'تعذر تحميل ساعات عمل ${doc.id}; سيتم استخدام بيانات الصيدلية: '
+              '${error.code}',
+            );
+          }
+          final location = data['location'];
+          final locationMap = location is Map
+              ? Map<String, dynamic>.from(location)
+              : const <String, dynamic>{};
+          approved[doc.id] = <String, dynamic>{
+            ...data,
+            'pharmacyId': doc.id,
+            'latitude': locationMap['latitude'] ?? data['latitude'],
+            'longitude': locationMap['longitude'] ?? data['longitude'],
+            'workingHours': hoursData ?? data['workingHours'],
+          };
+        }),
+      );
+    }
+    return approved;
+  }
+
+  bool _isAvailableIndexItem(Map<String, dynamic> data) {
+    return medicineAvailableForSearch(data);
+  }
+
   PharmacySearchResult? _evaluatePharmacyFromIndex({
     required String pharmacyId,
     required List<Map<String, dynamic>> pharmacyMedicines,
+    required Map<String, dynamic> pharmacyData,
     required List<MedicineSearchRequest> requests,
     required PharmacySearchFilters filters,
     List<String> userInsuranceCodes = const [],
@@ -97,13 +182,19 @@ class MedicineSearchService {
   }) {
     if (pharmacyMedicines.isEmpty) return null;
 
-    final first = pharmacyMedicines.first;
+    final first = <String, dynamic>{
+      ...pharmacyMedicines.first,
+      ...pharmacyData,
+    };
 
-    final String pharmacyName =
-    (first['pharmacyName'] ?? 'صيدلية').toString().trim();
+    final String pharmacyName = (first['pharmacyName'] ?? 'صيدلية')
+        .toString()
+        .trim();
 
-    final String status =
-    (first['status'] ?? '').toString().trim().toLowerCase();
+    final String status = (first['status'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
     if (status.isNotEmpty && status != 'approved') {
       debugPrint('⛔ pharmacy skipped بسبب status: $pharmacyName ($status)');
       return null;
@@ -129,19 +220,24 @@ class MedicineSearchService {
       return null;
     }
 
-    final double distanceKm = _calculateDistanceKm(
-      pharmacyLat: _toDouble(first['latitude']),
-      pharmacyLng: _toDouble(first['longitude']),
+    final double? calculatedDistanceKm = PharmacyDistance.betweenKm(
+      pharmacyLat: _toNullableDouble(first['latitude']),
+      pharmacyLng: _toNullableDouble(first['longitude']),
       userLat: userLat,
       userLng: userLng,
     );
 
-    if (distanceKm > filters.maxDistanceKm) {
+    if (calculatedDistanceKm != null &&
+        calculatedDistanceKm > filters.maxDistanceKm) {
       debugPrint(
-        '⛔ pharmacy skipped بسبب distance: $pharmacyName -> $distanceKm km',
+        '⛔ pharmacy skipped بسبب distance: '
+        '$pharmacyName -> $calculatedDistanceKm km',
       );
       return null;
     }
+
+    // -1 means that distance is unknown. It must never be treated as 0 km.
+    final double distanceKm = calculatedDistanceKm ?? -1;
 
     final bool isOpenNow = _resolveOpenNow(first);
 
@@ -150,7 +246,7 @@ class MedicineSearchService {
       return null;
     }
 
-    final double rating = 0.0;
+    final double rating = _resolveRating(first);
 
     final List<MatchedMedicineResult> matchedMedicines = [];
     final List<String> missingMedicines = [];
@@ -181,28 +277,28 @@ class MedicineSearchService {
           isAlternative: false,
         );
 
-        final alternativeMatches = topMatches
-            .skip(1)
-            .map(
-              (item) => item.copyWith(
-            requestKey: request.requestKey,
-            requestedName: request.rawText,
-            isAlternative: true,
-            similarMatches: const [],
-          ),
-        )
-            .toList();
+        final alternativeMatches =
+            (filters.alternativesAllowed
+                    ? topMatches.skip(1)
+                    : const Iterable<MatchedMedicineResult>.empty())
+                .map(
+                  (item) => item.copyWith(
+                    requestKey: request.requestKey,
+                    requestedName: request.rawText,
+                    isAlternative: true,
+                    similarMatches: const [],
+                  ),
+                )
+                .toList();
 
         debugPrint(
           '   ✅ matched "${request.rawText}" -> "${bestMatch.matchedMedicineName}" '
-              'score=${bestMatch.matchScore} '
-              'alternatives=${alternativeMatches.length}',
+          'score=${bestMatch.matchScore} '
+          'alternatives=${alternativeMatches.length}',
         );
 
         matchedMedicines.add(
-          bestMatch.copyWith(
-            similarMatches: alternativeMatches,
-          ),
+          bestMatch.copyWith(similarMatches: alternativeMatches),
         );
       }
     }
@@ -298,7 +394,10 @@ class MedicineSearchService {
 
       if (!isExact) {
         if (MedicineNormalizer.containsNormalized(name, request.rawText) ||
-            MedicineNormalizer.containsNormalized(scientific, request.rawText)) {
+            MedicineNormalizer.containsNormalized(
+              scientific,
+              request.rawText,
+            )) {
           isContains = true;
         }
 
@@ -315,12 +414,18 @@ class MedicineSearchService {
         }
 
         if (!isContains && requestBase.isNotEmpty) {
-          final reqParts =
-          requestBase.split(' ').where((e) => e.isNotEmpty).toList();
-          final nameParts =
-          baseName.split(' ').where((e) => e.isNotEmpty).toList();
-          final sciParts =
-          baseScientific.split(' ').where((e) => e.isNotEmpty).toList();
+          final reqParts = requestBase
+              .split(' ')
+              .where((e) => e.isNotEmpty)
+              .toList();
+          final nameParts = baseName
+              .split(' ')
+              .where((e) => e.isNotEmpty)
+              .toList();
+          final sciParts = baseScientific
+              .split(' ')
+              .where((e) => e.isNotEmpty)
+              .toList();
 
           if (reqParts.isNotEmpty &&
               ((nameParts.isNotEmpty && reqParts.first == nameParts.first) ||
@@ -331,10 +436,14 @@ class MedicineSearchService {
       }
 
       if (!isExact && !isContains) {
-        final fuzzyName =
-        MedicineNormalizer.similarityScore(request.rawText, name);
-        final fuzzyScientific =
-        MedicineNormalizer.similarityScore(request.rawText, scientific);
+        final fuzzyName = MedicineNormalizer.similarityScore(
+          request.rawText,
+          name,
+        );
+        final fuzzyScientific = MedicineNormalizer.similarityScore(
+          request.rawText,
+          scientific,
+        );
 
         if (fuzzyName >= 0.60 || fuzzyScientific >= 0.60) {
           isFuzzy = true;
@@ -350,11 +459,7 @@ class MedicineSearchService {
       }
     }
 
-    final combined = <Map<String, dynamic>>[
-      ...exact,
-      ...contains,
-      ...fuzzy,
-    ];
+    final combined = <Map<String, dynamic>>[...exact, ...contains, ...fuzzy];
 
     if (combined.isEmpty) return [];
 
@@ -395,17 +500,17 @@ class MedicineSearchService {
 
     final double averageMatchScore = matchedMedicines.isEmpty
         ? 0
-        : matchedMedicines
-        .map((e) => e.matchScore)
-        .reduce((a, b) => a + b) /
-        matchedMedicines.length;
+        : matchedMedicines.map((e) => e.matchScore).reduce((a, b) => a + b) /
+              matchedMedicines.length;
 
     double score = 0;
 
     score += matchedCount * 100;
     score -= missingCount * 120;
     score += averageMatchScore * 1.5;
-    score -= distanceKm * 5;
+    if (distanceKm >= 0) {
+      score -= distanceKm * 5;
+    }
     score -= totalEstimatedPrice * 0.15;
 
     if (supportsInsurance) score += 40;
@@ -417,15 +522,15 @@ class MedicineSearchService {
   }
 
   List<PharmacySearchResult> _sortResults(
-      List<PharmacySearchResult> results,
-      String sortBy,
-      ) {
+    List<PharmacySearchResult> results,
+    String sortBy,
+  ) {
     final sorted = [...results];
 
     switch (sortBy) {
       case PharmacySearchSort.cheapest:
         sorted.sort(
-              (a, b) => a.totalEstimatedPrice.compareTo(b.totalEstimatedPrice),
+          (a, b) => a.totalEstimatedPrice.compareTo(b.totalEstimatedPrice),
         );
         break;
 
@@ -439,7 +544,15 @@ class MedicineSearchService {
 
       case PharmacySearchSort.nearest:
       default:
-        sorted.sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
+        sorted.sort((a, b) {
+          final aKnown = a.distanceKm >= 0;
+          final bKnown = b.distanceKm >= 0;
+
+          if (aKnown && !bKnown) return -1;
+          if (!aKnown && bKnown) return 1;
+          if (!aKnown && !bKnown) return 0;
+          return a.distanceKm.compareTo(b.distanceKm);
+        });
         break;
     }
 
@@ -448,61 +561,78 @@ class MedicineSearchService {
 
   bool _resolveOpenNow(Map<String, dynamic> pharmacyData) {
     final is24Hours = pharmacyData['is24Hours'] == true;
-    final isOnline = pharmacyData['isOnline'] == true;
-
     if (is24Hours) return true;
-    return isOnline;
-  }
 
-  double _calculateDistanceKm({
-    required double pharmacyLat,
-    required double pharmacyLng,
-    double? userLat,
-    double? userLng,
-  }) {
-    if (userLat == null || userLng == null) {
-      return 0;
+    final hours = pharmacyData['workingHours'];
+    if (hours is! Map) return false;
+    const days = [
+      'sunday',
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+    ];
+    final now = DateTime.now();
+    final raw = hours[days[now.weekday % 7]];
+    final range = _parseBusinessHours(raw);
+    if (range == null) return false;
+    final current = now.hour * 60 + now.minute;
+    if (range.$1 <= range.$2) {
+      return current >= range.$1 && current <= range.$2;
     }
+    return current >= range.$1 || current <= range.$2;
+  }
 
-    if (pharmacyLat == 0 && pharmacyLng == 0) {
-      return 0;
+  (int, int)? _parseBusinessHours(dynamic raw) {
+    if (raw == null) return null;
+    final text = raw.toString().trim();
+    final lower = text.toLowerCase();
+    if (text.isEmpty ||
+        lower == 'closed' ||
+        lower == 'close' ||
+        lower == 'مغلق' ||
+        lower == 'مغلق اليوم') {
+      return null;
     }
-
-    return _haversineDistanceKm(
-      userLat,
-      userLng,
-      pharmacyLat,
-      pharmacyLng,
-    );
+    if (lower == '24 hours' || lower == '24 ساعة') return (0, 1439);
+    final parts = text.split(RegExp(r'\s*-\s*'));
+    if (parts.length != 2) return null;
+    final open = _parseMinutes(parts[0]);
+    final close = _parseMinutes(parts[1]);
+    if (open == null || close == null) return null;
+    return (open, close);
   }
 
-  double _haversineDistanceKm(
-      double lat1,
-      double lon1,
-      double lat2,
-      double lon2,
-      ) {
-    const double earthRadiusKm = 6371.0;
-
-    final double dLat = _degToRad(lat2 - lat1);
-    final double dLon = _degToRad(lon2 - lon1);
-
-    final double a = math.pow(math.sin(dLat / 2), 2).toDouble() +
-        math.cos(_degToRad(lat1)) *
-            math.cos(_degToRad(lat2)) *
-            math.pow(math.sin(dLon / 2), 2).toDouble();
-
-    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-
-    return earthRadiusKm * c;
+  int? _parseMinutes(String value) {
+    var text = value.trim();
+    final lower = text.toLowerCase();
+    final isPm = text.contains('م') || lower.contains('pm');
+    final isAm = text.contains('ص') || lower.contains('am');
+    text = text.replaceAll(RegExp(r'(AM|PM|am|pm|ص|م)'), '').trim();
+    final parts = text.split(':');
+    var hour = int.tryParse(parts.first.trim());
+    final minute = parts.length > 1 ? int.tryParse(parts[1].trim()) ?? 0 : 0;
+    if (hour == null || hour < 0 || hour > 23 || minute > 59) return null;
+    if (isPm && hour < 12) hour += 12;
+    if (isAm && hour == 12) hour = 0;
+    return hour * 60 + minute;
   }
 
-  double _degToRad(double deg) => deg * (math.pi / 180.0);
+  double _resolveRating(Map<String, dynamic> pharmacyData) {
+    for (final key in const ['rating', 'averageRating', 'ratingAverage']) {
+      final value = pharmacyData[key];
+      if (value is num) return value.toDouble();
+      final parsed = double.tryParse(value?.toString() ?? '');
+      if (parsed != null) return parsed;
+    }
+    return 0;
+  }
 
-  double _toDouble(dynamic value) {
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
-    return 0.0;
+  double? _toNullableDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
   }
 }

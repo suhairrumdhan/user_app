@@ -8,7 +8,7 @@ import '../models/notification_type.dart';
 class NotificationCard extends StatelessWidget {
   final AppNotificationModel notification;
   final VoidCallback onTap;
-  final VoidCallback onDelete;
+  final Future<void> Function() onDelete;
 
   const NotificationCard({
     super.key,
@@ -24,20 +24,19 @@ class NotificationCard extends StatelessWidget {
     return Dismissible(
       key: ValueKey(notification.id),
       direction: DismissDirection.endToStart,
-      onDismissed: (_) => onDelete(),
+      confirmDismiss: (_) async {
+        await onDelete();
+        // The live query removes the card after a successful write. A failed
+        // delete must not leave a dismissed widget mounted in the list.
+        return false;
+      },
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.symmetric(horizontal: 22),
         decoration: BoxDecoration(
           color: Colors.red.shade500,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.red.withOpacity(0.14),
-              blurRadius: 16,
-              offset: const Offset(0, 7),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [],
         ),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
@@ -58,38 +57,32 @@ class NotificationCard extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(16),
           onTap: onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
             decoration: BoxDecoration(
               color: notification.isRead ? Colors.white : ui.cardTint,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: notification.isRead
                     ? Colors.grey.shade200
                     : ui.baseColor.withOpacity(0.22),
                 width: notification.isRead ? 1.0 : 1.25,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 16,
-                  offset: const Offset(0, 7),
-                ),
-              ],
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _StatusStripe(color: ui.baseColor),
-                const SizedBox(width: 12),
-                _NotificationLeading(
-                  ui: ui,
-                  imageUrl: notification.imageUrl,
+                _StatusStripe(
+                  color: notification.isRead
+                      ? Colors.grey.shade300
+                      : ui.baseColor,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
+                _NotificationLeading(ui: ui, imageUrl: notification.imageUrl),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,19 +93,19 @@ class NotificationCard extends StatelessWidget {
                         isRead: notification.isRead,
                         color: ui.baseColor,
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 3),
                       Text(
                         notification.message,
-                        maxLines: 3,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: Colors.grey.shade800,
-                          fontSize: 13.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          height: 1.55,
+                          height: 1.35,
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 5),
                       _BottomMetaRow(
                         sourceLabel: _buildSourceLabel(notification),
                         secondaryLabel: _buildSecondaryLabel(notification),
@@ -120,12 +113,6 @@ class NotificationCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  Iconsax.arrow_left_2,
-                  size: 17,
-                  color: Colors.grey.shade400,
                 ),
               ],
             ),
@@ -172,14 +159,18 @@ class NotificationCard extends StatelessWidget {
 
   static String? _buildSecondaryLabel(AppNotificationModel notification) {
     final beneficiary = notification.beneficiaryName?.trim();
-    final status = notification.extraData['status']?.toString().trim().toLowerCase();
-    final statusLabel =
-    notification.extraData['statusLabel']?.toString().trim();
-    final canAdd =
-        notification.extraData['canAddToMedicationHistory'] == true;
+    final status = notification.extraData['status']
+        ?.toString()
+        .trim()
+        .toLowerCase();
+    final statusLabel = notification.extraData['statusLabel']
+        ?.toString()
+        .trim();
+    final canAdd = notification.extraData['canAddToMedicationHistory'] == true;
 
     if (notification.type == AppNotificationType.orderUpdate) {
-      final isDelivered = status == 'delivered' ||
+      final isDelivered =
+          status == 'delivered' ||
           status == 'completed_delivery' ||
           statusLabel == 'تم الاستلام' ||
           statusLabel == 'تم التسليم';
@@ -210,7 +201,8 @@ class NotificationCard extends StatelessWidget {
     }
 
     return null;
-  }}
+  }
+}
 
 class _StatusStripe extends StatelessWidget {
   final Color color;
@@ -221,7 +213,7 @@ class _StatusStripe extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 4,
-      height: 60,
+      height: 44,
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(999),
@@ -234,65 +226,52 @@ class _NotificationLeading extends StatelessWidget {
   final _NotificationUiData ui;
   final String? imageUrl;
 
-  const _NotificationLeading({
-    required this.ui,
-    this.imageUrl,
-  });
+  const _NotificationLeading({required this.ui, this.imageUrl});
 
   @override
   Widget build(BuildContext context) {
     final hasImage = imageUrl != null && imageUrl!.trim().isNotEmpty;
 
     return Container(
-      width: 52,
-      height: 52,
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
         gradient: hasImage
             ? null
             : LinearGradient(
-          colors: [ui.color1, ui.color2],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+                colors: [ui.color1, ui.color2],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
         color: hasImage ? Colors.white : null,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: hasImage
-            ? Border.all(
-          color: Colors.grey.shade200,
-          width: 1,
-        )
+            ? Border.all(color: Colors.grey.shade200, width: 1)
             : null,
-        boxShadow: [
-          BoxShadow(
-            color: ui.baseColor.withOpacity(0.18),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
-          ),
-        ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: hasImage
             ? Image.network(
-          imageUrl!,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _fallbackIcon(),
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Container(
-              color: Colors.grey.shade100,
-              alignment: Alignment.center,
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: ui.baseColor,
-                ),
-              ),
-            );
-          },
-        )
+                imageUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _fallbackIcon(),
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    color: Colors.grey.shade100,
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: ui.baseColor,
+                      ),
+                    ),
+                  );
+                },
+              )
             : _fallbackIcon(),
       ),
     );
@@ -307,11 +286,7 @@ class _NotificationLeading extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
       ),
-      child: Icon(
-        ui.icon,
-        color: Colors.white,
-        size: 23,
-      ),
+      child: Icon(ui.icon, color: Colors.white, size: 19),
     );
   }
 }
@@ -340,26 +315,26 @@ class _TopRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Colors.grey.shade900,
-              fontSize: 15.2,
+              fontSize: 13.2,
               fontWeight: isRead ? FontWeight.w700 : FontWeight.w800,
               height: 1.3,
             ),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 7),
         Text(
           timeText,
           style: TextStyle(
             color: Colors.grey.shade500,
-            fontSize: 11.6,
+            fontSize: 10,
             fontWeight: FontWeight.w700,
           ),
         ),
         if (!isRead) ...[
-          const SizedBox(width: 8),
+          const SizedBox(width: 5),
           Container(
-            width: 9,
-            height: 9,
+            width: 7,
+            height: 7,
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
@@ -399,7 +374,7 @@ class _BottomMetaRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: color,
-              fontSize: 12.4,
+              fontSize: 10.5,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -409,7 +384,7 @@ class _BottomMetaRow extends StatelessWidget {
             '  •  ',
             style: TextStyle(
               color: Colors.grey.shade400,
-              fontSize: 11.5,
+              fontSize: 10,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -419,7 +394,7 @@ class _BottomMetaRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: Colors.grey.shade600,
-                fontSize: 12.2,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -447,7 +422,9 @@ class _NotificationUiData {
     required this.metaColor,
   });
 
-  factory _NotificationUiData.fromNotification(AppNotificationModel notification) {
+  factory _NotificationUiData.fromNotification(
+    AppNotificationModel notification,
+  ) {
     final status = notification.extraData['status']?.toString();
 
     if (notification.type == AppNotificationType.orderUpdate) {
@@ -462,6 +439,7 @@ class _NotificationUiData {
             metaColor: Color(0xFF15803D),
           );
 
+        case 'confirmedReserved':
         case 'confirmed':
           return const _NotificationUiData(
             icon: Iconsax.tick_circle,
@@ -472,6 +450,7 @@ class _NotificationUiData {
             metaColor: Color(0xFF0F766E),
           );
 
+        case 'partialOfferPending':
         case 'partiallyConfirmed':
           return const _NotificationUiData(
             icon: Iconsax.warning_2,
@@ -482,6 +461,7 @@ class _NotificationUiData {
             metaColor: Color(0xFFC2410C),
           );
 
+        case 'underReview':
         case 'reviewing':
           return const _NotificationUiData(
             icon: Iconsax.search_status,
@@ -494,6 +474,7 @@ class _NotificationUiData {
 
         case 'rejected':
         case 'cancelled':
+        case 'notCollected':
           return const _NotificationUiData(
             icon: Iconsax.close_circle,
             color1: Color(0xFFDC2626),
@@ -501,6 +482,16 @@ class _NotificationUiData {
             baseColor: Color(0xFFDC2626),
             cardTint: Color(0xFFFFF5F5),
             metaColor: Color(0xFFB91C1C),
+          );
+
+        case 'preparing':
+          return const _NotificationUiData(
+            icon: Iconsax.box,
+            color1: Color(0xFF7C3AED),
+            color2: Color(0xFFA78BFA),
+            baseColor: Color(0xFF7C3AED),
+            cardTint: Color(0xFFF7F2FF),
+            metaColor: Color(0xFF6D28D9),
           );
 
         case 'completed':

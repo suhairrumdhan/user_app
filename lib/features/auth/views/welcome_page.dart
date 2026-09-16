@@ -37,45 +37,24 @@ class WelcomeScreen extends StatelessWidget {
       math.min(width * 0.085, isTablet ? 42 : 36),
     );
 
-    final double latinFontSize = math.max(
-      14,
-      math.min(width * 0.040, 18),
-    );
+    final double latinFontSize = math.max(14, math.min(width * 0.040, 18));
 
-    final double bodyFontSize = math.max(
-      13,
-      math.min(width * 0.038, 16),
-    );
+    final double bodyFontSize = math.max(13, math.min(width * 0.038, 16));
 
     final double welcomeFontSize = math.max(
       24,
       math.min(width * 0.078, isTablet ? 40 : 32),
     );
 
-    final double subTextFontSize = math.max(
-      12.5,
-      math.min(width * 0.036, 15),
-    );
+    final double subTextFontSize = math.max(12.5, math.min(width * 0.036, 15));
 
-    final double buttonHeight = math.max(
-      50,
-      math.min(height * 0.072, 60),
-    );
+    final double buttonHeight = math.max(50, math.min(height * 0.072, 60));
 
-    final double buttonFontSize = math.max(
-      15.5,
-      math.min(width * 0.043, 18),
-    );
+    final double buttonFontSize = math.max(15.5, math.min(width * 0.043, 18));
 
-    final double chipFontSize = math.max(
-      11,
-      math.min(width * 0.030, 12.5),
-    );
+    final double chipFontSize = math.max(11, math.min(width * 0.030, 12.5));
 
-    final double chipIconSize = math.max(
-      14,
-      math.min(width * 0.040, 16),
-    );
+    final double chipIconSize = math.max(14, math.min(width * 0.040, 16));
 
     return CustomScaffold(
       child: Stack(
@@ -123,34 +102,13 @@ class WelcomeScreen extends StatelessWidget {
                   Expanded(
                     flex: 30,
                     child: Center(
-                      child: Container(
+                      child: SizedBox(
                         width: double.infinity,
                         height: bannerHeight,
-                        decoration: BoxDecoration(
-                          // [CHANGE 1] Reduced transparency (more solid) and slightly darker base
-                          color: Colors.black.withOpacity(0.22),
-                          borderRadius: BorderRadius.circular(isTablet ? 34 : 28),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.2), // Slightly more visible border
-                            width: 1.2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.15),
-                              blurRadius: 24,
-                              offset: const Offset(0, 14),
-                            ),
-                          ],
-                        ),
-                        // [CHANGE 2] Made ClipRRect wrap the image directly, removing the inner Padding
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(isTablet ? 34 : 28),
-                          child: Image.asset(
-                            'assets/images/welcome_medicine.png',
-                            fit: BoxFit.cover,
-                            alignment: Alignment.center,
-                            // No more inner padding, image touches the border directly
-                          ),
+                        child: Image.asset(
+                          'assets/images/welcome_medicine.png',
+                          fit: BoxFit.contain,
+                          alignment: Alignment.center,
                         ),
                       ),
                     ),
@@ -191,7 +149,6 @@ class WelcomeScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-
                       ],
                     ),
                   ),
@@ -255,20 +212,15 @@ class WelcomeScreen extends StatelessWidget {
           ),
         ],
       ),
-    );  }
+    );
+  }
 
-  Widget _decorCircle({
-    required double size,
-    required Color color,
-  }) {
+  Widget _decorCircle({required double size, required Color color}) {
     return IgnorePointer(
       child: Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-        ),
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
     );
   }
@@ -308,19 +260,16 @@ class _ActionButton extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(height / 2),
-              border: Border.all(
-                color: borderColor,
-                width: 1.3,
-              ),
+              border: Border.all(color: borderColor, width: 1.3),
               boxShadow: isOutlined
                   ? []
                   : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.10),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.10),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
             ),
             child: Text(
               text,
@@ -360,18 +309,12 @@ class _MiniFeatureChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.08),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.10),
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.10)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            color: Colors.white.withOpacity(0.92),
-            size: iconSize,
-          ),
+          Icon(icon, color: Colors.white.withOpacity(0.92), size: iconSize),
           const SizedBox(width: 6),
           Text(
             label,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 
-import '../../../app/controllers/main_navigation_controller.dart';
 import '../../profile/controllers/user_controller.dart';
 import '../../search/views/search_ui_colors.dart';
 import '../models/order_status.dart';
@@ -19,8 +18,14 @@ class OrdersPage extends StatefulWidget {
 
 class _OrdersPageState extends State<OrdersPage> {
   final UserController _userController = Get.find<UserController>();
-  final MainNavigationController _navController =
-  Get.find<MainNavigationController>();
+  List<OrderModel> _latestOrders = const [];
+
+  void _openSearch() {
+    showSearch(
+      context: context,
+      delegate: _OrderSearchDelegate(orders: _latestOrders),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,91 +35,101 @@ class _OrdersPageState extends State<OrdersPage> {
       backgroundColor: SearchUiColors.primary,
       body: currentUser == null
           ? const _OrdersShell(
-        child: _OrdersMessageState(
-          icon: Iconsax.user_octagon,
-          title: 'يجب تسجيل الدخول أولاً',
-          subtitle: 'سجلي الدخول لعرض طلباتك ومتابعة حالتها.',
-        ),
-      )
+              child: _OrdersMessageState(
+                icon: Iconsax.user_octagon,
+                title: 'يجب تسجيل الدخول أولاً',
+                subtitle: 'سجلي الدخول لعرض طلباتك ومتابعة حالتها.',
+              ),
+            )
           : _OrdersShell(
-        child: StreamBuilder<List<OrderModel>>(
-          stream: OrderService.instance.getUserOrdersStream(currentUser.id),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator(
-                  color: SearchUiColors.primary,
+              onSearchTap: _openSearch,
+              child: StreamBuilder<List<OrderModel>>(
+                stream: OrderService.instance.getUserOrdersStream(
+                  currentUser.id,
                 ),
-              );
-            }
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: SearchUiColors.primary,
+                      ),
+                    );
+                  }
 
-            if (snapshot.hasError) {
-              return const _OrdersMessageState(
-                icon: Iconsax.warning_2,
-                title: 'حدث خطأ',
-                subtitle: 'تعذر تحميل الطلبات حالياً.',
-              );
-            }
+                  if (snapshot.hasError) {
+                    return const _OrdersMessageState(
+                      icon: Iconsax.warning_2,
+                      title: 'حدث خطأ',
+                      subtitle: 'تعذر تحميل الطلبات حالياً.',
+                    );
+                  }
 
-            final orders = snapshot.data ?? [];
+                  final orders = snapshot.data ?? [];
+                  _latestOrders = orders;
 
-            if (orders.isEmpty) {
-              return const _OrdersMessageState(
-                icon: Iconsax.box,
-                title: 'لا توجد طلبات بعد',
-                subtitle: 'عند إرسال أول طلب سيظهر هنا لتتمكن من متابعته.',
-              );
-            }
+                  if (orders.isEmpty) {
+                    return const _OrdersMessageState(
+                      icon: Iconsax.box,
+                      title: 'لا توجد طلبات بعد',
+                      subtitle:
+                          'عند إرسال أول طلب سيظهر هنا لتتمكن من متابعته.',
+                    );
+                  }
 
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
-                  child: _OrdersSummaryCard(
-                    totalOrders: orders.length,
-                    pendingCount: orders
-                        .where((o) =>
-                    o.status == OrderStatus.pending ||
-                        o.status == OrderStatus.reviewing ||
-                        o.status == OrderStatus.confirmed ||
-                        o.status == OrderStatus.partiallyConfirmed ||
-                        o.status == OrderStatus.ready)
-                        .length,
-                    completedCount: orders
-                        .where((o) => o.status == OrderStatus.completed)
-                        .length,
-                  ),
-                ),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-                    itemCount: orders.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final order = orders[index];
+                  return Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 5),
+                        child: _OrdersSummaryCard(
+                          totalOrders: orders.length,
+                          pendingCount: orders
+                              .where(
+                                (o) =>
+                                    o.status == OrderStatus.received ||
+                                    o.status == OrderStatus.underReview ||
+                                    o.status == OrderStatus.confirmedReserved ||
+                                    o.status == OrderStatus.partialOfferPending ||
+                                    o.status == OrderStatus.preparing ||
+                                    o.status == OrderStatus.ready,
+                              )
+                              .length,
+                          completedCount: orders
+                              .where((o) => o.status == OrderStatus.completed)
+                              .length,
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(14, 6, 14, 16),
+                          itemCount: orders.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final order = orders[index];
 
-                      return OrderCard(
-                        order: order,
-                        onTap: () {
-                          Get.to(() => OrderDetailsPage(order: order));
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
+                            return OrderCard(
+                              order: order,
+                              onTap: () {
+                                Get.to(() => OrderDetailsPage(order: order));
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
     );
   }
 }
 
 class _OrdersShell extends StatelessWidget {
   final Widget child;
+  final VoidCallback? onSearchTap;
 
-  const _OrdersShell({required this.child});
+  const _OrdersShell({required this.child, this.onSearchTap});
 
   @override
   Widget build(BuildContext context) {
@@ -123,23 +138,19 @@ class _OrdersShell extends StatelessWidget {
         SafeArea(
           bottom: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
             child: Row(
               children: [
                 Container(
-                  width: 52,
-                  height: 52,
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.16),
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
-                    Iconsax.box,
-                    color: Colors.white,
-                    size: 25,
-                  ),
+                  child: const Icon(Iconsax.box, color: Colors.white, size: 19),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 9),
                 const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,21 +159,28 @@ class _OrdersShell extends StatelessWidget {
                         'طلباتي',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 22,
+                          fontSize: 17,
                           fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'تابع جميع طلباتك وحالتها بسهولة',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
+                ),
+                IconButton(
+                  onPressed: onSearchTap,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(color: Colors.white.withOpacity(0.22)),
+                    ),
+                    backgroundColor: Colors.white.withOpacity(0.10),
+                  ),
+                  icon: const Icon(Iconsax.search_normal_1, size: 18),
                 ),
               ],
             ),
@@ -173,9 +191,7 @@ class _OrdersShell extends StatelessWidget {
             width: double.infinity,
             decoration: const BoxDecoration(
               color: SearchUiColors.light,
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(34),
-              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: child,
           ),
@@ -199,21 +215,14 @@ class _OrdersSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [SearchUiColors.primary, SearchUiColors.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: SearchUiColors.primary.withOpacity(0.18),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
@@ -224,7 +233,7 @@ class _OrdersSummaryCard extends StatelessWidget {
               icon: Iconsax.box,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 5),
           Expanded(
             child: _summaryItem(
               title: 'قيد المتابعة',
@@ -232,7 +241,7 @@ class _OrdersSummaryCard extends StatelessWidget {
               icon: Iconsax.timer_1,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 5),
           Expanded(
             child: _summaryItem(
               title: 'مكتملة',
@@ -251,30 +260,30 @@ class _OrdersSummaryCard extends StatelessWidget {
     required IconData icon,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(11),
       ),
       child: Column(
         children: [
-          Icon(icon, color: Colors.white, size: 18),
-          const SizedBox(height: 8),
+          Icon(icon, color: Colors.white, size: 14),
+          const SizedBox(height: 3),
           Text(
             value,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 18,
+              fontSize: 14,
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             title,
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 11.5,
+              fontSize: 9.5,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -324,11 +333,7 @@ class _OrdersMessageState extends StatelessWidget {
                   color: SearchUiColors.primary.withOpacity(0.10),
                   borderRadius: BorderRadius.circular(24),
                 ),
-                child: Icon(
-                  icon,
-                  color: SearchUiColors.primary,
-                  size: 34,
-                ),
+                child: Icon(icon, color: SearchUiColors.primary, size: 34),
               ),
               const SizedBox(height: 16),
               Text(
@@ -355,6 +360,85 @@ class _OrdersMessageState extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _OrderSearchDelegate extends SearchDelegate<String> {
+  final List<OrderModel> orders;
+
+  _OrderSearchDelegate({required this.orders});
+
+  @override
+  String get searchFieldLabel => 'ابحث داخل الطلبات';
+
+  @override
+  List<Widget>? buildActions(BuildContext context) => [
+    if (query.isNotEmpty)
+      IconButton(
+        icon: const Icon(Icons.close),
+        onPressed: () => query = '',
+      ),
+  ];
+
+  @override
+  Widget? buildLeading(BuildContext context) => IconButton(
+    icon: const Icon(Icons.arrow_back_ios_new_rounded),
+    onPressed: () => close(context, ''),
+  );
+
+  @override
+  Widget buildResults(BuildContext context) => _buildBody(context);
+
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildBody(context);
+
+  Widget _buildBody(BuildContext context) {
+    final searchText = query.trim().toLowerCase();
+    if (searchText.isEmpty) {
+      return const Center(
+        child: Text(
+          'ابحث برقم الطلب أو الصيدلية أو المستفيد أو الدواء',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+      );
+    }
+
+    final results = orders.where((order) {
+      return order.id.toLowerCase().contains(searchText) ||
+          (order.orderNumber?.toLowerCase().contains(searchText) ?? false) ||
+          order.pharmacy.pharmacyName.toLowerCase().contains(searchText) ||
+          order.beneficiary.name.toLowerCase().contains(searchText) ||
+          order.statusLabel.toLowerCase().contains(searchText) ||
+          order.medicines.any(
+            (medicine) => medicine.displayName.toLowerCase().contains(searchText) ||
+                medicine.requestedName.toLowerCase().contains(searchText),
+          );
+    }).toList();
+
+    if (results.isEmpty) {
+      return const Center(
+        child: Text(
+          'لا توجد نتائج',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: results.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final order = results[index];
+        return OrderCard(
+          order: order,
+          onTap: () {
+            close(context, '');
+            Get.to(() => OrderDetailsPage(order: order));
+          },
+        );
+      },
     );
   }
 }

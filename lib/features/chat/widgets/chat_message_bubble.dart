@@ -106,7 +106,9 @@ class ChatMessageBubble extends StatelessWidget {
                     8,
                   ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: message.isImage || message.isFile
+                        ? CrossAxisAlignment.start
+                        : CrossAxisAlignment.end,
                     children: [
                       if (message.isImage && message.hasImage) ...[
                         GestureDetector(
@@ -261,7 +263,7 @@ class ChatMessageBubble extends StatelessWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Spacer(),
+                          if (message.isImage || message.isFile) const Spacer(),
                           Text(
                             _formatTime(message.timestamp),
                             style: TextStyle(

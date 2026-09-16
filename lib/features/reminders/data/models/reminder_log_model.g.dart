@@ -47,23 +47,28 @@ const ReminderLogModelSchema = CollectionSchema(
       name: r'ownerName',
       type: IsarType.string,
     ),
-    r'reminderLocalId': PropertySchema(
+    r'ownerUserId': PropertySchema(
       id: 6,
+      name: r'ownerUserId',
+      type: IsarType.string,
+    ),
+    r'reminderLocalId': PropertySchema(
+      id: 7,
       name: r'reminderLocalId',
       type: IsarType.long,
     ),
     r'reminderType': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'reminderType',
       type: IsarType.string,
     ),
     r'scheduledAt': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'scheduledAt',
       type: IsarType.dateTime,
     ),
     r'title': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'title',
       type: IsarType.string,
     )
@@ -74,6 +79,19 @@ const ReminderLogModelSchema = CollectionSchema(
   deserializeProp: _reminderLogModelDeserializeProp,
   idName: r'id',
   indexes: {
+    r'ownerUserId': IndexSchema(
+      id: 1631799950038639233,
+      name: r'ownerUserId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'ownerUserId',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'reminderType': IndexSchema(
       id: -3490059515220763204,
       name: r'reminderType',
@@ -150,6 +168,7 @@ int _reminderLogModelEstimateSize(
   }
   bytesCount += 3 + object.ownerBeneficiaryId.length * 3;
   bytesCount += 3 + object.ownerName.length * 3;
+  bytesCount += 3 + object.ownerUserId.length * 3;
   bytesCount += 3 + object.reminderType.length * 3;
   {
     final value = object.title;
@@ -172,10 +191,11 @@ void _reminderLogModelSerialize(
   writer.writeString(offsets[3], object.notes);
   writer.writeString(offsets[4], object.ownerBeneficiaryId);
   writer.writeString(offsets[5], object.ownerName);
-  writer.writeLong(offsets[6], object.reminderLocalId);
-  writer.writeString(offsets[7], object.reminderType);
-  writer.writeDateTime(offsets[8], object.scheduledAt);
-  writer.writeString(offsets[9], object.title);
+  writer.writeString(offsets[6], object.ownerUserId);
+  writer.writeLong(offsets[7], object.reminderLocalId);
+  writer.writeString(offsets[8], object.reminderType);
+  writer.writeDateTime(offsets[9], object.scheduledAt);
+  writer.writeString(offsets[10], object.title);
 }
 
 ReminderLogModel _reminderLogModelDeserialize(
@@ -192,10 +212,11 @@ ReminderLogModel _reminderLogModelDeserialize(
   object.notes = reader.readStringOrNull(offsets[3]);
   object.ownerBeneficiaryId = reader.readString(offsets[4]);
   object.ownerName = reader.readString(offsets[5]);
-  object.reminderLocalId = reader.readLong(offsets[6]);
-  object.reminderType = reader.readString(offsets[7]);
-  object.scheduledAt = reader.readDateTime(offsets[8]);
-  object.title = reader.readStringOrNull(offsets[9]);
+  object.ownerUserId = reader.readString(offsets[6]);
+  object.reminderLocalId = reader.readLong(offsets[7]);
+  object.reminderType = reader.readString(offsets[8]);
+  object.scheduledAt = reader.readDateTime(offsets[9]);
+  object.title = reader.readStringOrNull(offsets[10]);
   return object;
 }
 
@@ -219,12 +240,14 @@ P _reminderLogModelDeserializeProp<P>(
     case 5:
       return (reader.readString(offset)) as P;
     case 6:
-      return (reader.readLong(offset)) as P;
-    case 7:
       return (reader.readString(offset)) as P;
+    case 7:
+      return (reader.readLong(offset)) as P;
     case 8:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 9:
+      return (reader.readDateTime(offset)) as P;
+    case 10:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -328,6 +351,51 @@ extension ReminderLogModelQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterWhereClause>
+      ownerUserIdEqualTo(String ownerUserId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'ownerUserId',
+        value: [ownerUserId],
+      ));
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterWhereClause>
+      ownerUserIdNotEqualTo(String ownerUserId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'ownerUserId',
+              lower: [],
+              upper: [ownerUserId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'ownerUserId',
+              lower: [ownerUserId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'ownerUserId',
+              lower: [ownerUserId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'ownerUserId',
+              lower: [],
+              upper: [ownerUserId],
+              includeUpper: false,
+            ));
+      }
     });
   }
 
@@ -1311,6 +1379,142 @@ extension ReminderLogModelQueryFilter
   }
 
   QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterFilterCondition>
+      ownerUserIdEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterFilterCondition>
+      ownerUserIdGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterFilterCondition>
+      ownerUserIdLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterFilterCondition>
+      ownerUserIdBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'ownerUserId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterFilterCondition>
+      ownerUserIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterFilterCondition>
+      ownerUserIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterFilterCondition>
+      ownerUserIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterFilterCondition>
+      ownerUserIdMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'ownerUserId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterFilterCondition>
+      ownerUserIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'ownerUserId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterFilterCondition>
+      ownerUserIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'ownerUserId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterFilterCondition>
       reminderLocalIdEqualTo(int value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -1805,6 +2009,20 @@ extension ReminderLogModelQuerySortBy
   }
 
   QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterSortBy>
+      sortByOwnerUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'ownerUserId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterSortBy>
+      sortByOwnerUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'ownerUserId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterSortBy>
       sortByReminderLocalId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'reminderLocalId', Sort.asc);
@@ -1959,6 +2177,20 @@ extension ReminderLogModelQuerySortThenBy
   }
 
   QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterSortBy>
+      thenByOwnerUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'ownerUserId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterSortBy>
+      thenByOwnerUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'ownerUserId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QAfterSortBy>
       thenByReminderLocalId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'reminderLocalId', Sort.asc);
@@ -2060,6 +2292,13 @@ extension ReminderLogModelQueryWhereDistinct
   }
 
   QueryBuilder<ReminderLogModel, ReminderLogModel, QDistinct>
+      distinctByOwnerUserId({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'ownerUserId', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, ReminderLogModel, QDistinct>
       distinctByReminderLocalId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'reminderLocalId');
@@ -2133,6 +2372,13 @@ extension ReminderLogModelQueryProperty
   QueryBuilder<ReminderLogModel, String, QQueryOperations> ownerNameProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'ownerName');
+    });
+  }
+
+  QueryBuilder<ReminderLogModel, String, QQueryOperations>
+      ownerUserIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'ownerUserId');
     });
   }
 

@@ -7,7 +7,7 @@ class RemindersRepository {
   final RemindersLocalDataSource _local;
 
   RemindersRepository({RemindersLocalDataSource? local})
-      : _local = local ?? RemindersLocalDataSource();
+    : _local = local ?? RemindersLocalDataSource();
 
   // ========= Medication =========
 
@@ -27,9 +27,13 @@ class RemindersRepository {
     return _local.getAllMedicationReminders();
   }
 
+  Future<List<MedicationReminderModel>> getUnownedMedicationReminders() {
+    return _local.getUnownedMedicationReminders();
+  }
+
   Future<List<MedicationReminderModel>> getMedicationRemindersByStatus(
-      String status,
-      ) {
+    String status,
+  ) {
     return _local.getMedicationRemindersByStatus(status);
   }
 
@@ -38,8 +42,8 @@ class RemindersRepository {
   }
 
   Stream<List<MedicationReminderModel>> watchMedicationRemindersByStatus(
-      String status,
-      ) {
+    String status,
+  ) {
     return _local.watchMedicationRemindersByStatus(status);
   }
 
@@ -65,9 +69,13 @@ class RemindersRepository {
     return _local.getAllAppointmentReminders();
   }
 
+  Future<List<AppointmentReminderModel>> getUnownedAppointmentReminders() {
+    return _local.getUnownedAppointmentReminders();
+  }
+
   Future<List<AppointmentReminderModel>> getAppointmentRemindersByStatus(
-      String status,
-      ) {
+    String status,
+  ) {
     return _local.getAppointmentRemindersByStatus(status);
   }
 

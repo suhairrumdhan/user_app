@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:iconsax/iconsax.dart';
 
-import '../../auth/services/auth_services.dart';
 import '../controllers/user_controller.dart';
 import '../../auth/services/user_repository.dart';
 
@@ -17,7 +16,6 @@ class EditProfilePage extends StatefulWidget {
 
 class _EditProfilePageState extends State<EditProfilePage> {
   final UserController userController = Get.find<UserController>();
-  final AuthService _authService = AuthService();
   final UserRepository _userRepo = UserRepository.instance;
 
   final _formKey = GlobalKey<FormState>();
@@ -26,15 +24,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _birthDateController;
-  late final TextEditingController _currentPasswordController;
-  late final TextEditingController _passwordController;
-  late final TextEditingController _confirmPasswordController;
-
-  final _showCurrentPassword = false.obs;
-  final _showPassword = false.obs;
-  final _showConfirmPassword = false.obs;
-  final _isPersonalInfoExpanded = false.obs;
-  final _isPasswordExpanded = false.obs;
   final _selectedBirthDate = Rx<DateTime?>(null);
 
   // اللون الرئيسي المطابق لصفحة البروفايل
@@ -50,9 +39,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _nameController = TextEditingController();
     _phoneController = TextEditingController();
     _birthDateController = TextEditingController();
-    _currentPasswordController = TextEditingController();
-    _passwordController = TextEditingController();
-    _confirmPasswordController = TextEditingController();
 
     _updateControllersFromUser();
   }
@@ -75,27 +61,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _nameController.dispose();
     _phoneController.dispose();
     _birthDateController.dispose();
-    _currentPasswordController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
     super.dispose();
-  }
-
-  Future<bool> _verifyCurrentPassword(String password) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return false;
-
-      final credential = EmailAuthProvider.credential(
-        email: user.email!,
-        password: password,
-      );
-
-      await user.reauthenticateWithCredential(credential);
-      return true;
-    } catch (e) {
-      return false;
-    }
   }
 
   Future<void> _selectBirthDate(BuildContext context) async {
@@ -138,9 +104,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
       final newName = _nameController.text.trim();
       final newPhone = _phoneController.text.trim();
       final newBirthDate = _selectedBirthDate.value;
-      final currentPassword = _currentPasswordController.text.trim();
-      final newPassword = _passwordController.text.trim();
-      final confirmPassword = _confirmPasswordController.text.trim();
 
       final Map<String, dynamic> updates = {};
 
@@ -159,26 +122,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       if (updates.isNotEmpty) {
         await _userRepo.updateUserFields(userModel.id, updates);
-      }
-
-      if (_isPasswordExpanded.value && newPassword.isNotEmpty) {
-        if (currentPassword.isEmpty) {
-          _showError('يرجى إدخال كلمة المرور الحالية');
-          return;
-        }
-
-        if (newPassword != confirmPassword) {
-          _showError('كلمة المرور وتأكيدها غير متطابقين');
-          return;
-        }
-
-        final isCurrentPasswordValid = await _verifyCurrentPassword(currentPassword);
-        if (!isCurrentPasswordValid) {
-          _showError('كلمة المرور الحالية غير صحيحة');
-          return;
-        }
-
-        await user.updatePassword(newPassword);
       }
 
       await userController.loadUser(userModel.id);
@@ -247,7 +190,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     ),
                     const SizedBox(width: 8),
                     const Text(
-                      "تعديل الملف الشخصي",
+                      "معلومات شخصية",
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 22,
@@ -277,10 +220,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
                         // بطاقة المعلومات الشخصية
                         _buildPersonalInfoCard(),
-                        const SizedBox(height: 16),
-
-                        // بطاقة تغيير كلمة المرور
-                        _buildPasswordCard(),
                         const SizedBox(height: 30),
 
                         // زر الحفظ
@@ -300,11 +239,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
 
   Widget _buildPersonalInfoCard() {
-    return Obx(() => _buildExpandableCard(
-      title: 'المعلومات الشخصية',
-      icon: Iconsax.user_edit,
-      isExpanded: _isPersonalInfoExpanded.value,
-      onToggle: () => _isPersonalInfoExpanded.toggle(),
+    return _buildInfoCard(
       children: [
         _buildModernTextField(
           controller: _nameController,
@@ -328,62 +263,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           onTap: () => _selectBirthDate(context),
         ),
       ],
-    ));
-  }
-
-  Widget _buildPasswordCard() {
-    return Obx(() => _buildExpandableCard(
-      title: 'تغيير كلمة المرور',
-      icon: Iconsax.lock,
-      isExpanded: _isPasswordExpanded.value,
-      onToggle: () => _isPasswordExpanded.toggle(),
-      children: [
-        Obx(() => _buildModernPasswordField(
-          controller: _currentPasswordController,
-          label: 'كلمة المرور الحالية',
-          showPassword: _showCurrentPassword.value,
-          onToggle: () => _showCurrentPassword.toggle(),
-          validator: (value) {
-            if (_isPasswordExpanded.value && (value == null || value.isEmpty)) {
-              return 'يرجى إدخال كلمة المرور الحالية';
-            }
-            return null;
-          },
-        )),
-        const SizedBox(height: 16),
-        Obx(() => _buildModernPasswordField(
-          controller: _passwordController,
-          label: 'كلمة المرور الجديدة',
-          showPassword: _showPassword.value,
-          onToggle: () => _showPassword.toggle(),
-          validator: (value) {
-            if (_isPasswordExpanded.value && (value == null || value.isEmpty)) {
-              return 'يرجى إدخال كلمة المرور الجديدة';
-            }
-            if (_isPasswordExpanded.value && value != null && value.length < 6) {
-              return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
-            }
-            return null;
-          },
-        )),
-        const SizedBox(height: 16),
-        Obx(() => _buildModernPasswordField(
-          controller: _confirmPasswordController,
-          label: 'تأكيد كلمة المرور',
-          showPassword: _showConfirmPassword.value,
-          onToggle: () => _showConfirmPassword.toggle(),
-          validator: (value) {
-            if (_isPasswordExpanded.value && (value == null || value.isEmpty)) {
-              return 'يرجى تأكيد كلمة المرور';
-            }
-            if (_isPasswordExpanded.value && value != _passwordController.text) {
-              return 'كلمة المرور غير متطابقة';
-            }
-            return null;
-          },
-        )),
-      ],
-    ));
+    );
   }
 
   Widget _buildSaveButton() {
@@ -431,13 +311,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     ));
   }
 
-  Widget _buildExpandableCard({
-    required String title,
-    required IconData icon,
-    required bool isExpanded,
-    required VoidCallback onToggle,
-    required List<Widget> children,
-  }) {
+  Widget _buildInfoCard({required List<Widget> children}) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -452,51 +326,35 @@ class _EditProfilePageState extends State<EditProfilePage> {
       ),
       child: Column(
         children: [
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onToggle,
-              borderRadius: BorderRadius.circular(20),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: pPrimaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(icon, color: pPrimaryColor, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF2C3E50),
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      isExpanded ? Iconsax.arrow_up_1 : Iconsax.arrow_down_1,
-                      color: pPrimaryColor,
-                      size: 22,
-                    ),
-                  ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: pPrimaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Iconsax.user_edit, color: pPrimaryColor, size: 20),
                 ),
-              ),
+                const SizedBox(width: 12),
+                const Text(
+                  'المعلومات الشخصية',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF2C3E50),
+                  ),
+                ),
+              ],
             ),
           ),
-          if (isExpanded) ...[
-            const Divider(height: 1, color: Color(0xFFF0F0F0)),
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(children: children),
-            ),
-          ],
+          const Divider(height: 1, color: Color(0xFFF0F0F0)),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(children: children),
+          ),
         ],
       ),
     );
@@ -575,46 +433,4 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
-  Widget _buildModernPasswordField({
-    required TextEditingController controller,
-    required String label,
-    required bool showPassword,
-    required VoidCallback onToggle,
-    required String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: !showPassword,
-      validator: validator,
-      style: const TextStyle(fontSize: 15, color: Color(0xFF2C3E50)),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Color(0xFF7F8C8D), fontSize: 13),
-        prefixIcon: Icon(Iconsax.lock, color: pPrimaryColor, size: 20),
-        suffixIcon: IconButton(
-          icon: Icon(
-            showPassword ? Iconsax.eye_slash : Iconsax.eye,
-            color: pPrimaryColor,
-            size: 20,
-          ),
-          onPressed: onToggle,
-        ),
-        filled: true,
-        fillColor: const Color(0xFFF8F9FA),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey[200]!, width: 1),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: pPrimaryColor, width: 2),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      ),
-    );
-  }
 }

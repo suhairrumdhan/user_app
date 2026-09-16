@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:user_application/features/auth/services/user_repository.dart';
 import 'package:user_application/features/profile/controllers/user_controller.dart';
 
+import '../../../app/core/services/push_notification_service.dart';
 import '../views/welcome_page.dart';
 
 class AuthController extends GetxController {
@@ -20,22 +23,24 @@ class AuthController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    // الاستماع لتغيرات حالة المصادقة
+    final persistedUser = _auth.currentUser;
+    user.value = persistedUser;
+    isLoading.value = false;
+    if (persistedUser != null) {
+      unawaited(_userController.loadUser(persistedUser.uid));
+    }
     _auth.authStateChanges().listen(_onAuthStateChanged);
   }
 
-  void _onAuthStateChanged(User? firebaseUser) async {
+  void _onAuthStateChanged(User? firebaseUser) {
     user.value = firebaseUser;
+    isLoading.value = false;
 
     if (firebaseUser != null) {
-      // تحميل بيانات المستخدم إذا كان مسجل دخول
-      await _userController.loadUser(firebaseUser.uid);
+      unawaited(_userController.loadUser(firebaseUser.uid));
     } else {
-      // مسح بيانات المستخدم إذا سجل خروج
       _userController.clearUser();
     }
-
-    isLoading.value = false;
   }
 
   // التحقق من اكتمال المعلومات الصحية
@@ -48,6 +53,7 @@ class AuthController extends GetxController {
   Future<void> signOut() async {
     try {
       isLoading.value = true;
+      await PushNotificationService.instance.unregisterCurrentDevice();
       await _auth.signOut();
       _userController.clearUser();
       Get.offAll(() => const WelcomeScreen());
@@ -63,9 +69,8 @@ class AuthController extends GetxController {
 
   // التحقق إذا كان المستخدم مسجل دخول
   bool get isLoggedIn => user.value != null;
-
-
 }
+
 extension AuthControllerExtensions on AuthController {
   // تحديث كلمة المرور
   Future<void> updatePassword(String newPassword) async {
@@ -88,10 +93,9 @@ extension AuthControllerExtensions on AuthController {
 
       // تحديث في Firestore
       final uid = user.value!.uid;
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .update({'photoUrl': photoPath});
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'photoUrl': photoPath,
+      });
 
       // إعادة تحميل المستخدم
       user.refresh();

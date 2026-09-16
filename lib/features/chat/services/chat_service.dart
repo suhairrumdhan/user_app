@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
+import '../../orders/models/order_status.dart';
 import '../../profile/controllers/user_controller.dart';
 import '../models/chat_thread_model.dart';
 import '../models/message_model.dart';
@@ -28,8 +30,174 @@ class ChatService {
   CollectionReference<Map<String, dynamic>> _messagesRef(String chatId) =>
       _chatsRef.doc(chatId).collection('messages');
 
+  bool _isClosedOrderStatus(String status) {
+    return status == OrderStatus.completed.value ||
+        status == OrderStatus.cancelled.value ||
+        status == OrderStatus.rejected.value ||
+        status == OrderStatus.notCollected.value;
+  }
+
+  Future<void> _ensureChatWritable(String chatId) async {
+    final chatSnapshot = await _chatsRef.doc(chatId).get();
+    final chatData = chatSnapshot.data();
+    final orderId = (chatData?['orderId'] ?? '').toString().trim();
+    if (!chatSnapshot.exists || orderId.isEmpty) {
+      throw Exception('تعذر التحقق من الطلب المرتبط بالمحادثة');
+    }
+
+    final orderSnapshot = await _firestore
+        .collection('orders')
+        .doc(orderId)
+        .get();
+    if (!orderSnapshot.exists) {
+      throw Exception('الطلب المرتبط بالمحادثة غير موجود');
+    }
+
+    final status = (orderSnapshot.data()?['status'] ?? '').toString();
+    if (_isClosedOrderStatus(status)) {
+      throw Exception('انتهى الطلب وأصبحت المحادثة للقراءة فقط');
+    }
+  }
+
+  String _resolveOrderChatId(OrderModel order) {
+    final linkedChatId = (order.chatId ?? '').trim();
+    if (linkedChatId.isNotEmpty) return linkedChatId;
+
+    // Use the same deterministic id as the pharmacy app. A query by orderId
+    // alone is denied by the participant-only Firestore list rule.
+    return 'order_${order.id.trim()}';
+  }
+
+  Future<ChatThread> getOrCreateOrderChat(OrderModel order) async {
+    final currentUser = _requireCurrentUser();
+    final orderId = order.id.trim();
+    final currentUserId = currentUser.id.toString().trim();
+
+    if (orderId.isEmpty) {
+      throw Exception('لا يمكن بدء المحادثة قبل حفظ الطلب');
+    }
+
+    if (order.pharmacy.pharmacyId.trim().isEmpty) {
+      throw Exception('بيانات الصيدلية في الطلب غير صالحة');
+    }
+
+    if (order.user.userId.trim().isNotEmpty &&
+        order.user.userId.trim() != currentUserId) {
+      throw Exception('لا تملك صلاحية فتح محادثة هذا الطلب');
+    }
+
+    final chatId = _resolveOrderChatId(order);
+    final chatRef = _chatsRef.doc(chatId);
+    final orderRef = _firestore.collection('orders').doc(orderId);
+    final initialMessageRef = _messagesRef(chatId).doc('conversation_created');
+
+    await _firestore.runTransaction((transaction) async {
+      final chatSnapshot = await transaction.get(chatRef);
+      final orderSnapshot = await transaction.get(orderRef);
+
+      if (!orderSnapshot.exists) {
+        throw Exception('الطلب غير موجود');
+      }
+
+      final liveOrder = OrderModel.fromFirestore(orderSnapshot);
+      if (liveOrder.user.userId.trim().isNotEmpty &&
+          liveOrder.user.userId.trim() != currentUserId) {
+        throw Exception('لا تملك صلاحية فتح محادثة هذا الطلب');
+      }
+
+      if (_isClosedOrderStatus(liveOrder.status.value)) {
+        throw Exception('انتهى الطلب وأصبحت المحادثة للقراءة فقط');
+      }
+
+      if (chatSnapshot.exists) {
+        final chatData = chatSnapshot.data() ?? const <String, dynamic>{};
+        final existingOrderId = (chatData['orderId'] ?? '').toString().trim();
+        final existingUserId = (chatData['userId'] ?? '').toString().trim();
+
+        if (existingOrderId.isNotEmpty && existingOrderId != orderId) {
+          throw Exception('معرف المحادثة مرتبط بطلب آخر');
+        }
+
+        if (existingUserId.isNotEmpty && existingUserId != currentUserId) {
+          throw Exception('لا تملك صلاحية فتح هذه المحادثة');
+        }
+      }
+
+      if (!chatSnapshot.exists) {
+        final orderNumber = (liveOrder.orderNumber ?? '').trim();
+        final systemText = orderNumber.isNotEmpty
+            ? 'تم إنشاء المحادثة للطلب #$orderNumber'
+            : 'تم إنشاء المحادثة لهذا الطلب';
+
+        transaction.set(chatRef, {
+          'chatId': chatId,
+          'orderId': orderId,
+          'orderNumber': liveOrder.orderNumber,
+          'userId': currentUserId,
+          'userName': liveOrder.user.name.trim().isNotEmpty
+              ? liveOrder.user.name.trim()
+              : currentUser.name.toString(),
+          'pharmacyId': liveOrder.pharmacy.pharmacyId,
+          'pharmacyName': liveOrder.pharmacy.pharmacyName,
+          'pharmacyImageUrl': liveOrder.pharmacy.imageUrl ?? '',
+          'pharmacyIsOnline': liveOrder.pharmacy.isOnline,
+          'beneficiaryId': liveOrder.beneficiary.beneficiaryId,
+          'beneficiaryName': liveOrder.beneficiary.name,
+          'beneficiaryType': liveOrder.beneficiary.type.value,
+          'relationLabel':
+              liveOrder.beneficiary.relationLabel ??
+              liveOrder.beneficiary.type.label,
+          'healthSnapshot': {
+            'gender': liveOrder.beneficiary.gender,
+            'bloodType': liveOrder.beneficiary.bloodType,
+            'age': liveOrder.beneficiary.age,
+            'dateOfBirth': liveOrder.beneficiary.dateOfBirth == null
+                ? null
+                : Timestamp.fromDate(liveOrder.beneficiary.dateOfBirth!),
+            'allergies': liveOrder.beneficiary.allergies,
+            'healthConditions': liveOrder.beneficiary.healthConditions,
+            'currentMedications': liveOrder.beneficiary.currentMedications,
+            'hasHealthData': liveOrder.beneficiary.hasHealthData,
+          },
+          'lastMessage': systemText,
+          'lastMessageType': 'system',
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'userUnreadCount': 0,
+          'pharmacyUnreadCount': 0,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        transaction.set(initialMessageRef, {
+          'senderId': 'system',
+          'senderName': 'النظام',
+          'senderType': 'system',
+          'type': 'system',
+          'text': systemText,
+          'status': 'read',
+          'isRead': true,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
+
+      if ((liveOrder.chatId ?? '').trim() != chatId) {
+        transaction.update(orderRef, {
+          'chatId': chatId,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    });
+
+    final chatSnapshot = await chatRef.get();
+    if (!chatSnapshot.exists || chatSnapshot.data() == null) {
+      throw Exception('تعذر فتح المحادثة');
+    }
+
+    return ChatThread.fromFirestore(chatSnapshot.data()!, chatSnapshot.id);
+  }
+
   Stream<List<ChatThread>> getUserChatsStream() {
-    final userId = _userController.user.value?.id;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return Stream.value([]);
 
     return _chatsRef
@@ -38,27 +206,29 @@ class ChatService {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-          .map((doc) => ChatThread.fromFirestore(doc.data(), doc.id))
-          .toList(),
-    );
+              .map((doc) => ChatThread.fromFirestore(doc.data(), doc.id))
+              .toList(),
+        );
   }
 
   Stream<List<MessageModel>> getMessagesStream(String chatId) {
     final currentUser = _userController.user.value;
+    final currentUserId =
+        currentUser?.id ?? FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return _messagesRef(chatId)
         .orderBy('timestamp', descending: false)
         .snapshots()
         .map(
           (snapshot) => snapshot.docs.map((doc) {
-        return MessageModel.fromFirestore(
-          doc.data(),
-          doc.id,
-          chatId,
-          currentUser?.id ?? '',
+            return MessageModel.fromFirestore(
+              doc.data(),
+              doc.id,
+              chatId,
+              currentUserId,
+            );
+          }).toList(),
         );
-      }).toList(),
-    );
   }
 
   Future<void> sendTextMessage({
@@ -68,6 +238,7 @@ class ChatService {
     final currentUser = _requireCurrentUser();
     final value = text.trim();
     if (value.isEmpty) return;
+    await _ensureChatWritable(chatId);
 
     await _messagesRef(chatId).add({
       'senderId': currentUser.id,
@@ -95,6 +266,7 @@ class ChatService {
     String caption = '',
   }) async {
     final currentUser = _requireCurrentUser();
+    await _ensureChatWritable(chatId);
 
     await _messagesRef(chatId).add({
       'senderId': currentUser.id,
@@ -127,6 +299,7 @@ class ChatService {
     String caption = '',
   }) async {
     final currentUser = _requireCurrentUser();
+    await _ensureChatWritable(chatId);
 
     await _messagesRef(chatId).add({
       'senderId': currentUser.id,
@@ -167,17 +340,14 @@ class ChatService {
         .get();
 
     for (final doc in unreadMessages.docs) {
-      batch.update(doc.reference, {
-        'isRead': true,
-        'status': 'read',
-      });
+      batch.update(doc.reference, {'isRead': true, 'status': 'read'});
     }
 
     await batch.commit();
   }
 
   Stream<int> getUnreadCountStream() {
-    final userId = _userController.user.value?.id;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return Stream.value(0);
 
     return _chatsRef.where('userId', isEqualTo: userId).snapshots().map((s) {
@@ -202,8 +372,8 @@ class ChatService {
   }
 
   List<ParticipatingPharmacySummary> buildPharmacySummaries(
-      List<ChatThread> threads,
-      ) {
+    List<ChatThread> threads,
+  ) {
     final Map<String, List<ChatThread>> grouped = {};
 
     for (final thread in threads) {
@@ -217,7 +387,7 @@ class ChatService {
       final latest = pharmacyThreads.first;
       final unread = pharmacyThreads.fold<int>(
         0,
-            (sum, t) => sum + t.userUnreadCount,
+        (sum, t) => sum + t.userUnreadCount,
       );
 
       return ParticipatingPharmacySummary(
@@ -230,13 +400,14 @@ class ChatService {
         lastMessageTime: latest.lastMessageTime,
         latestThread: latest,
       );
-    }).toList()
-      ..sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+    }).toList()..sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
 
     return result;
   }
 
-  Map<String, List<ChatThread>> groupThreadsByPharmacy(List<ChatThread> threads) {
+  Map<String, List<ChatThread>> groupThreadsByPharmacy(
+    List<ChatThread> threads,
+  ) {
     final Map<String, List<ChatThread>> grouped = {};
 
     for (final thread in threads) {
@@ -244,7 +415,9 @@ class ChatService {
     }
 
     for (final entry in grouped.entries) {
-      entry.value.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+      entry.value.sort(
+        (a, b) => b.lastMessageTime.compareTo(a.lastMessageTime),
+      );
     }
 
     return grouped;

@@ -16,6 +16,7 @@ class UserRepository extends GetxController {
       rethrow;
     }
   }
+
   Future<void> updateUserFields(String uid, Map<String, dynamic> data) async {
     try {
       print('🔄 جاري تحديث بيانات المستخدم: $uid');
@@ -29,6 +30,7 @@ class UserRepository extends GetxController {
       rethrow;
     }
   }
+
   // التحقق مما إذا كان المستخدم موجود مسبقًا في Firestore
   Future<bool> checkUserExists(String uid) async {
     final doc = await _db.collection("users").doc(uid).get();
@@ -48,10 +50,13 @@ class UserRepository extends GetxController {
   Future<void> saveUser(UserModel user) async {
     try {
       print('💾 جاري حفظ المستخدم في Firestore: ${user.id}');
-      await _db.collection("users").doc(user.id).set(
-          user.toJson(),
-          SetOptions(merge: true)  // ✅ هذا هيخلي البيانات تدمج بدل ما تستبدل
-      );
+      await _db
+          .collection("users")
+          .doc(user.id)
+          .set(
+            user.toJson(),
+            SetOptions(merge: true), // ✅ هذا هيخلي البيانات تدمج بدل ما تستبدل
+          );
       print('✅ تم حفظ المستخدم بنجاح في Firestore');
     } catch (e) {
       print('❌ خطأ في حفظ المستخدم في Firestore: $e');
@@ -65,8 +70,17 @@ class UserRepository extends GetxController {
       final doc = await _db.collection("users").doc(uid).get();
       return doc.exists ? UserModel.fromJson(doc.data()!, doc.id) : null;
     } catch (e) {
-      throw "فشل في جلب بيانات المستخدم: ${e.toString()}";
+      try {
+        final cachedDoc = await _db
+            .collection("users")
+            .doc(uid)
+            .get(const GetOptions(source: Source.cache));
+        return cachedDoc.exists
+            ? UserModel.fromJson(cachedDoc.data()!, cachedDoc.id)
+            : null;
+      } catch (_) {
+        throw "فشل في جلب بيانات المستخدم: ${e.toString()}";
+      }
     }
   }
-
 }

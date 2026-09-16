@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:user_application/features/auth/services/email_action_service.dart';
+import 'package:user_application/features/auth/views/forgot_password_page.dart';
 import 'package:user_application/features/profile/views/edit_profile_page.dart';
 import 'package:user_application/features/health_records/views/health_record_page.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -61,22 +63,30 @@ class _ProfilePageState extends State<ProfilePage> {
       body: SafeArea(
         child: Column(
           children: [
-            // ===== AppBar ثابت =====
             Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
               child: Row(
+                textDirection: TextDirection.rtl,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.16),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Iconsax.profile_circle,
+                      color: Colors.white,
+                      size: 19,
+                    ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 9),
                   const Text(
                     "الملف الشخصي",
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 22,
+                      fontSize: 17,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -113,28 +123,29 @@ class _ProfilePageState extends State<ProfilePage> {
                                 children: [
                                   CircleAvatar(
                                     radius: 50,
-                                    backgroundColor:
-                                    Colors.white.withOpacity(0.3),
+                                    backgroundColor: Colors.white.withOpacity(
+                                      0.3,
+                                    ),
                                     backgroundImage: photoUrl != null
                                         ? NetworkImage(photoUrl)
                                         : null,
                                     child: photoUrl == null
                                         ? const Icon(
-                                      Icons.person,
-                                      size: 60,
-                                      color: Colors.white,
-                                    )
+                                            Icons.person,
+                                            size: 60,
+                                            color: Colors.white,
+                                          )
                                         : null,
                                   ),
                                   Positioned(
                                     bottom: 4,
                                     right: 4,
                                     child: GestureDetector(
-                                      onTap: () => ProfileImageService
-                                          .showImagePickerBottomSheet(
-                                        context,
-                                        userController,
-                                      ),
+                                      onTap: () =>
+                                          ProfileImageService.showImagePickerBottomSheet(
+                                            context,
+                                            userController,
+                                          ),
                                       child: Container(
                                         padding: const EdgeInsets.all(6),
                                         decoration: const BoxDecoration(
@@ -157,8 +168,8 @@ class _ProfilePageState extends State<ProfilePage> {
                             // ===== الاسم والبريد =====
                             Text(
                               (userModel?.name?.isNotEmpty == true
-                                  ? userModel!.name
-                                  : authUser?.displayName) ??
+                                      ? userModel!.name
+                                      : authUser?.displayName) ??
                                   'مستخدم',
                               style: const TextStyle(
                                 color: Colors.white,
@@ -169,8 +180,8 @@ class _ProfilePageState extends State<ProfilePage> {
                             const SizedBox(height: 4),
                             Text(
                               (userModel?.email?.isNotEmpty == true
-                                  ? userModel!.email
-                                  : authUser?.email) ??
+                                      ? userModel!.email
+                                      : authUser?.email) ??
                                   'لا يوجد بريد إلكتروني',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.9),
@@ -198,15 +209,30 @@ class _ProfilePageState extends State<ProfilePage> {
                           child: Column(
                             children: [
                               ProfileMenuCard(
-                                icon: Icons.settings,
-                                title: "إعدادات الحساب",
-                                subTitle: "تعديل بياناتك الشخصية، معلومات الاتصال، كلمة المرور ",
-                                //expandableChild:  // الفورم الذي يظهر عند الضغط
-                                onTap: () {
-                                  // أي إجراء إضافي عند الضغط
-                                  Get.to(() => const EditProfilePage());
-                                },
+                                icon: Iconsax.user_edit,
+                                title: "معلومات شخصية",
+                                subTitle: "تعديل الاسم، رقم الهاتف وتاريخ الميلاد",
+                                onTap: () => Get.to(() => const EditProfilePage()),
                               ),
+                              Obx(() {
+                                final user = authController.user.value;
+                                final email = user?.email;
+                                if (!EmailActionService.usesEmailPassword(user) ||
+                                    email == null) {
+                                  return const SizedBox.shrink();
+                                }
+                                return ProfileMenuCard(
+                                  icon: Icons.lock_reset_rounded,
+                                  title: "إعادة تعيين كلمة المرور",
+                                  subTitle: "إرسال رابط التغيير إلى بريد حسابك",
+                                  onTap: () => Get.to(
+                                    () => ForgotPasswordPage(
+                                      initialEmail: email,
+                                      fromProfile: true,
+                                    ),
+                                  ),
+                                );
+                              }),
                               ProfileMenuCard(
                                 icon: Icons.family_restroom,
                                 title: "أفراد العائلة",
@@ -244,10 +270,11 @@ class _ProfilePageState extends State<ProfilePage> {
                               ProfileMenuCard(
                                 icon: Icons.monitor_heart,
                                 title: "السجلات الصحية",
-                                subTitle: " تصفح البيانات الصحية لك ولأفراد عائلتك",
+                                subTitle:
+                                    " تصفح البيانات الصحية لك ولأفراد عائلتك",
                                 onTap: () {
-                                  Get.put(FamilyController());         // أول واحد
-                                  Get.put(HealthRecordController());   // بعده
+                                  Get.put(FamilyController()); // أول واحد
+                                  Get.put(HealthRecordController()); // بعده
                                   Get.to(() => HealthRecordsPage());
                                 },
                               ),
@@ -273,13 +300,15 @@ class _ProfilePageState extends State<ProfilePage> {
                                     ),
                                   ),
                                   child: Row(
+                                    textDirection: TextDirection.rtl,
                                     children: [
                                       Container(
                                         padding: const EdgeInsets.all(10),
                                         decoration: BoxDecoration(
                                           color: Colors.red.withOpacity(0.15),
-                                          borderRadius:
-                                          BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                         child: const Icon(
                                           Icons.logout,

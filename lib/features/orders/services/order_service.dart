@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../../shared/pending_order_commands.dart';
 
 import '../../pharmacy/models/pharmacy_model.dart';
 import '../../prescription/models/beneficiary_model.dart';
@@ -15,51 +18,102 @@ class OrderService {
   static final OrderService instance = OrderService._();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
+  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
+    region: 'us-central1',
+  );
 
   CollectionReference<Map<String, dynamic>> get _ordersRef =>
       _firestore.collection('orders');
 
   UserController get _userController => Get.find<UserController>();
 
-  Future<Map<String, dynamic>> _reserveOrderNumber({
-    required String pharmacyId,
-    required String userId,
-    required String userName,
-    required String beneficiaryId,
-    required String beneficiaryName,
-    required String beneficiaryType,
-    required String relationLabel,
-  }) async {
-    try {
-      final callable = _functions.httpsCallable('reserveOrderNumber');
+  String newOperationId(String command) {
+    final random = Random.secure();
+    final entropy = List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+    return 'order:$command:${DateTime.now().microsecondsSinceEpoch}:$entropy';
+  }
 
-      final result = await callable.call({
-        'pharmacyId': pharmacyId,
-        'userId': userId,
-        'userName': userName,
-        'beneficiaryId': beneficiaryId,
-        'beneficiaryName': beneficiaryName,
-        'beneficiaryType': beneficiaryType,
-        'relationLabel': relationLabel,
-      });
-
-      final data = Map<String, dynamic>.from(result.data as Map);
-      debugPrint('✅ reserveOrderNumber result: $data');
-
-      return data;
-    } on FirebaseFunctionsException catch (e, st) {
-      debugPrint('❌ FirebaseFunctionsException');
-      debugPrint('code: ${e.code}');
-      debugPrint('message: ${e.message}');
-      debugPrint('details: ${e.details}');
-      debugPrintStack(stackTrace: st);
-      rethrow;
-    } catch (e, st) {
-      debugPrint('❌ reserveOrderNumber unknown error: $e');
-      debugPrintStack(stackTrace: st);
-      rethrow;
+  dynamic _callableValue(dynamic value) {
+    if (value is Timestamp) return value.toDate().toUtc().toIso8601String();
+    if (value is DateTime) return value.toUtc().toIso8601String();
+    if (value is List) return value.map(_callableValue).toList();
+    if (value is Map) {
+      return value.map(
+        (key, item) => MapEntry(key.toString(), _callableValue(item)),
+      );
     }
+    return value;
+  }
+
+  Future<Map<String, dynamic>> _executeCommand({
+    required String command,
+    required String operationId,
+    String? orderId,
+    Map<String, dynamic> payload = const {},
+    Map<String, dynamic> actor = const {},
+  }) async {
+    final callable = _functions.httpsCallable('executeOrderCommand');
+    final request = {
+      'schemaVersion': 3,
+      'command': command,
+      'operationId': operationId,
+      if (orderId != null) 'orderId': orderId,
+      'payload': _callableValue(payload),
+      'actor': actor,
+    };
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) throw StateError('يجب تسجيل الدخول');
+    return PendingOrderCommands.execute(
+      key: '$uid:$command:${orderId ?? "new"}',
+      request: request,
+      isDefinitiveFailure: (error) =>
+          error is FirebaseFunctionsException &&
+          !{
+            'unavailable',
+            'deadline-exceeded',
+            'internal',
+          }.contains(error.code),
+      send: (savedRequest) async {
+        FirebaseFunctionsException? lastError;
+        for (var attempt = 0; attempt < 3; attempt++) {
+          try {
+            if (FirebaseAuth.instance.currentUser?.uid != uid)
+              throw StateError('تغيرت جلسة الدخول');
+            debugPrint(
+              'executeOrderCommand started: command=$command '
+              'operationId=${savedRequest['operationId']} attempt=${attempt + 1}',
+            );
+            final response = await callable.call(savedRequest);
+            debugPrint(
+              'executeOrderCommand succeeded: command=$command '
+              'response=${response.data}',
+            );
+            return Map<String, dynamic>.from(response.data as Map);
+          } on FirebaseFunctionsException catch (error) {
+            lastError = error;
+            debugPrint(
+              'executeOrderCommand failed: command=$command code=${error.code} '
+              'message=${error.message} details=${error.details}',
+            );
+            if (!{
+                  'unavailable',
+                  'deadline-exceeded',
+                  'internal',
+                }.contains(error.code) ||
+                attempt == 2) {
+              rethrow;
+            }
+            await Future<void>.delayed(
+              Duration(milliseconds: 600 * (attempt + 1)),
+            );
+          }
+        }
+        throw lastError ?? Exception('تعذر تنفيذ أمر الطلب');
+      },
+    );
   }
 
   Future<OrderModel> createOrder({
@@ -114,46 +168,74 @@ class OrderService {
       metadata: metadata,
     );
     try {
-      final reserved = await _reserveOrderNumber(
-        pharmacyId: pharmacy.id,
-        userId: currentUser.id,
-        userName: currentUser.name,
-        beneficiaryId: beneficiary.id,
-        beneficiaryName: beneficiary.name,
-        beneficiaryType: beneficiary.isSelf ? 'self' : 'family',
-        relationLabel: beneficiary.relation?.trim().isNotEmpty == true
-            ? beneficiary.relation!.trim()
-            : (beneficiary.isSelf ? 'أنا' : 'فرد من العائلة'),
+      final operationId = newOperationId('create');
+      final map = order.toMap()
+        ..removeWhere(
+          (key, _) => {
+            'schemaVersion',
+            'orderNumber',
+            'orderDateKey',
+            'dailySequence',
+            'status',
+            'statusLabel',
+            'statusHistory',
+            'createdAt',
+            'updatedAt',
+            'submittedAt',
+            'reviewedAt',
+            'completedAt',
+            'cancelledAt',
+            'operationId',
+            'payloadHash',
+            'commandResultRef',
+            'invoiceId',
+            'offerVersion',
+            'reservationId',
+            'reservationState',
+            'reviewStartedAt',
+            'pharmacyDelayAt',
+            'userDecisionStartedAt',
+            'userDecisionDeadline',
+            'preparingAt',
+            'readyAt',
+            'pickupDeadline',
+            'pickupOverdue',
+            'pharmacyDelayed',
+            'deliveredAt',
+            'collectedAt',
+            'rejectedAt',
+            'notCollectedAt',
+          }.contains(key),
+        );
+      final envelope = await _executeCommand(
+        command: 'createOrder',
+        operationId: operationId,
+        payload: {'order': map},
       );
-
-      debugPrint('✅ reserved map: $reserved');
-
-      final orderWithNumber = order.copyWith(
-        orderNumber: reserved['orderNumber']?.toString(),
-        orderDateKey: reserved['orderDateKey']?.toString(),
-        dailySequence: reserved['dailySequence'] is int
-            ? reserved['dailySequence'] as int
-            : int.tryParse('${reserved['dailySequence']}'),
+      final result = Map<String, dynamic>.from(envelope['result'] as Map);
+      final createdStatus = OrderStatusX.fromValue(
+        result['status']?.toString(),
       );
-
-      debugPrint('✅ orderWithNumber.orderNumber = ${orderWithNumber.orderNumber}');
-      debugPrint('✅ orderWithNumber.orderDateKey = ${orderWithNumber.orderDateKey}');
-      debugPrint('✅ orderWithNumber.dailySequence = ${orderWithNumber.dailySequence}');
-
-      final map = orderWithNumber.toMap();
-      debugPrint('✅ orderWithNumber.toMap ready');
-
-
-      final doc = await _ordersRef.add(map);
-      debugPrint('✅ order saved with id: ${doc.id}');
-
-      return orderWithNumber.copyWith(id: doc.id);
+      final localCommittedAt = DateTime.now();
+      return order.copyWith(
+        id: result['orderId']?.toString() ?? '',
+        orderNumber: result['orderNumber']?.toString(),
+        status: createdStatus,
+        statusLabel: createdStatus.label,
+        operationId: envelope['operationId']?.toString(),
+        payloadHash: envelope['payloadHash']?.toString(),
+        createdAt: localCommittedAt,
+        updatedAt: localCommittedAt,
+        submittedAt: localCommittedAt,
+        reviewStartedAt: createdStatus == OrderStatus.underReview
+            ? localCommittedAt
+            : null,
+      );
     } catch (e, st) {
       debugPrint('❌ createOrder failed inside OrderService: $e');
       debugPrintStack(stackTrace: st);
       rethrow;
     }
-
   }
 
   Future<OrderModel?> getOrderById(String orderId) async {
@@ -176,9 +258,9 @@ class OrderService {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-          .map((doc) => OrderModel.fromFirestore(doc))
-          .toList(),
-    );
+              .map((doc) => OrderModel.fromFirestore(doc))
+              .toList(),
+        );
   }
 
   Stream<List<OrderModel>> getPharmacyOrdersStream(String pharmacyId) {
@@ -192,9 +274,9 @@ class OrderService {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-          .map((doc) => OrderModel.fromFirestore(doc))
-          .toList(),
-    );
+              .map((doc) => OrderModel.fromFirestore(doc))
+              .toList(),
+        );
   }
 
   Future<void> updateOrderStatus({
@@ -208,49 +290,50 @@ class OrderService {
       throw Exception('معرف الطلب غير صالح');
     }
 
-    final docRef = _ordersRef.doc(orderId);
-    final doc = await docRef.get();
-
-    if (!doc.exists) {
-      throw Exception('الطلب غير موجود');
+    if (changedByType != 'user' || newStatus != OrderStatus.cancelled) {
+      throw Exception('هذا الانتقال لا ينفذه تطبيق المستخدم');
     }
-
-    final currentOrder = OrderModel.fromFirestore(doc);
-    final now = DateTime.now();
-
-    final updatedHistory = [
-      ...currentOrder.statusHistory,
-      OrderStatusLog(
-        status: newStatus.value,
-        label: newStatus.label,
-        changedById: changedById,
-        changedByType: changedByType,
-        note: note,
-        changedAt: now,
-      ),
-    ];
-
-    final updateMap = <String, dynamic>{
-      'status': newStatus.value,
-      'statusLabel': newStatus.label,
-      'statusHistory': updatedHistory.map((e) => e.toMap()).toList(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-
-    if (newStatus == OrderStatus.reviewing) {
-      updateMap['reviewedAt'] = FieldValue.serverTimestamp();
-    }
-
-    if (newStatus == OrderStatus.completed) {
-      updateMap['completedAt'] = FieldValue.serverTimestamp();
-    }
-
-    if (newStatus == OrderStatus.cancelled) {
-      updateMap['cancelledAt'] = FieldValue.serverTimestamp();
-    }
-
-    await docRef.update(updateMap);
+    await _executeCommand(
+      command: 'cancelOrder',
+      operationId: newOperationId('cancel'),
+      orderId: orderId,
+      payload: {if (note != null) 'note': note},
+    );
   }
+
+  Future<void> acceptPartialOffer({
+    required String orderId,
+    required int offerVersion,
+  }) async {
+    await _executeCommand(
+      command: 'acceptPartialOffer',
+      operationId: newOperationId('accept-offer'),
+      orderId: orderId,
+      payload: {'offerVersion': offerVersion},
+    );
+  }
+
+  Future<void> rejectPartialOffer({
+    required String orderId,
+    required int offerVersion,
+  }) async {
+    await _executeCommand(
+      command: 'rejectPartialOffer',
+      operationId: newOperationId('reject-offer'),
+      orderId: orderId,
+      payload: {'offerVersion': offerVersion},
+    );
+  }
+
+  Future<void> continueWithoutInsurance({required String orderId}) async {
+    await _executeCommand(
+      command: 'continueWithoutInsurance',
+      operationId: newOperationId('continue-without-insurance'),
+      orderId: orderId,
+      payload: const {'note': 'اختار المستخدم متابعة الطلب دون تغطية تأمينية'},
+    );
+  }
+
   Stream<OrderModel?> watchOrderById(String orderId) {
     if (orderId.trim().isEmpty) return Stream.value(null);
 
@@ -259,6 +342,7 @@ class OrderService {
       return OrderModel.fromFirestore(doc);
     });
   }
+
   Future<void> attachChatToOrder({
     required String orderId,
     required String chatId,

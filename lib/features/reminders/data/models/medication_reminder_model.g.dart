@@ -69,33 +69,38 @@ const MedicationReminderModelSchema = CollectionSchema(
       type: IsarType.object,
       target: r'ReminderOwnerEmbedded',
     ),
-    r'route': PropertySchema(
+    r'ownerUserId': PropertySchema(
       id: 10,
+      name: r'ownerUserId',
+      type: IsarType.string,
+    ),
+    r'route': PropertySchema(
+      id: 11,
       name: r'route',
       type: IsarType.string,
     ),
     r'saveToHealthRecord': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'saveToHealthRecord',
       type: IsarType.bool,
     ),
     r'startDate': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'startDate',
       type: IsarType.dateTime,
     ),
     r'status': PropertySchema(
-      id: 13,
+      id: 14,
       name: r'status',
       type: IsarType.string,
     ),
     r'times': PropertySchema(
-      id: 14,
+      id: 15,
       name: r'times',
       type: IsarType.stringList,
     ),
     r'updatedAt': PropertySchema(
-      id: 15,
+      id: 16,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -106,6 +111,19 @@ const MedicationReminderModelSchema = CollectionSchema(
   deserializeProp: _medicationReminderModelDeserializeProp,
   idName: r'id',
   indexes: {
+    r'ownerUserId': IndexSchema(
+      id: 1631799950038639233,
+      name: r'ownerUserId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'ownerUserId',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'medicineName': IndexSchema(
       id: 819219057635901769,
       name: r'medicineName',
@@ -164,6 +182,7 @@ int _medicationReminderModelEstimateSize(
   bytesCount += 3 +
       ReminderOwnerEmbeddedSchema.estimateSize(
           object.owner, allOffsets[ReminderOwnerEmbedded]!, allOffsets);
+  bytesCount += 3 + object.ownerUserId.length * 3;
   {
     final value = object.route;
     if (value != null) {
@@ -202,12 +221,13 @@ void _medicationReminderModelSerialize(
     ReminderOwnerEmbeddedSchema.serialize,
     object.owner,
   );
-  writer.writeString(offsets[10], object.route);
-  writer.writeBool(offsets[11], object.saveToHealthRecord);
-  writer.writeDateTime(offsets[12], object.startDate);
-  writer.writeString(offsets[13], object.status);
-  writer.writeStringList(offsets[14], object.times);
-  writer.writeDateTime(offsets[15], object.updatedAt);
+  writer.writeString(offsets[10], object.ownerUserId);
+  writer.writeString(offsets[11], object.route);
+  writer.writeBool(offsets[12], object.saveToHealthRecord);
+  writer.writeDateTime(offsets[13], object.startDate);
+  writer.writeString(offsets[14], object.status);
+  writer.writeStringList(offsets[15], object.times);
+  writer.writeDateTime(offsets[16], object.updatedAt);
 }
 
 MedicationReminderModel _medicationReminderModelDeserialize(
@@ -232,12 +252,13 @@ MedicationReminderModel _medicationReminderModelDeserialize(
         allOffsets,
       ) ??
       ReminderOwnerEmbedded();
-  object.route = reader.readStringOrNull(offsets[10]);
-  object.saveToHealthRecord = reader.readBool(offsets[11]);
-  object.startDate = reader.readDateTime(offsets[12]);
-  object.status = reader.readString(offsets[13]);
-  object.times = reader.readStringList(offsets[14]) ?? [];
-  object.updatedAt = reader.readDateTimeOrNull(offsets[15]);
+  object.ownerUserId = reader.readString(offsets[10]);
+  object.route = reader.readStringOrNull(offsets[11]);
+  object.saveToHealthRecord = reader.readBool(offsets[12]);
+  object.startDate = reader.readDateTime(offsets[13]);
+  object.status = reader.readString(offsets[14]);
+  object.times = reader.readStringList(offsets[15]) ?? [];
+  object.updatedAt = reader.readDateTimeOrNull(offsets[16]);
   return object;
 }
 
@@ -274,16 +295,18 @@ P _medicationReminderModelDeserializeProp<P>(
           ) ??
           ReminderOwnerEmbedded()) as P;
     case 10:
-      return (reader.readStringOrNull(offset)) as P;
-    case 11:
-      return (reader.readBool(offset)) as P;
-    case 12:
-      return (reader.readDateTime(offset)) as P;
-    case 13:
       return (reader.readString(offset)) as P;
+    case 11:
+      return (reader.readStringOrNull(offset)) as P;
+    case 12:
+      return (reader.readBool(offset)) as P;
+    case 13:
+      return (reader.readDateTime(offset)) as P;
     case 14:
-      return (reader.readStringList(offset) ?? []) as P;
+      return (reader.readString(offset)) as P;
     case 15:
+      return (reader.readStringList(offset) ?? []) as P;
+    case 16:
       return (reader.readDateTimeOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -381,6 +404,51 @@ extension MedicationReminderModelQueryWhere on QueryBuilder<
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel,
+      QAfterWhereClause> ownerUserIdEqualTo(String ownerUserId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'ownerUserId',
+        value: [ownerUserId],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel,
+      QAfterWhereClause> ownerUserIdNotEqualTo(String ownerUserId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'ownerUserId',
+              lower: [],
+              upper: [ownerUserId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'ownerUserId',
+              lower: [ownerUserId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'ownerUserId',
+              lower: [ownerUserId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'ownerUserId',
+              lower: [],
+              upper: [ownerUserId],
+              includeUpper: false,
+            ));
+      }
     });
   }
 
@@ -1417,6 +1485,144 @@ extension MedicationReminderModelQueryFilter on QueryBuilder<
   }
 
   QueryBuilder<MedicationReminderModel, MedicationReminderModel,
+      QAfterFilterCondition> ownerUserIdEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel,
+      QAfterFilterCondition> ownerUserIdGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel,
+      QAfterFilterCondition> ownerUserIdLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel,
+      QAfterFilterCondition> ownerUserIdBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'ownerUserId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel,
+      QAfterFilterCondition> ownerUserIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel,
+      QAfterFilterCondition> ownerUserIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel,
+          QAfterFilterCondition>
+      ownerUserIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel,
+          QAfterFilterCondition>
+      ownerUserIdMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'ownerUserId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel,
+      QAfterFilterCondition> ownerUserIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'ownerUserId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel,
+      QAfterFilterCondition> ownerUserIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'ownerUserId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel,
       QAfterFilterCondition> routeIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -2206,6 +2412,20 @@ extension MedicationReminderModelQuerySortBy
   }
 
   QueryBuilder<MedicationReminderModel, MedicationReminderModel, QAfterSortBy>
+      sortByOwnerUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'ownerUserId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel, QAfterSortBy>
+      sortByOwnerUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'ownerUserId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel, QAfterSortBy>
       sortByRoute() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'route', Sort.asc);
@@ -2405,6 +2625,20 @@ extension MedicationReminderModelQuerySortThenBy on QueryBuilder<
   }
 
   QueryBuilder<MedicationReminderModel, MedicationReminderModel, QAfterSortBy>
+      thenByOwnerUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'ownerUserId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel, QAfterSortBy>
+      thenByOwnerUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'ownerUserId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel, QAfterSortBy>
       thenByRoute() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'route', Sort.asc);
@@ -2541,6 +2775,13 @@ extension MedicationReminderModelQueryWhereDistinct on QueryBuilder<
   }
 
   QueryBuilder<MedicationReminderModel, MedicationReminderModel, QDistinct>
+      distinctByOwnerUserId({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'ownerUserId', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, MedicationReminderModel, QDistinct>
       distinctByRoute({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'route', caseSensitive: caseSensitive);
@@ -2658,6 +2899,13 @@ extension MedicationReminderModelQueryProperty on QueryBuilder<
       ownerProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'owner');
+    });
+  }
+
+  QueryBuilder<MedicationReminderModel, String, QQueryOperations>
+      ownerUserIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'ownerUserId');
     });
   }
 

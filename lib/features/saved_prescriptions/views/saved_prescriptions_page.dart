@@ -596,15 +596,17 @@ class SavedPrescriptionsPage extends StatelessWidget {
 
     searchController.clearAll();
     searchController.setSearchSource(prescription.source);
-    searchController.setBeneficiary(beneficiary);
     searchController.setRequests(requests);
 
     await controller.recordPrescriptionSearch(prescription.id);
 
     Get.to(
-          () => SearchResultsPage(
+      () => SearchResultsPage(
         medicines: medicines,
-        beneficiary: beneficiary,
+        searchSource: prescription.source,
+        initialBeneficiary: beneficiary,
+        prescriptionId: prescription.id,
+        prescriptionImageUrl: prescription.originalFileUrl,
       ),
     );
   }

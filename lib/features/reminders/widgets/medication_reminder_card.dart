@@ -1,15 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:user_application/features/reminders/widgets/reminder_section_header.dart';
 
 import '../controllers/reminders_controller.dart';
 import '../data/models/medication_reminder_model.dart';
 import '../views/reminder_details_page.dart';
-import 'action_sheet.dart';
-import 'owner_badge.dart';
 import 'reminder_card.dart';
-import 'time_chip.dart';
 
 class MedicationReminderCard extends StatelessWidget {
   final MedicationReminderModel reminder;
@@ -36,7 +32,7 @@ class MedicationReminderCard extends StatelessWidget {
           : Colors.orange.withOpacity(0.18),
       onTap: () {
         Get.to(
-              () => ReminderDetailsPage(
+          () => ReminderDetailsPage(
             reminderId: reminder.id,
             reminderType: 'medication',
           ),
@@ -47,20 +43,20 @@ class MedicationReminderCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
                   color: isActive
                       ? rPrimaryColor.withOpacity(0.10)
                       : Colors.orange.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(11),
                 ),
                 child: Icon(
                   Iconsax.book,
                   color: isActive ? rPrimaryColor : rWarningColor,
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,20 +64,17 @@ class MedicationReminderCard extends StatelessWidget {
                     Text(
                       reminder.medicineName,
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF2C3E50),
                       ),
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 2),
                     Text(
                       reminder.dosage?.trim().isNotEmpty == true
                           ? reminder.dosage!
-                          : 'بدون جرعة محددة',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 12.5,
-                      ),
+                          : reminder.owner.name,
+                      style: TextStyle(color: Colors.grey[600], fontSize: 11),
                     ),
                   ],
                 ),
@@ -107,7 +100,7 @@ class MedicationReminderCard extends StatelessWidget {
                       break;
                     case 'details':
                       Get.to(
-                            () => ReminderDetailsPage(
+                        () => ReminderDetailsPage(
                           reminderId: reminder.id,
                           reminderType: 'medication',
                         ),
@@ -116,14 +109,8 @@ class MedicationReminderCard extends StatelessWidget {
                   }
                 },
                 itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'taken',
-                    child: Text('تم الأخذ'),
-                  ),
-                  const PopupMenuItem(
-                    value: 'snooze',
-                    child: Text('تأجيل'),
-                  ),
+                  const PopupMenuItem(value: 'taken', child: Text('تم الأخذ')),
+                  const PopupMenuItem(value: 'snooze', child: Text('تأجيل')),
                   PopupMenuItem(
                     value: 'pause',
                     child: Text(isActive ? 'إيقاف مؤقت' : 'استئناف'),
@@ -132,47 +119,51 @@ class MedicationReminderCard extends StatelessWidget {
                     value: 'details',
                     child: Text('عرض التفاصيل'),
                   ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('حذف'),
-                  ),
+                  const PopupMenuItem(value: 'delete', child: Text('حذف')),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isActive
-                    ? [
-                  rPrimaryColor,
-                  const Color(0xFF7BC4EA),
-                ]
-                    : [
-                  const Color(0xFFFFB74D),
-                  const Color(0xFFFFCC80),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(18),
+              color: isActive
+                  ? rPrimaryColor.withOpacity(0.08)
+                  : rWarningColor.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(11),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                OwnerBadge(owner: reminder.owner),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children:
-                  reminder.times.map((e) => TimeChip(time: e)).toList(),
+                const Icon(Iconsax.clock, color: rPrimaryColor, size: 15),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    reminder.times.join('  •  '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF2C3E50),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Text(
+                  reminder.owner.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: rPrimaryColor,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -183,7 +174,7 @@ class MedicationReminderCard extends StatelessWidget {
                   onTap: () => controller.markMedicationTaken(reminder),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 6),
               Expanded(
                 child: _MiniAction(
                   title: 'تأجيل',
@@ -192,13 +183,11 @@ class MedicationReminderCard extends StatelessWidget {
                   onTap: () => controller.snoozeMedication(reminder),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 6),
               Expanded(
                 child: _MiniAction(
                   title: isActive ? 'إيقاف' : 'استئناف',
-                  icon: isActive
-                      ? Iconsax.pause_circle
-                      : Iconsax.play_circle,
+                  icon: isActive ? Iconsax.pause_circle : Iconsax.play_circle,
                   color: isActive ? Colors.black54 : rPrimaryColor,
                   onTap: () async {
                     if (isActive) {
@@ -210,19 +199,6 @@ class MedicationReminderCard extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () => ReminderActionSheet.showForMedication(
-                context: context,
-                reminder: reminder,
-                controller: controller,
-              ),
-              icon: const Icon(Iconsax.more, size: 16),
-              label: const Text('خيارات أكثر'),
-            ),
           ),
         ],
       ),
@@ -247,22 +223,23 @@ class _MiniAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: color.withOpacity(0.08),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(11),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(11),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 11),
-          child: Column(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(height: 5),
+              Icon(icon, size: 15, color: color),
+              const SizedBox(width: 4),
               Text(
                 title,
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.bold,
-                  fontSize: 11.5,
+                  fontSize: 10.5,
                 ),
               ),
             ],

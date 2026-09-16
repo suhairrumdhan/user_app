@@ -14,6 +14,7 @@ class AppNotificationModel {
   final NotificationReferenceType referenceType;
 
   final bool isRead;
+  final bool badgeSeen;
   final bool isDeleted;
   final bool isActionable;
 
@@ -50,6 +51,7 @@ class AppNotificationModel {
     this.priority = NotificationPriority.normal,
     this.referenceType = NotificationReferenceType.none,
     this.isRead = false,
+    this.badgeSeen = false,
     this.isDeleted = false,
     this.isActionable = true,
     required this.createdAt,
@@ -98,6 +100,7 @@ class AppNotificationModel {
       referenceType:
       NotificationReferenceTypeX.fromString(data['referenceType']),
       isRead: _readBool(data['isRead']),
+      badgeSeen: _readBool(data['badgeSeen']),
       isDeleted: _readBool(data['isDeleted']),
       isActionable: data['isActionable'] is bool ? data['isActionable'] as bool : true,
       createdAt: _readDateTime(data['createdAt']) ?? DateTime.now(),
@@ -129,6 +132,7 @@ class AppNotificationModel {
       'priority': priority.value,
       'referenceType': referenceType.value,
       'isRead': isRead,
+      'badgeSeen': badgeSeen,
       'isDeleted': isDeleted,
       'isActionable': isActionable,
       'createdAt': includeServerTimestamp
@@ -162,6 +166,7 @@ class AppNotificationModel {
     NotificationPriority? priority,
     NotificationReferenceType? referenceType,
     bool? isRead,
+    bool? badgeSeen,
     bool? isDeleted,
     bool? isActionable,
     DateTime? createdAt,
@@ -206,6 +211,7 @@ class AppNotificationModel {
       priority: priority ?? this.priority,
       referenceType: referenceType ?? this.referenceType,
       isRead: isRead ?? this.isRead,
+      badgeSeen: badgeSeen ?? this.badgeSeen,
       isDeleted: isDeleted ?? this.isDeleted,
       isActionable: isActionable ?? this.isActionable,
       createdAt: createdAt ?? this.createdAt,

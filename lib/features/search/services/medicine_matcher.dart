@@ -1,6 +1,7 @@
 import '../models/medicine_search_request.dart';
 import '../models/matched_medicine_result.dart';
 import 'medicine_normalizer.dart';
+import '../models/medicine_sale_quote.dart';
 
 class MedicineMatcher {
   const MedicineMatcher._();
@@ -13,37 +14,42 @@ class MedicineMatcher {
     final String pharmacyId = (medicineData['pharmacyId'] ?? '').toString();
 
     final String medicineId =
-    (medicineData['medicineId'] ?? medicineData['id'] ?? '').toString();
+        (medicineData['medicineId'] ?? medicineData['id'] ?? '').toString();
 
     final String name = (medicineData['medicineName'] ?? '').toString().trim();
-    final String scientificName =
-    (medicineData['scientificName'] ?? '').toString().trim();
+    final String scientificName = (medicineData['scientificName'] ?? '')
+        .toString()
+        .trim();
 
     if (name.isEmpty) return null;
 
-    final bool isAvailable = _isAvailable(medicineData);
-    if (!isAvailable) return null;
+    final quote = MedicineSaleQuote.fromIndex(medicineData);
+    if (quote == null) return null;
     final String normalizedRequest = request.normalizedText;
     final String normalizedName = MedicineNormalizer.normalize(name);
-    final String normalizedScientific =
-    MedicineNormalizer.normalize(scientificName);
+    final String normalizedScientific = MedicineNormalizer.normalize(
+      scientificName,
+    );
 
-// ✅ الجديد
+    // ✅ الجديد
     final String requestBase =
-        request.baseName ?? MedicineNormalizer.extractBaseName(normalizedRequest);
+        request.baseName ??
+        MedicineNormalizer.extractBaseName(normalizedRequest);
 
-    final String nameBase =
-    MedicineNormalizer.extractBaseName(normalizedName);
+    final String nameBase = MedicineNormalizer.extractBaseName(normalizedName);
 
-    final List<String> requestTokens =
-    request.searchTokens.isNotEmpty
+    final List<String> requestTokens = request.searchTokens.isNotEmpty
         ? request.searchTokens
         : MedicineNormalizer.buildSearchTokens(normalizedRequest);
 
-
-    final String? medicineStrength = _extractMedicineStrength(medicineData, name);
-    final String? medicineDosageForm =
-    _extractMedicineDosageForm(medicineData, name);
+    final String? medicineStrength = _extractMedicineStrength(
+      medicineData,
+      name,
+    );
+    final String? medicineDosageForm = _extractMedicineDosageForm(
+      medicineData,
+      name,
+    );
 
     double score = 0;
     String matchType = '';
@@ -93,7 +99,11 @@ class MedicineMatcher {
     }
 
     /// 4) CONTAINS (fallback)
-    if (!matched && MedicineNormalizer.containsNormalized(normalizedName, normalizedRequest)) {
+    if (!matched &&
+        MedicineNormalizer.containsNormalized(
+          normalizedName,
+          normalizedRequest,
+        )) {
       score = 78;
       matchType = 'contains';
       matched = true;
@@ -101,8 +111,10 @@ class MedicineMatcher {
 
     /// 5) FUZZY (آخر حل)
     if (!matched) {
-      final fuzzyNameScore =
-      MedicineNormalizer.similarityScore(normalizedRequest, normalizedName);
+      final fuzzyNameScore = MedicineNormalizer.similarityScore(
+        normalizedRequest,
+        normalizedName,
+      );
 
       if (fuzzyNameScore >= 0.85) {
         score = 60 + (fuzzyNameScore * 30);
@@ -112,7 +124,6 @@ class MedicineMatcher {
     }
 
     if (!matched) return null;
-
 
     // تحسين/خصم حسب التركيز والشكل الدوائي
     score = _applyStrengthAdjustment(
@@ -129,8 +140,6 @@ class MedicineMatcher {
 
     score = score.clamp(0, 100).toDouble();
 
-    final double price = _resolvePrice(medicineData);
-    final bool soldByPiece = medicineData['sellByPiece'] == true;
     final String? unit = medicineData['unit']?.toString();
     final String? imageUrl = medicineData['imageUrl']?.toString();
     return MatchedMedicineResult(
@@ -138,14 +147,13 @@ class MedicineMatcher {
       pharmacyId: pharmacyId,
       matchedMedicineId: medicineId.isNotEmpty ? medicineId : name,
       matchedMedicineName: name,
-      matchedScientificName:
-      scientificName.isNotEmpty ? scientificName : null,
-      price: price,
-      soldByPiece: soldByPiece,
+      matchedScientificName: scientificName.isNotEmpty ? scientificName : null,
+      price: quote.price,
+      soldByPiece: quote.soldByPiece,
       unit: unit,
-      availableQuantity: _toInt(medicineData['quantity']),
-      availablePieceQuantity: _toInt(medicineData['pieceQuantity']),
-      isAvailable: isAvailable,
+      availableQuantity: quote.stock.availablePackages,
+      availablePieceQuantity: quote.stock.availablePieces,
+      isAvailable: true,
       matchScore: score,
       matchType: matchType,
       imageUrl: imageUrl,
@@ -176,10 +184,7 @@ class MedicineMatcher {
     final List<MatchedMedicineResult> matches = [];
 
     for (final med in pharmacyMedicines) {
-      final result = matchMedicine(
-        request: request,
-        medicineData: med,
-      );
+      final result = matchMedicine(request: request, medicineData: med);
 
       if (result == null) continue;
       matches.add(result);
@@ -191,11 +196,20 @@ class MedicineMatcher {
       final scoreCompare = b.matchScore.compareTo(a.matchScore);
       if (scoreCompare != 0) return scoreCompare;
 
-      final availabilityCompare = b.isAvailable.toString().compareTo(a.isAvailable.toString());
+      final availabilityCompare = b.isAvailable.toString().compareTo(
+        a.isAvailable.toString(),
+      );
       if (availabilityCompare != 0) return availabilityCompare;
 
-      final quantityCompare = (b.availableQuantity + b.availablePieceQuantity)
-          .compareTo(a.availableQuantity + a.availablePieceQuantity);
+      // Different selling units have no meaningful count ordering.
+      final quantityCompare = a.soldByPiece != b.soldByPiece
+          ? 0
+          : (a.soldByPiece ? b.availablePieceQuantity : b.availableQuantity)
+                .compareTo(
+                  a.soldByPiece
+                      ? a.availablePieceQuantity
+                      : a.availableQuantity,
+                );
       if (quantityCompare != 0) return quantityCompare;
 
       return a.price.compareTo(b.price);
@@ -232,28 +246,6 @@ class MedicineMatcher {
       });
 
     return result.take(limit).toList();
-  }
-
-  static bool _isAvailable(Map<String, dynamic> medicineData) {
-    final dynamic availableField = medicineData['available'];
-    if (availableField is bool) return availableField;
-
-    final int quantity = _toInt(medicineData['quantity']);
-    final int pieceQuantity = _toInt(medicineData['pieceQuantity']);
-
-    return quantity > 0 || pieceQuantity > 0;
-  }
-
-  static double _resolvePrice(Map<String, dynamic> medicineData) {
-    final bool sellByPiece = medicineData['sellByPiece'] == true;
-    final double piecePrice = _toDouble(medicineData['piecePrice']);
-    final double sellingPrice = _toDouble(medicineData['sellingPrice']);
-
-    if (sellByPiece && piecePrice > 0) {
-      return piecePrice;
-    }
-
-    return sellingPrice;
   }
 
   static double _applyStrengthAdjustment({
@@ -299,9 +291,9 @@ class MedicineMatcher {
   }
 
   static String? _extractMedicineStrength(
-      Map<String, dynamic> medicineData,
-      String fallbackName,
-      ) {
+    Map<String, dynamic> medicineData,
+    String fallbackName,
+  ) {
     final fromField = medicineData['strength']?.toString();
     if (fromField != null && fromField.trim().isNotEmpty) {
       return MedicineNormalizer.extractStrength(fromField);
@@ -317,9 +309,9 @@ class MedicineMatcher {
   }
 
   static String? _extractMedicineDosageForm(
-      Map<String, dynamic> medicineData,
-      String fallbackName,
-      ) {
+    Map<String, dynamic> medicineData,
+    String fallbackName,
+  ) {
     final unit = medicineData['unit']?.toString();
     if (unit != null && unit.trim().isNotEmpty) {
       final normalizedUnit = MedicineNormalizer.extractDosageForm(unit);
@@ -331,25 +323,5 @@ class MedicineMatcher {
 
     final scientificName = medicineData['scientificName']?.toString() ?? '';
     return MedicineNormalizer.extractDosageForm(scientificName);
-  }
-
-  static bool _safeContains(String a, String b) {
-    if (a.isEmpty || b.isEmpty) return false;
-    if (b.length < 3) return false;
-    return a.contains(b) || b.contains(a);
-  }
-
-  static int _toInt(dynamic value) {
-    if (value is int) return value;
-    if (value is double) return value.toInt();
-    if (value is String) return int.tryParse(value) ?? 0;
-    return 0;
-  }
-
-  static double _toDouble(dynamic value) {
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
-    return 0.0;
   }
 }

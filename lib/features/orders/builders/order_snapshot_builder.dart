@@ -52,8 +52,8 @@ class OrderSnapshotBuilder {
           preferred: beneficiary.name,
           fallback: currentUser.name,
         ),
-        relationLabel: beneficiary.relation?.trim().isNotEmpty == true
-            ? beneficiary.relation!.trim()
+        relationLabel: beneficiary.relation.trim().isNotEmpty
+            ? beneficiary.relation.trim()
             : 'أنا',
         familyMemberId: null,
         gender: _safeText(currentUser.gender),
@@ -101,8 +101,8 @@ class OrderSnapshotBuilder {
         preferred: beneficiary.name,
         fallback: member.name,
       ),
-      relationLabel: beneficiary.relation?.trim().isNotEmpty == true
-          ? beneficiary.relation!.trim()
+      relationLabel: beneficiary.relation.trim().isNotEmpty
+          ? beneficiary.relation.trim()
           : (member.relation?.trim().isNotEmpty == true
           ? member.relation!.trim()
           : 'فرد من العائلة'),
@@ -200,6 +200,7 @@ class OrderSnapshotBuilder {
   }) {
     return selectedMatches.map((matched) {
       final quantity =
+          quantitiesByMatchedMedicineId['${matched.matchedMedicineId}:${matched.soldByPiece}'] ??
           quantitiesByMatchedMedicineId[matched.matchedMedicineId] ?? 1;
 
       final normalizedRequested =
@@ -270,7 +271,7 @@ class OrderSnapshotBuilder {
         beneficiarySnapshot.currentMedications.isNotEmpty ||
         beneficiarySnapshot.hasHealthData;
 
-    final status = OrderStatus.pending;
+    final status = OrderStatus.received;
 
     final calculatedTotal = medicineItems.fold<double>(
       0,

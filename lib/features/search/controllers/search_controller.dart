@@ -15,7 +15,7 @@ class SearchController extends GetxController {
   final MedicineSearchService _searchService;
 
   SearchController({MedicineSearchService? searchService})
-      : _searchService = searchService ?? MedicineSearchService();
+    : _searchService = searchService ?? MedicineSearchService();
 
   final RxList<MedicineSearchRequest> requestedMedicines =
       <MedicineSearchRequest>[].obs;
@@ -25,11 +25,9 @@ class SearchController extends GetxController {
   final RxMap<String, PharmacyModel> pharmaciesById =
       <String, PharmacyModel>{}.obs;
 
-  final Rx<PharmacySearchFilters> filters =
-      const PharmacySearchFilters().obs;
+  final Rx<PharmacySearchFilters> filters = const PharmacySearchFilters().obs;
 
-  final RxList<PharmacySearchResult> results =
-      <PharmacySearchResult>[].obs;
+  final RxList<PharmacySearchResult> results = <PharmacySearchResult>[].obs;
 
   final RxBool isLoading = false.obs;
   final RxString searchSource = 'manual'.obs;
@@ -54,7 +52,7 @@ class SearchController extends GetxController {
 
       for (final doc in snapshot.docs) {
         final pharmacy = PharmacyModel.fromFirestore(doc);
-        pharmaciesById[pharmacy.id] = pharmacy;
+        if (pharmacy.isApproved) pharmaciesById[pharmacy.id] = pharmacy;
       }
     }
   }
@@ -64,10 +62,10 @@ class SearchController extends GetxController {
         .where((result) => pharmaciesById.containsKey(result.pharmacyId))
         .map(
           (result) => PharmacyModel.fromSearchResult(
-        result,
-        pharmacy: pharmaciesById[result.pharmacyId]!,
-      ),
-    )
+            result,
+            pharmacy: pharmaciesById[result.pharmacyId]!,
+          ),
+        )
         .toList();
   }
 
@@ -82,7 +80,7 @@ class SearchController extends GetxController {
     final oldResult = results[index];
 
     final targetIndex = oldResult.matchedMedicines.indexWhere(
-          (item) => item.requestKey == requestKey,
+      (item) => item.requestKey == requestKey,
     );
 
     if (targetIndex == -1) return;
@@ -92,7 +90,7 @@ class SearchController extends GetxController {
     final mergedAlternatives = <MatchedMedicineResult>[
       oldSelected.copyWith(similarMatches: const []),
       ...oldSelected.similarMatches.where(
-            (e) => e.matchedMedicineId != newSelection.matchedMedicineId,
+        (e) => e.matchedMedicineId != newSelection.matchedMedicineId,
       ),
     ];
 
@@ -107,7 +105,7 @@ class SearchController extends GetxController {
 
     final newTotalPrice = updatedMatches.fold<double>(
       0,
-          (sum, item) => sum + item.price,
+      (sum, item) => sum + item.price,
     );
 
     final updatedResult = oldResult.copyWith(
@@ -149,7 +147,7 @@ class SearchController extends GetxController {
     final normalized = MedicineNormalizer.normalize(cleaned);
 
     final exists = requestedMedicines.any(
-          (item) => item.normalizedText == normalized,
+      (item) => item.normalizedText == normalized,
     );
 
     if (exists) return;
@@ -197,11 +195,21 @@ class SearchController extends GetxController {
     filters.value = filters.value.copyWith(sortBy: value);
   }
 
+  void updatePriceRange({double? minPrice, double? maxPrice}) {
+    filters.value = filters.value.copyWith(
+      minPrice: minPrice,
+      maxPrice: maxPrice,
+      clearMinPrice: minPrice == null,
+      clearMaxPrice: maxPrice == null,
+    );
+  }
+
   Future<void> runSearch({
     List<String> userInsuranceCodes = const [],
     double? userLat,
     double? userLng,
   }) async {
+    if (isLoading.value) return;
     if (requestedMedicines.isEmpty) {
       errorMessage.value = 'لا توجد أدوية للبحث';
       results.clear();
@@ -228,8 +236,11 @@ class SearchController extends GetxController {
           .toList();
 
       await _loadPharmaciesByIds(pharmacyIds);
+      results.removeWhere(
+        (result) => !pharmaciesById.containsKey(result.pharmacyId),
+      );
 
-      if (searchResults.isEmpty) {
+      if (results.isEmpty) {
         errorMessage.value = 'لم يتم العثور على نتائج مناسبة';
       }
     } catch (e) {

@@ -13,8 +13,10 @@ class NotificationsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NotificationsController controller =
-    Get.put(NotificationsController(), permanent: true);
+    final NotificationsController controller = Get.put(
+      NotificationsController(),
+      permanent: true,
+    );
 
     return Scaffold(
       backgroundColor: SearchUiColors.primary,
@@ -27,13 +29,13 @@ class NotificationsPage extends StatelessWidget {
           return Column(
             children: [
               Obx(
-                    () => NotificationsHeader(
+                () => NotificationsHeader(
                   totalCount: allNotifications.length,
                   unreadCount: unreadCount,
                   isProcessing: controller.isProcessing.value,
                   onMarkAllAsRead: unreadCount == 0
                       ? null
-                      : () => controller.markAllAsRead(),
+                      : () => controller.markAllAsRead(context: context),
                 ),
               ),
               Expanded(
@@ -42,7 +44,7 @@ class NotificationsPage extends StatelessWidget {
                   decoration: const BoxDecoration(
                     color: SearchUiColors.light,
                     borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(34),
+                      top: Radius.circular(24),
                     ),
                   ),
                   child: _buildBody(
@@ -69,9 +71,7 @@ class NotificationsPage extends StatelessWidget {
     if (snapshot.connectionState == ConnectionState.waiting &&
         allNotifications.isEmpty) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: SearchUiColors.primary,
-        ),
+        child: CircularProgressIndicator(color: SearchUiColors.primary),
       );
     }
 
@@ -84,46 +84,44 @@ class NotificationsPage extends StatelessWidget {
 
     return Column(
       children: [
-        const SizedBox(height: 16),
-        const SizedBox(height: 14),
+        const SizedBox(height: 9),
         Expanded(
-          child: allNotifications.isEmpty  // تغيير: استخدام allNotifications بدلاً من filteredNotifications
-              ? const NotificationsEmptyState(  // تغيير: إزالة Obx(() =>)
-            title: 'لا توجد إشعارات',
-            subtitle: 'عند وصول أي تحديثات أو تنبيهات مهمة ستظهر هنا مباشرة.',
-          )
+          child: allNotifications.isEmpty
+              ? const NotificationsEmptyState(
+                  title: 'لا توجد إشعارات',
+                  subtitle: 'ستظهر التنبيهات الجديدة هنا.',
+                )
               : RefreshIndicator(
-            color: SearchUiColors.primary,
-            onRefresh: () async {
-              await Future<void>.delayed(
-                const Duration(milliseconds: 500),
-              );
-              // يمكن إضافة منطق التحديث هنا إذا لزم الأمر
-            },
-            child: ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-              itemCount: allNotifications.length,  // تغيير: استخدام allNotifications
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final notification = allNotifications[index];  // تغيير: استخدام allNotifications
+                  color: SearchUiColors.primary,
+                  onRefresh: () async {
+                    await Future<void>.delayed(
+                      const Duration(milliseconds: 500),
+                    );
+                  },
+                  child: ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(14, 2, 14, 18),
+                    itemCount: allNotifications.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 7),
+                    itemBuilder: (context, index) {
+                      final notification = allNotifications[index];
 
-                return NotificationCard(
-                  notification: notification,
-                  onTap: () => controller.handleNotificationTap(
-                    notification,
-                    context,
+                      return NotificationCard(
+                        notification: notification,
+                        onTap: () => controller.handleNotificationTap(
+                          notification,
+                          context,
+                        ),
+                        onDelete: () => controller.deleteNotification(
+                          notification.id,
+                          context: context,
+                        ),
+                      );
+                    },
                   ),
-                  onDelete: () => controller.deleteNotification(
-                    notification.id,
-                  ),
-                );
-              },
-            ),
-          ),
+                ),
         ),
       ],
     );
-
   }
 }

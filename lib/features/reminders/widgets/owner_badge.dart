@@ -6,10 +6,7 @@ import '../data/models/reminder_owner_embedded.dart';
 class OwnerBadge extends StatelessWidget {
   final ReminderOwnerEmbedded owner;
 
-  const OwnerBadge({
-    super.key,
-    required this.owner,
-  });
+  const OwnerBadge({super.key, required this.owner});
 
   static const Color rPrimaryColor = Color(0xFF5EABD6);
 
@@ -32,7 +29,7 @@ class OwnerBadge extends StatelessWidget {
           const SizedBox(width: 8),
           Flexible(
             child: Text(
-              '${owner.name} • ${owner.relation}',
+              owner.name,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,

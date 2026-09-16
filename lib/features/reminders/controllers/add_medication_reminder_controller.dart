@@ -8,7 +8,13 @@ import '../domain/helpers/reminder_time_helper.dart';
 import 'reminders_controller.dart';
 
 class AddMedicationReminderController extends GetxController {
-  final RemindersController remindersController = Get.find<RemindersController>();
+  AddMedicationReminderController({this.existingReminder});
+
+  final MedicationReminderModel? existingReminder;
+  final RemindersController remindersController =
+      Get.find<RemindersController>();
+
+  bool get isEditing => existingReminder != null;
 
   // ========= Form Fields =========
 
@@ -28,6 +34,28 @@ class AddMedicationReminderController extends GetxController {
   final RxBool isSaving = false.obs;
 
   // ========= Lifecycle =========
+
+  @override
+  void onInit() {
+    super.onInit();
+    final reminder = existingReminder;
+    if (reminder == null) return;
+
+    medicineNameController.text = reminder.medicineName;
+    dosageController.text = reminder.dosage ?? '';
+    routeController.text = reminder.route ?? '';
+    notesController.text = reminder.notes ?? '';
+    selectedBeneficiary.value = BeneficiaryModel(
+      id: reminder.owner.beneficiaryId,
+      name: reminder.owner.name,
+      type: reminder.owner.type,
+      relation: reminder.owner.relation,
+    );
+    startDate.value = reminder.startDate;
+    endDate.value = reminder.endDate;
+    times.assignAll(ReminderTimeHelper.normalizeAndSortTimes(reminder.times));
+    saveToHealthRecord.value = reminder.saveToHealthRecord;
+  }
 
   @override
   void onClose() {
@@ -73,10 +101,7 @@ class AddMedicationReminderController extends GetxController {
     times.value = ReminderTimeHelper.normalizeAndSortTimes(updated);
   }
 
-  void replaceTime({
-    required String oldTime,
-    required TimeOfDay newTime,
-  }) {
+  void replaceTime({required String oldTime, required TimeOfDay newTime}) {
     final formatted = ReminderTimeHelper.formatTimeOfDay(newTime);
     final updated = [...times];
     final index = updated.indexOf(oldTime);
@@ -152,7 +177,8 @@ class AddMedicationReminderController extends GetxController {
       throw StateError('Medicine name is required before building reminder.');
     }
 
-    final reminder = MedicationReminderModel()
+    final reminder = existingReminder ?? MedicationReminderModel();
+    reminder
       ..medicineName = medicineName
       ..dosage = dosageController.text.trim().isEmpty
           ? null
@@ -167,10 +193,14 @@ class AddMedicationReminderController extends GetxController {
       ..startDate = startDate.value
       ..endDate = endDate.value
       ..times = ReminderTimeHelper.normalizeAndSortTimes([...times])
-      ..notificationIds = <int>[]
-      ..status = 'active'
-      ..saveToHealthRecord = saveToHealthRecord.value
-      ..createdAt = DateTime.now();
+      ..saveToHealthRecord = saveToHealthRecord.value;
+
+    if (!isEditing) {
+      reminder
+        ..notificationIds = <int>[]
+        ..status = 'active'
+        ..createdAt = DateTime.now();
+    }
 
     return reminder;
   }
@@ -195,13 +225,18 @@ class AddMedicationReminderController extends GetxController {
   // ========= Save =========
 
   Future<MedicationReminderModel?> saveReminder() async {
+    if (isSaving.value) return null;
     if (!validateAll()) return null;
 
     try {
       isSaving.value = true;
 
       final reminder = buildReminderModel();
-      await remindersController.addMedicationReminder(reminder);
+      if (isEditing) {
+        await remindersController.updateMedicationReminder(reminder);
+      } else {
+        await remindersController.addMedicationReminder(reminder);
+      }
 
       return reminder;
     } catch (e) {

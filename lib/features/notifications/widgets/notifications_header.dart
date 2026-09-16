@@ -21,100 +21,79 @@ class NotificationsHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [SearchUiColors.primary, SearchUiColors.secondary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
+      color: SearchUiColors.primary,
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 22),
-          child: Column(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.16),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      Iconsax.notification_bing,
-                      color: Colors.white,
-                      size: 25,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'الإشعارات',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'تابع آخر التحديثات والتنبيهات المهمة',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (unreadCount > 0)
-                    TextButton.icon(
-                      onPressed: isProcessing ? null : onMarkAllAsRead,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          side: BorderSide(
-                            color: Colors.white.withOpacity(0.22),
-                          ),
-                        ),
-                        backgroundColor: Colors.white.withOpacity(0.10),
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.16),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Iconsax.notification_bing,
+                  color: Colors.white,
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Row(
+                  children: [
+                    const Text(
+                      'الإشعارات',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
                       ),
-                      icon: isProcessing
-                          ? const SizedBox(
-                        width: 15,
-                        height: 15,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                          : const Icon(
-                        Iconsax.tick_circle,
-                        size: 16,
-                      ),
-                      label: const Text(
-                        'قراءة الكل',
-                        style: TextStyle(
-                          fontSize: 12.5,
+                    ),
+                    if (unreadCount > 0) ...[
+                      const SizedBox(width: 7),
+                      Text(
+                        '$unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ),
-                ],
+                    ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 18),
+              if (unreadCount > 0)
+                IconButton(
+                  tooltip: 'تعيين الكل كمقروء',
+                  onPressed: isProcessing ? null : onMarkAllAsRead,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(color: Colors.white.withOpacity(0.22)),
+                    ),
+                    backgroundColor: Colors.white.withOpacity(0.10),
+                  ),
+                  icon: isProcessing
+                      ? const SizedBox(
+                          width: 15,
+                          height: 15,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Iconsax.tick_circle, size: 16),
+                ),
             ],
           ),
         ),
@@ -122,4 +101,3 @@ class NotificationsHeader extends StatelessWidget {
     );
   }
 }
-

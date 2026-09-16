@@ -4,6 +4,7 @@ import 'package:icons_plus/icons_plus.dart';
 import 'package:user_application/app/core/widgets/custom_scaffold.dart';
 import 'package:user_application/app/core/widgets/custom_text_field.dart';
 import 'package:user_application/features/auth/services/auth_services.dart';
+import 'package:user_application/features/auth/views/forgot_password_page.dart';
 
 // Controller للـ Login
 class LoginController extends GetxController {
@@ -86,8 +87,10 @@ class LoginController extends GetxController {
       margin: const EdgeInsets.all(16),
       borderRadius: 12,
       snackStyle: SnackStyle.FLOATING,
-      icon: Icon(isError ? Icons.error_outline : Icons.warning_amber_rounded,
-          color: isError ? Colors.red[800] : Colors.orange[800]),
+      icon: Icon(
+        isError ? Icons.error_outline : Icons.warning_amber_rounded,
+        color: isError ? Colors.red[800] : Colors.orange[800],
+      ),
     );
   }
 
@@ -167,7 +170,9 @@ class _LoginPageState extends State<LoginPage> {
       );
     } else {
       // إذا فشل الـ validation، نعرض رسالة عامة
-      controller.showServerError("يرجى التأكد من إدخال البريد الإلكتروني وكلمة المرور بشكل صحيح");
+      controller.showServerError(
+        "يرجى التأكد من إدخال البريد الإلكتروني وكلمة المرور بشكل صحيح",
+      );
     }
   }
 
@@ -185,7 +190,10 @@ class _LoginPageState extends State<LoginPage> {
           children: [
             Align(
               alignment: Alignment.topCenter,
-              child: Container(height: height * 0.25, color: Colors.transparent),
+              child: Container(
+                height: height * 0.25,
+                color: Colors.transparent,
+              ),
             ),
             Align(
               alignment: Alignment.bottomCenter,
@@ -204,13 +212,11 @@ class _LoginPageState extends State<LoginPage> {
                         const SizedBox(height: 16),
                         Text(
                           "تسجيل الدخول",
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
+                          style: Theme.of(context).textTheme.headlineMedium
                               ?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF2C3E50),
-                          ),
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF2C3E50),
+                              ),
                         ),
                         const SizedBox(height: 24),
 
@@ -225,7 +231,8 @@ class _LoginPageState extends State<LoginPage> {
                               controller.emailError.value = '';
                             }
                           },
-                          validator: (value) => controller.validateEmail(value ?? ''),
+                          validator: (value) =>
+                              controller.validateEmail(value ?? ''),
                         ),
 
                         const SizedBox(height: 16),
@@ -245,93 +252,128 @@ class _LoginPageState extends State<LoginPage> {
                               controller.passwordError.value = '';
                             }
                           },
-                          validator: (value) => controller.validatePassword(value ?? ''),
+                          validator: (value) =>
+                              controller.validatePassword(value ?? ''),
                         ),
 
+                        Obx(
+                          () => Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: TextButton(
+                              onPressed: controller.isLoading.value
+                                  ? null
+                                  : () => Get.to(
+                                      () => ForgotPasswordPage(
+                                        initialEmail: controller
+                                            .emailController
+                                            .text
+                                            .trim(),
+                                      ),
+                                    ),
+                              child: const Text(
+                                'نسيت كلمة المرور؟',
+                                style: TextStyle(
+                                  color: Color(0xFF5EABD6),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
 
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 8),
 
                         // زر تسجيل الدخول
-                        Obx(() => Container(
-                          width: double.infinity,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF5EABD6),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF5EABD6).withOpacity(0.3),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ElevatedButton(
-                            onPressed: controller.isLoading.value
-                                ? null
-                                : handleLogin,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF5EABD6),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
+                        Obx(
+                          () => Container(
+                            width: double.infinity,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF5EABD6),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF5EABD6,
+                                  ).withOpacity(0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                            child: controller.isLoading.value
-                                ? const SizedBox(
-                              height: 22,
-                              width: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+                            child: ElevatedButton(
+                              onPressed: controller.isLoading.value
+                                  ? null
+                                  : handleLogin,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF5EABD6),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                               ),
-                            )
-                                : const Text(
-                              "تسجيل الدخول",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
+                              child: controller.isLoading.value
+                                  ? const SizedBox(
+                                      height: 22,
+                                      width: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text(
+                                      "تسجيل الدخول",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                             ),
                           ),
-                        )),
+                        ),
 
                         const SizedBox(height: 20),
 
                         // زر Google
-                        Obx(() => Container(
-                          width: double.infinity,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          child: ElevatedButton.icon(
-                            onPressed: controller.isLoading.value
-                                ? null
-                                : () => controller.authService.signInWithGoogle(
-                              context,
-                              controller.setLoading,
+                        Obx(
+                          () => Container(
+                            width: double.infinity,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.grey.shade300),
                             ),
-                            icon: const Icon(Bootstrap.google, color: Colors.red),
-                            label: const Text(
-                              "تسجيل الدخول باستخدام Google",
-                              style: TextStyle(
-                                color: Color(0xFF2C3E50),
-                                fontWeight: FontWeight.w500,
+                            child: ElevatedButton.icon(
+                              onPressed: controller.isLoading.value
+                                  ? null
+                                  : () =>
+                                        controller.authService.signInWithGoogle(
+                                          context,
+                                          controller.setLoading,
+                                        ),
+                              icon: const Icon(
+                                Bootstrap.google,
+                                color: Colors.red,
+                              ),
+                              label: const Text(
+                                "تسجيل الدخول باستخدام Google",
+                                style: TextStyle(
+                                  color: Color(0xFF2C3E50),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                               ),
                             ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
                           ),
-                        )),
+                        ),
                       ],
                     ),
                   ),
@@ -340,14 +382,16 @@ class _LoginPageState extends State<LoginPage> {
             ),
 
             // مؤشر التحميل overlay
-            Obx(() => controller.isLoading.value
-                ? Container(
-              color: Colors.black54,
-              child: const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              ),
-            )
-                : const SizedBox()),
+            Obx(
+              () => controller.isLoading.value
+                  ? Container(
+                      color: Colors.black54,
+                      child: const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      ),
+                    )
+                  : const SizedBox(),
+            ),
           ],
         ),
       ),

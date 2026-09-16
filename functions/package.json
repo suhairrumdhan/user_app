@@ -1,12 +1,21 @@
 {
   "name": "functions",
+  "version": "3.0.0-f03.1",
   "description": "Cloud Functions for Firebase",
   "scripts": {
     "lint": "eslint .",
-    "serve": "firebase emulators:start --only functions",
-    "shell": "firebase functions:shell",
-    "start": "npm run shell",
-    "deploy": "firebase deploy --only functions",
+    "test": "node --test test/*.test.js test/f02/*.test.js test/f03/*.test.js",
+    "test:f03": "node --test test/f03/*.test.js",
+    "test:f03:live": "node --test --test-concurrency=1 test/live/*.test.js",
+    "verify:f03": "npm run lint && npm run test:f03",
+    "verify": "npm run lint && npm test",
+    "test:emulator": "node test/helpers/commands.js emulator-test",
+    "emulators:start": "node test/helpers/commands.js start",
+    "fixtures:seed": "node test/helpers/commands.js seed",
+    "fixtures:reset": "node test/helpers/commands.js reset",
+    "serve": "npm run emulators:start",
+    "start": "npm run emulators:start",
+    "deploy": "node -e \"throw new Error('Use the reviewed named deploy commands in ../docs/backend-migration.md')\"",
     "logs": "firebase functions:log"
   },
   "engines": {
@@ -18,9 +27,12 @@
     "firebase-functions": "^7.0.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
     "eslint": "^8.15.0",
     "eslint-config-google": "^0.14.0",
-    "firebase-functions-test": "^3.4.1"
+    "firebase": "12.19.0",
+    "firebase-functions-test": "^3.4.1",
+    "firebase-tools": "15.3.1"
   },
   "private": true
 }

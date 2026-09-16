@@ -3,8 +3,6 @@ import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../controllers/reminders_controller.dart';
-import '../services/local_notification_service.dart';
-import '../widgets/reminder_section_header.dart';
 import 'add_appointment_page.dart';
 import 'add_medication_reminder_page.dart';
 import 'appointment_reminders_tab.dart';
@@ -24,7 +22,7 @@ class RemindersPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final RemindersController controller =
-    Get.isRegistered<RemindersController>()
+        Get.isRegistered<RemindersController>()
         ? Get.find<RemindersController>()
         : Get.put(RemindersController());
 
@@ -36,30 +34,31 @@ class RemindersPage extends StatelessWidget {
           child: Column(
             children: [
               Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
                       onPressed: () => Navigator.pop(context),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 5),
                     const Expanded(
                       child: Text(
                         'التذكيرات ',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 22,
+                          fontSize: 17,
                           fontWeight: FontWeight.bold,
                         ),
-
                       ),
                     ),
                     GestureDetector(
                       onTap: () => _showAddOptions(context),
                       child: Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
@@ -73,7 +72,7 @@ class RemindersPage extends StatelessWidget {
                         child: const Icon(
                           Iconsax.add,
                           color: rPrimaryColor,
-                          size: 22,
+                          size: 19,
                         ),
                       ),
                     ),
@@ -86,15 +85,15 @@ class RemindersPage extends StatelessWidget {
                   decoration: const BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(40),
-                      topRight: Radius.circular(40),
+                      topLeft: Radius.circular(24),
+                      topRight: Radius.circular(24),
                     ),
                   ),
                   child: Column(
                     children: [
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 10),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
                         child: Obx(() {
                           final activeMedications = controller
                               .medicationReminders
@@ -108,72 +107,51 @@ class RemindersPage extends StatelessWidget {
 
                           return Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(18),
+                            padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
                                 colors: [rPrimaryColor, rSecondaryColor],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
-                              borderRadius: BorderRadius.circular(24),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: rPrimaryColor.withOpacity(0.20),
-                                  blurRadius: 18,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                            child: Column(
+                            child: Row(
                               children: [
-                                const ReminderSectionHeader(
-                                  title: 'نظام التذكيرات ',
-                                  subTitle:
-                                  'إدارة تذكيرات الأدوية والمواعيد ',
-                                  titleColor: Colors.white,
-                                  subTitleColor: Colors.white,
-                                  icon: Iconsax.notification_bing,
-                                  iconColor: Colors.white,
+                                Expanded(
+                                  child: _SummaryBox(
+                                    title: 'الأدوية',
+                                    value: '$activeMedications',
+                                    icon: Iconsax.book,
+                                    color: Colors.white,
+                                  ),
                                 ),
-                                const SizedBox(height: 14),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _SummaryBox(
-                                        title: 'الأدوية',
-                                        value: '$activeMedications',
-                                        icon: Iconsax.book,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: _SummaryBox(
-                                        title: 'المواعيد',
-                                        value: '$activeAppointments',
-                                        icon: Iconsax.calendar_1,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: _SummaryBox(
-                                        title: 'السجل',
-                                        value: '$logsCount',
-                                        icon: Iconsax.note_1,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: _SummaryBox(
+                                    title: 'المواعيد',
+                                    value: '$activeAppointments',
+                                    icon: Iconsax.calendar_1,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: _SummaryBox(
+                                    title: 'السجل',
+                                    value: '$logsCount',
+                                    icon: Iconsax.note_1,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ],
                             ),
                           );
                         }),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 9),
                       Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 20),
+                        margin: const EdgeInsets.symmetric(horizontal: 14),
                         decoration: BoxDecoration(
                           color: rLightColor,
                           borderRadius: BorderRadius.circular(16),
@@ -188,8 +166,7 @@ class RemindersPage extends StatelessWidget {
                           indicatorSize: TabBarIndicatorSize.tab,
                           indicator: BoxDecoration(
                             color: Colors.white,
-                            borderRadius:
-                            BorderRadius.all(Radius.circular(14)),
+                            borderRadius: BorderRadius.all(Radius.circular(14)),
                           ),
                           tabs: [
                             Tab(text: 'الأدوية'),
@@ -198,7 +175,7 @@ class RemindersPage extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 8),
                       Expanded(
                         child: TabBarView(
                           children: [
@@ -299,30 +276,28 @@ class _SummaryBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 5),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.16),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: Column(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 21),
-          const SizedBox(height: 8),
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 4),
           Text(
             value,
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.bold,
-              fontSize: 18,
+              fontSize: 13,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(width: 4),
           Text(
             title,
-            style: TextStyle(
-              color: color.withOpacity(0.92),
-              fontSize: 12,
-            ),
+            style: TextStyle(color: color.withOpacity(0.92), fontSize: 9.5),
           ),
         ],
       ),
@@ -384,10 +359,7 @@ class _AddOptionTile extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     subTitle,
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 12.5,
-                    ),
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12.5),
                   ),
                 ],
               ),

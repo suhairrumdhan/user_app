@@ -18,6 +18,8 @@ class BeneficiarySelectorSheet extends StatefulWidget {
   final ValueChanged<BeneficiarySelectionResult>? onSelected;
   final bool showSaveOption;
   final bool initialSaveValue;
+  final String title;
+  final String subtitle;
 
   const BeneficiarySelectorSheet({
     super.key,
@@ -25,6 +27,8 @@ class BeneficiarySelectorSheet extends StatefulWidget {
     this.onSelected,
     this.showSaveOption = true,
     this.initialSaveValue = false,
+    this.title = 'اختيار المستفيد',
+    this.subtitle = 'اختر الشخص الذي تخصه الوصفة أو الطلب',
   });
 
   @override
@@ -46,14 +50,13 @@ class _BeneficiarySelectorSheetState extends State<BeneficiarySelectorSheet> {
   }
 
   void _selectBeneficiary(BeneficiaryModel beneficiary) {
-    Navigator.pop(context);
-
-    widget.onSelected?.call(
-      BeneficiarySelectionResult(
-        beneficiary: beneficiary,
-        savePrescription: _savePrescription,
-      ),
+    final result = BeneficiarySelectionResult(
+      beneficiary: beneficiary,
+      savePrescription: _savePrescription,
     );
+
+    Navigator.pop(context, result);
+    widget.onSelected?.call(result);
   }
 
   @override
@@ -73,14 +76,11 @@ class _BeneficiarySelectorSheetState extends State<BeneficiarySelectorSheet> {
             const SizedBox(height: 16),
             _buildHeader(),
             const SizedBox(height: 8),
-            const Align(
+            Align(
               alignment: Alignment.centerRight,
               child: Text(
-                'اختر الشخص الذي تخصه الوصفة أو الطلب',
-                style: TextStyle(
-                  color: Colors.black54,
-                  fontSize: 13,
-                ),
+                widget.subtitle,
+                style: const TextStyle(color: Colors.black54, fontSize: 13),
               ),
             ),
             const SizedBox(height: 16),
@@ -117,13 +117,13 @@ class _BeneficiarySelectorSheetState extends State<BeneficiarySelectorSheet> {
   }
 
   Widget _buildHeader() {
-    return const Row(
+    return Row(
       children: [
-        Icon(Iconsax.profile_2user, color: primary),
-        SizedBox(width: 8),
+        const Icon(Iconsax.profile_2user, color: primary),
+        const SizedBox(width: 8),
         Text(
-          'لمن هذه الوصفة؟',
-          style: TextStyle(
+          widget.title,
+          style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
             color: primary,
@@ -179,22 +179,10 @@ class _BeneficiarySelectorSheetState extends State<BeneficiarySelectorSheet> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      item.relation,
-                      style: const TextStyle(
-                        color: Colors.black54,
-                        fontSize: 12,
-                      ),
-                    ),
                   ],
                 ),
               ),
-              const Icon(
-                Iconsax.arrow_left_2,
-                color: primary,
-                size: 18,
-              ),
+              const Icon(Iconsax.arrow_left_2, color: primary, size: 18),
             ],
           ),
         ),

@@ -3,15 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:user_application/features/auth/services/user_repository.dart' show UserRepository;
+import '../../../app/core/services/push_notification_service.dart';
 import '../../profile/controllers/user_controller.dart' show UserController;
 import '../../health_records/views/health_info.dart';
 import '../../pharmacy/views/home_page.dart';
 import '../views/welcome_page.dart';
 import '../../profile/models/user_model.dart';
+import 'email_action_service.dart';
+import '../views/email_verification_page.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final EmailActionService _emailActions = EmailActionService();
 
   // ---------- تسجيل مستخدم جديد ----------
   // ---------- تسجيل مستخدم جديد ----------
@@ -52,21 +55,33 @@ class AuthService {
         healthInfoCompleted: false,
       );
 
-      await FirebaseFirestore.instance.collection('users').doc(uid).set(newUser.toJson());
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .set(newUser.toJson());
       final userController = Get.find<UserController>();
       await userController.loadUser(uid);
 
-      if (!context.mounted) return;
-      Get.offAll(() => const HealthInfoScreen());
+      var verificationEmailSent = false;
+      try {
+        await _emailActions.sendVerificationEmail();
+        verificationEmailSent = true;
+      } on FirebaseAuthException catch (e) {
+        debugPrint('تعذر إرسال رسالة تأكيد البريد: ${e.code}');
+      }
 
+      if (!context.mounted) return;
+      Get.offAll(() => EmailVerificationPage(emailSent: verificationEmailSent));
     } on FirebaseAuthException catch (e) {
       String message = "حدث خطأ";
       print('🔥 FirebaseAuthException code: ${e.code}'); // للتتبع
 
       if (e.code == 'email-already-in-use') {
-        message = "❌ هذا البريد الإلكتروني مسجل بالفعل. يرجى استخدام بريد آخر أو تسجيل الدخول";
+        message =
+            "❌ هذا البريد الإلكتروني مسجل بالفعل. يرجى استخدام بريد آخر أو تسجيل الدخول";
       } else if (e.code == 'weak-password') {
-        message = "❌ كلمة المرور ضعيفة جداً. يرجى استخدام كلمة مرور أقوى (أكثر من 6 أحرف، تحتوي على أرقام ورموز وحروف)";
+        message =
+            "❌ كلمة المرور ضعيفة جداً. يرجى استخدام كلمة مرور أقوى (أكثر من 6 أحرف، تحتوي على أرقام ورموز وحروف)";
       } else if (e.code == 'invalid-email') {
         message = "❌ البريد الإلكتروني غير صالح";
       }
@@ -95,7 +110,7 @@ class AuthService {
     }
   }
 
-// تحديث دالة loginWithEmail في AuthService
+  // تحديث دالة loginWithEmail في AuthService
   Future<void> loginWithEmail({
     required BuildContext context,
     required String email,
@@ -119,17 +134,26 @@ class AuthService {
     try {
       print('📧 محاولة تسجيل الدخول للبريد: $email');
 
-      await _auth.signInWithEmailAndPassword(
+      final credential = await _auth.signInWithEmailAndPassword(
         email: email.trim(),
         password: password.trim(),
       );
 
       print('✅ تم تسجيل الدخول بنجاح');
 
-      final user = _auth.currentUser;
+      final user = credential.user;
       if (user != null) {
+        if (EmailActionService.requiresEmailVerification(user)) {
+          if (!context.mounted) return;
+          Get.offAll(() => const EmailVerificationPage());
+          return;
+        }
+
         print('📁 جلب بيانات المستخدم من Firestore...');
-        final doc = await FirebaseFirestore.instance.collection("users").doc(user.uid).get();
+        final doc = await FirebaseFirestore.instance
+            .collection("users")
+            .doc(user.uid)
+            .get();
 
         if (!context.mounted) return;
 
@@ -161,10 +185,12 @@ class AuthService {
         case 'invalid-credential':
         case 'user-not-found':
         case 'wrong-password':
-          message = " البريد الإلكتروني أو كلمة المرور غير صحيحة\n يرجى التأكد من بيانات الدخول";
+          message =
+              " البريد الإلكتروني أو كلمة المرور غير صحيحة\n يرجى التأكد من بيانات الدخول";
           break;
         case 'invalid-email':
-          message = " صيغة البريد الإلكتروني غير صحيحة\n مثال: name@example.com";
+          message =
+              " صيغة البريد الإلكتروني غير صحيحة\n مثال: name@example.com";
           break;
         case 'user-disabled':
           message = " هذا الحساب معطل\n يرجى الاتصال بالدعم الفني";
@@ -173,7 +199,8 @@ class AuthService {
           message = "⚠️ تم تجاوز عدد المحاولات المسموحة\n يرجى المحاولة لاحقاً";
           break;
         case 'network-request-failed':
-          message = "⚠️ مشكلة في الاتصال بالإنترنت\n يرجى التحقق من اتصالك بالإنترنت";
+          message =
+              "⚠️ مشكلة في الاتصال بالإنترنت\n يرجى التحقق من اتصالك بالإنترنت";
           break;
         default:
           message = " خطأ: ${e.message}\n يرجى المحاولة مرة أخرى";
@@ -186,13 +213,14 @@ class AuthService {
             backgroundColor: Colors.red.shade700,
             duration: const Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
       onError?.call(message);
-
-    } catch (e, stackTrace) {
+    } catch (e) {
       print('========================================');
       print(' خطأ غير متوقع:');
       print('نوع الخطأ: ${e.runtimeType}');
@@ -211,17 +239,17 @@ class AuthService {
         );
       }
       onError?.call(message);
-
     } finally {
       setLoading(false);
     }
   }
+
   // ---------- تسجيل الدخول بجوجل ----------
   // ---------- تسجيل الدخول بجوجل (المصلحة) ----------
   Future<void> signInWithGoogle(
-      BuildContext context,
-      Function(bool) setLoading,
-      ) async {
+    BuildContext context,
+    Function(bool) setLoading,
+  ) async {
     setLoading(true);
 
     try {
@@ -230,7 +258,8 @@ class AuthService {
       // ✅ أضف Web Client ID هنا
       final GoogleSignIn googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
-        clientId: '657034913156-sg2ln6ge94ckda9elbsu3qfv1ltejlct.apps.googleusercontent.com',
+        clientId:
+            '657034913156-sg2ln6ge94ckda9elbsu3qfv1ltejlct.apps.googleusercontent.com',
       );
 
       // تسجيل الخروج من أي حساب سابق لضمان ظهور شاشة الاختيار
@@ -255,7 +284,8 @@ class AuthService {
 
       print('✅ تم اختيار الحساب: ${googleUser.email}');
       print('🔐 جاري الحصول على معلومات المصادقة...');
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
@@ -263,7 +293,9 @@ class AuthService {
       );
 
       print('🔥 جاري تسجيل الدخول إلى Firebase...');
-      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      final UserCredential userCredential = await _auth.signInWithCredential(
+        credential,
+      );
       final User? user = userCredential.user;
 
       if (user == null) {
@@ -282,7 +314,10 @@ class AuthService {
       print('✅ تم تسجيل الدخول بنجاح: ${user.uid}');
 
       print('📁 التحقق من وجود المستخدم في Firestore...');
-      final doc = await FirebaseFirestore.instance.collection("users").doc(user.uid).get();
+      final doc = await FirebaseFirestore.instance
+          .collection("users")
+          .doc(user.uid)
+          .get();
 
       if (!doc.exists) {
         print('📝 إنشاء مستخدم جديد في Firestore...');
@@ -324,7 +359,6 @@ class AuthService {
           ),
         );
       }
-
     } on FirebaseAuthException catch (e) {
       print('🔥 FirebaseAuthException في Google Sign-In: ${e.code}');
       print('📝 تفاصيل: ${e.message}');
@@ -332,7 +366,8 @@ class AuthService {
       String message = "";
       switch (e.code) {
         case 'account-exists-with-different-credential':
-          message = "هذا البريد مرتبط بحساب آخر. يرجى تسجيل الدخول باستخدام الطريقة الأخرى.";
+          message =
+              "هذا البريد مرتبط بحساب آخر. يرجى تسجيل الدخول باستخدام الطريقة الأخرى.";
           break;
         case 'invalid-credential':
           message = "بيانات الاعتماد غير صالحة. يرجى المحاولة مرة أخرى.";
@@ -353,7 +388,6 @@ class AuthService {
           ),
         );
       }
-
     } catch (e, stackTrace) {
       print('========================================');
       print('❌ خطأ غير متوقع في Google Sign-In:');
@@ -373,14 +407,15 @@ class AuthService {
           ),
         );
       }
-
     } finally {
       setLoading(false);
     }
   }
+
   // ---------- تسجيل الخروج ----------
   Future<void> signOut() async {
     try {
+      await PushNotificationService.instance.unregisterCurrentDevice();
       await _auth.signOut();
       Get.offAll(() => const WelcomeScreen());
     } catch (e) {

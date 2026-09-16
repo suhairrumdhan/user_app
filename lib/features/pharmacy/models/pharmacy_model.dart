@@ -148,7 +148,11 @@ class PharmacyModel {
 
   String get matchLabel => hasFullMatch ? 'تطابق كامل' : 'تطابق جزئي';
 
-  String get displayDistance => '${distanceKm.toStringAsFixed(1)} كم';
+  bool get hasKnownDistance => distanceKm >= 0;
+
+  String get displayDistance => hasKnownDistance
+      ? '${distanceKm.toStringAsFixed(1)} كم'
+      : 'غير متوفرة';
   String get displayPrice => '${totalEstimatedPrice.toStringAsFixed(2)} د.ل';
 
   bool get hasValidCoordinates => latitude != null && longitude != null;

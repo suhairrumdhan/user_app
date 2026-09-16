@@ -56,65 +56,64 @@ class _ProfileMenuCardState extends State<ProfileMenuCard>
                   ),
                 ],
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: primaryColor.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
+              child: Directionality(
+                textDirection: TextDirection.rtl,
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(widget.icon, size: 22, color: primaryColor),
                     ),
-                    child: Icon(
-                      widget.icon,
-                      size: 22,
-                      color: primaryColor,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.title,
-                          maxLines: 1,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.title,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.subTitle,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.black.withOpacity(0.6),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.subTitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.black.withOpacity(0.6),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  if (widget.expandableChild != null)
-                    AnimatedRotation(
-                      turns: _isExpanded ? 0.5 : 0, // يدور السهم 180°
-                      duration: const Duration(milliseconds: 300),
-                      child: Icon(
+                    const SizedBox(width: 6),
+                    if (widget.expandableChild != null)
+                      AnimatedRotation(
+                        turns: _isExpanded ? 0.5 : 0, // يدور السهم 180°
+                        duration: const Duration(milliseconds: 300),
+                        child: Icon(
+                          Icons.arrow_forward_ios,
+                          size: 18,
+                          color: Colors.black.withOpacity(0.4),
+                        ),
+                      )
+                    else
+                      Icon(
                         Icons.arrow_forward_ios,
                         size: 18,
                         color: Colors.black.withOpacity(0.4),
                       ),
-                    )
-                  else
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 18,
-                      color: Colors.black.withOpacity(0.4),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -124,13 +123,12 @@ class _ProfileMenuCardState extends State<ProfileMenuCard>
           curve: Curves.easeInOut,
           child: _isExpanded
               ? SizedBox(
-            width: double.infinity,
-            height: 300, // مثلا تحدد ارتفاع مناسب للفورم
-            child: widget.expandableChild,
-          )
+                  width: double.infinity,
+                  height: 300, // مثلا تحدد ارتفاع مناسب للفورم
+                  child: widget.expandableChild,
+                )
               : const SizedBox.shrink(),
         ),
-
       ],
     );
   }

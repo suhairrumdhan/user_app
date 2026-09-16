@@ -54,28 +54,33 @@ const AppointmentReminderModelSchema = CollectionSchema(
       type: IsarType.object,
       target: r'ReminderOwnerEmbedded',
     ),
-    r'remindBeforeMinutes': PropertySchema(
+    r'ownerUserId': PropertySchema(
       id: 7,
+      name: r'ownerUserId',
+      type: IsarType.string,
+    ),
+    r'remindBeforeMinutes': PropertySchema(
+      id: 8,
       name: r'remindBeforeMinutes',
       type: IsarType.long,
     ),
     r'saveToHealthRecord': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'saveToHealthRecord',
       type: IsarType.bool,
     ),
     r'status': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'status',
       type: IsarType.string,
     ),
     r'title': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'title',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -86,6 +91,19 @@ const AppointmentReminderModelSchema = CollectionSchema(
   deserializeProp: _appointmentReminderModelDeserializeProp,
   idName: r'id',
   indexes: {
+    r'ownerUserId': IndexSchema(
+      id: 1631799950038639233,
+      name: r'ownerUserId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'ownerUserId',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'title': IndexSchema(
       id: -7636685945352118059,
       name: r'title',
@@ -142,6 +160,7 @@ int _appointmentReminderModelEstimateSize(
   bytesCount += 3 +
       ReminderOwnerEmbeddedSchema.estimateSize(
           object.owner, allOffsets[ReminderOwnerEmbedded]!, allOffsets);
+  bytesCount += 3 + object.ownerUserId.length * 3;
   bytesCount += 3 + object.status.length * 3;
   bytesCount += 3 + object.title.length * 3;
   return bytesCount;
@@ -165,11 +184,12 @@ void _appointmentReminderModelSerialize(
     ReminderOwnerEmbeddedSchema.serialize,
     object.owner,
   );
-  writer.writeLong(offsets[7], object.remindBeforeMinutes);
-  writer.writeBool(offsets[8], object.saveToHealthRecord);
-  writer.writeString(offsets[9], object.status);
-  writer.writeString(offsets[10], object.title);
-  writer.writeDateTime(offsets[11], object.updatedAt);
+  writer.writeString(offsets[7], object.ownerUserId);
+  writer.writeLong(offsets[8], object.remindBeforeMinutes);
+  writer.writeBool(offsets[9], object.saveToHealthRecord);
+  writer.writeString(offsets[10], object.status);
+  writer.writeString(offsets[11], object.title);
+  writer.writeDateTime(offsets[12], object.updatedAt);
 }
 
 AppointmentReminderModel _appointmentReminderModelDeserialize(
@@ -191,11 +211,12 @@ AppointmentReminderModel _appointmentReminderModelDeserialize(
         allOffsets,
       ) ??
       ReminderOwnerEmbedded();
-  object.remindBeforeMinutes = reader.readLong(offsets[7]);
-  object.saveToHealthRecord = reader.readBool(offsets[8]);
-  object.status = reader.readString(offsets[9]);
-  object.title = reader.readString(offsets[10]);
-  object.updatedAt = reader.readDateTimeOrNull(offsets[11]);
+  object.ownerUserId = reader.readString(offsets[7]);
+  object.remindBeforeMinutes = reader.readLong(offsets[8]);
+  object.saveToHealthRecord = reader.readBool(offsets[9]);
+  object.status = reader.readString(offsets[10]);
+  object.title = reader.readString(offsets[11]);
+  object.updatedAt = reader.readDateTimeOrNull(offsets[12]);
   return object;
 }
 
@@ -226,14 +247,16 @@ P _appointmentReminderModelDeserializeProp<P>(
           ) ??
           ReminderOwnerEmbedded()) as P;
     case 7:
-      return (reader.readLong(offset)) as P;
-    case 8:
-      return (reader.readBool(offset)) as P;
-    case 9:
       return (reader.readString(offset)) as P;
+    case 8:
+      return (reader.readLong(offset)) as P;
+    case 9:
+      return (reader.readBool(offset)) as P;
     case 10:
       return (reader.readString(offset)) as P;
     case 11:
+      return (reader.readString(offset)) as P;
+    case 12:
       return (reader.readDateTimeOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -331,6 +354,51 @@ extension AppointmentReminderModelQueryWhere on QueryBuilder<
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel,
+      QAfterWhereClause> ownerUserIdEqualTo(String ownerUserId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'ownerUserId',
+        value: [ownerUserId],
+      ));
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel,
+      QAfterWhereClause> ownerUserIdNotEqualTo(String ownerUserId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'ownerUserId',
+              lower: [],
+              upper: [ownerUserId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'ownerUserId',
+              lower: [ownerUserId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'ownerUserId',
+              lower: [ownerUserId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'ownerUserId',
+              lower: [],
+              upper: [ownerUserId],
+              includeUpper: false,
+            ));
+      }
     });
   }
 
@@ -992,6 +1060,144 @@ extension AppointmentReminderModelQueryFilter on QueryBuilder<
   }
 
   QueryBuilder<AppointmentReminderModel, AppointmentReminderModel,
+      QAfterFilterCondition> ownerUserIdEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel,
+      QAfterFilterCondition> ownerUserIdGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel,
+      QAfterFilterCondition> ownerUserIdLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel,
+      QAfterFilterCondition> ownerUserIdBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'ownerUserId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel,
+      QAfterFilterCondition> ownerUserIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel,
+      QAfterFilterCondition> ownerUserIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel,
+          QAfterFilterCondition>
+      ownerUserIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'ownerUserId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel,
+          QAfterFilterCondition>
+      ownerUserIdMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'ownerUserId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel,
+      QAfterFilterCondition> ownerUserIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'ownerUserId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel,
+      QAfterFilterCondition> ownerUserIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'ownerUserId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel,
       QAfterFilterCondition> remindBeforeMinutesEqualTo(int value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -1508,6 +1714,20 @@ extension AppointmentReminderModelQuerySortBy on QueryBuilder<
   }
 
   QueryBuilder<AppointmentReminderModel, AppointmentReminderModel, QAfterSortBy>
+      sortByOwnerUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'ownerUserId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel, QAfterSortBy>
+      sortByOwnerUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'ownerUserId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel, QAfterSortBy>
       sortByRemindBeforeMinutes() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'remindBeforeMinutes', Sort.asc);
@@ -1679,6 +1899,20 @@ extension AppointmentReminderModelQuerySortThenBy on QueryBuilder<
   }
 
   QueryBuilder<AppointmentReminderModel, AppointmentReminderModel, QAfterSortBy>
+      thenByOwnerUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'ownerUserId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel, QAfterSortBy>
+      thenByOwnerUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'ownerUserId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel, QAfterSortBy>
       thenByRemindBeforeMinutes() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'remindBeforeMinutes', Sort.asc);
@@ -1794,6 +2028,13 @@ extension AppointmentReminderModelQueryWhereDistinct on QueryBuilder<
   }
 
   QueryBuilder<AppointmentReminderModel, AppointmentReminderModel, QDistinct>
+      distinctByOwnerUserId({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'ownerUserId', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, AppointmentReminderModel, QDistinct>
       distinctByRemindBeforeMinutes() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'remindBeforeMinutes');
@@ -1883,6 +2124,13 @@ extension AppointmentReminderModelQueryProperty on QueryBuilder<
       QQueryOperations> ownerProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'owner');
+    });
+  }
+
+  QueryBuilder<AppointmentReminderModel, String, QQueryOperations>
+      ownerUserIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'ownerUserId');
     });
   }
 

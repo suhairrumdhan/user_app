@@ -47,14 +47,20 @@ class ChatListItem extends StatelessWidget {
 
   Color _statusColor(String status) {
     switch (status) {
+      case 'received':
       case 'pending':
         return Colors.orange;
+      case 'underReview':
       case 'reviewing':
         return Colors.deepOrange;
+      case 'confirmedReserved':
       case 'confirmed':
         return Colors.green;
+      case 'partialOfferPending':
       case 'partiallyConfirmed':
         return Colors.teal;
+      case 'preparing':
+        return Colors.deepPurple;
       case 'rejected':
         return Colors.red;
       case 'ready':
@@ -63,21 +69,27 @@ class ChatListItem extends StatelessWidget {
         return Colors.blueGrey;
       case 'cancelled':
         return Colors.redAccent;
+      case 'notCollected':
+        return Colors.brown;
       default:
         return primaryColor;
     }
   }
 
   bool _isLockedStatus(String status) {
-    return status == 'completed' || status == 'cancelled';
+    return status == 'completed' ||
+        status == 'cancelled' ||
+        status == 'rejected' ||
+        status == 'notCollected';
   }
 
   @override
   Widget build(BuildContext context) {
     return Dismissible(
       key: Key(thread.chatId),
-      direction:
-      onDelete == null ? DismissDirection.none : DismissDirection.endToStart,
+      direction: onDelete == null
+          ? DismissDirection.none
+          : DismissDirection.endToStart,
       onDismissed: (_) => onDelete?.call(),
       background: Container(
         margin: const EdgeInsets.symmetric(vertical: 4),
@@ -117,14 +129,17 @@ class ChatListItem extends StatelessWidget {
 
                 final bool useFallback = pharmacy == null;
 
-                final pharmacyName =
-                useFallback ? thread.pharmacyName : pharmacy.displayName;
+                final pharmacyName = useFallback
+                    ? thread.pharmacyName
+                    : pharmacy.displayName;
 
-                final pharmacyImageUrl =
-                useFallback ? thread.pharmacyImageUrl : pharmacy.imageUrl;
+                final pharmacyImageUrl = useFallback
+                    ? thread.pharmacyImageUrl
+                    : pharmacy.imageUrl;
 
-                final pharmacyIsOnline =
-                useFallback ? thread.pharmacyIsOnline : pharmacy.isOnline;
+                final pharmacyIsOnline = useFallback
+                    ? thread.pharmacyIsOnline
+                    : pharmacy.isOnline;
 
                 final hasImage = pharmacyImageUrl.trim().isNotEmpty;
 
@@ -135,8 +150,9 @@ class ChatListItem extends StatelessWidget {
                         CircleAvatar(
                           radius: 25,
                           backgroundColor: const Color(0xFFF4F8FC),
-                          backgroundImage:
-                          hasImage ? NetworkImage(pharmacyImageUrl) : null,
+                          backgroundImage: hasImage
+                              ? NetworkImage(pharmacyImageUrl)
+                              : null,
                           child: !hasImage
                               ? Icon(Icons.local_pharmacy, color: primaryColor)
                               : null,
@@ -151,8 +167,10 @@ class ChatListItem extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: Colors.green,
                                 shape: BoxShape.circle,
-                                border:
-                                Border.all(color: Colors.white, width: 2),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
                               ),
                             ),
                           ),
@@ -171,7 +189,7 @@ class ChatListItem extends StatelessWidget {
                           final statusColor = _statusColor(status);
                           final isLocked = _isLockedStatus(status);
                           final orderNumberText =
-                          order?.orderNumber?.trim().isNotEmpty == true
+                              order?.orderNumber?.trim().isNotEmpty == true
                               ? 'طلب #${order!.orderNumber}'
                               : 'طلب';
 
@@ -208,7 +226,7 @@ class ChatListItem extends StatelessWidget {
                                     const SizedBox(height: 6),
                                     Text(
                                       thread.beneficiaryName.isNotEmpty
-                                          ? '${thread.beneficiaryName} • ${thread.relationLabel}'
+                                          ? thread.beneficiaryName
                                           : 'المستفيد غير محدد',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -238,9 +256,12 @@ class ChatListItem extends StatelessWidget {
                                             vertical: 5,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: statusColor.withOpacity(0.10),
-                                            borderRadius:
-                                            BorderRadius.circular(999),
+                                            color: statusColor.withOpacity(
+                                              0.10,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
                                           ),
                                           child: Text(
                                             statusLabel,
@@ -261,7 +282,7 @@ class ChatListItem extends StatelessWidget {
                                             decoration: BoxDecoration(
                                               color: Colors.grey.shade100,
                                               borderRadius:
-                                              BorderRadius.circular(999),
+                                                  BorderRadius.circular(999),
                                             ),
                                             child: Row(
                                               mainAxisSize: MainAxisSize.min,
@@ -320,15 +341,16 @@ class ChatListItem extends StatelessWidget {
                                       ),
                                       decoration: BoxDecoration(
                                         color: primaryColor,
-                                        borderRadius:
-                                        BorderRadius.circular(999),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
                                       ),
                                       child: Center(
                                         child: Text(
                                           thread.userUnreadCount > 99
                                               ? '99+'
                                               : thread.userUnreadCount
-                                              .toString(),
+                                                    .toString(),
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 10,

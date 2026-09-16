@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart' show Colors;
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:user_application/features/profile/models/user_model.dart';
@@ -39,7 +38,8 @@ class UserController extends GetxController {
     try {
       isLoading.value = true;
       UserModel? fetchedUser = await _userRepo.getUser(uid);
-      if (fetchedUser != null) {
+      if (fetchedUser != null &&
+          FirebaseAuth.instance.currentUser?.uid == uid) {
         user.value = fetchedUser;
         print('✅ تم تحميل بيانات المستخدم بنجاح');
       } else {
@@ -109,7 +109,8 @@ class UserController extends GetxController {
         final updatedUser = user.value!.copyWith(
           healthConditions: healthConditions ?? user.value!.healthConditions,
           allergies: allergies ?? user.value!.allergies,
-          currentMedications: currentMedications ?? user.value!.currentMedications,
+          currentMedications:
+              currentMedications ?? user.value!.currentMedications,
         );
 
         user.value = updatedUser;
@@ -238,7 +239,10 @@ class UserController extends GetxController {
       final userId = user.value!.id;
 
       // رفع الصورة
-      final String? imageUrl = await ImageUploadService().uploadProfileImage(imageFile, userId);
+      final String? imageUrl = await ImageUploadService().uploadProfileImage(
+        imageFile,
+        userId,
+      );
 
       if (imageUrl != null) {
         // تحديث بيانات المستخدم
@@ -303,7 +307,10 @@ class UserController extends GetxController {
       }
 
       // رفع الصورة إلى Firebase Storage
-      final String? imageUrl = await ImageUploadService().uploadProfileImage(newImage, userId);
+      final String? imageUrl = await ImageUploadService().uploadProfileImage(
+        newImage,
+        userId,
+      );
 
       if (imageUrl != null) {
         // تحديث بيانات المستخدم في Firestore
@@ -348,7 +355,10 @@ class UserController extends GetxController {
       }
 
       // رفع الصورة إلى Firebase Storage
-      final String? imageUrl = await ImageUploadService().uploadProfileImage(capturedImage, userId);
+      final String? imageUrl = await ImageUploadService().uploadProfileImage(
+        capturedImage,
+        userId,
+      );
 
       if (imageUrl != null) {
         // تحديث بيانات المستخدم في Firestore

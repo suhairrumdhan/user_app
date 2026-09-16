@@ -10,6 +10,7 @@ import '../../../app/controllers/main_navigation_controller.dart';
 import '../../../app/core/utils/location_utils.dart';
 import '../../../app/core/widgets/custom_bottom_navigation_bar.dart';
 import '../../chat/views/chats_screen.dart';
+import '../../notifications/services/notifications_service.dart';
 import '../../notifications/views/notifications_page.dart';
 import '../../orders/views/orders_page.dart';
 import '../../profile/views/profile_page.dart';
@@ -33,7 +34,22 @@ class _HomePageState extends State<HomePage> {
   double _selectedDistance = 4.0;
 
   final MainNavigationController _navController =
-  Get.find<MainNavigationController>();
+      Get.find<MainNavigationController>();
+
+  void _onBottomNavigationTap(int index) {
+    _navController.changeIndex(index);
+    if (index == 3) {
+      unawaited(_markNotificationsAsSeen());
+    }
+  }
+
+  Future<void> _markNotificationsAsSeen() async {
+    try {
+      await NotificationsService().markAllAsSeen();
+    } catch (error) {
+      debugPrint('Failed to clear notification badge: $error');
+    }
+  }
 
   StreamSubscription<Position>? _positionStream;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
@@ -50,21 +66,26 @@ class _HomePageState extends State<HomePage> {
     await _refreshLocation();
     await _startLiveLocation();
   }
-  Future<PharmacyModel> _pharmacyFromDocWithBusinessHours(
-      DocumentSnapshot<Map<String, dynamic>> doc,
-      ) async {
-    final hoursDoc = await FirebaseFirestore.instance
-        .collection('pharmacies')
-        .doc(doc.id)
-        .collection('settings')
-        .doc('businessHours')
-        .get();
 
-    return PharmacyModel.fromFirestore(
-      doc,
-      workingHours: hoursDoc.data(),
-    );
+  Future<PharmacyModel> _pharmacyFromDocWithBusinessHours(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
+    try {
+      final hoursDoc = await FirebaseFirestore.instance
+          .collection('pharmacies')
+          .doc(doc.id)
+          .collection('settings')
+          .doc('businessHours')
+          .get();
+
+      return PharmacyModel.fromFirestore(doc, workingHours: hoursDoc.data());
+    } catch (error) {
+      // The pharmacy may be cached even when its settings document is not.
+      debugPrint('Business hours unavailable for ${doc.id}: $error');
+      return PharmacyModel.fromFirestore(doc);
+    }
   }
+
   Future<void> _listenToPharmacies() async {
     await _pharmaciesSubscription?.cancel();
 
@@ -74,45 +95,49 @@ class _HomePageState extends State<HomePage> {
         .snapshots()
         .listen(
           (snapshot) async {
-        final pharmacies = await Future.wait(
-          snapshot.docs.map((doc) => _pharmacyFromDocWithBusinessHours(doc)),
+            final pharmacies = await Future.wait(
+              snapshot.docs.map(
+                (doc) => _pharmacyFromDocWithBusinessHours(doc),
+              ),
+            );
+
+            final pharmaciesWithDistance = _currentPosition == null
+                ? pharmacies
+                : _attachDistances(
+                    pharmacies: pharmacies,
+                    currentPosition: _currentPosition!,
+                  );
+
+            final filtered =
+                _currentPosition == null
+                      ? <PharmacyModel>[]
+                      : pharmaciesWithDistance.where((pharmacy) {
+                          final distance = pharmacy.distance;
+                          if (distance == null) return false;
+                          return (distance / 1000) <= _selectedDistance;
+                        }).toList()
+                  ..sort(
+                    (a, b) => (a.distance ?? double.infinity).compareTo(
+                      b.distance ?? double.infinity,
+                    ),
+                  );
+
+            if (!mounted) return;
+
+            setState(() {
+              _allPharmacies = pharmaciesWithDistance;
+              _filteredPharmacies = filtered;
+              _isLocationLoading = false;
+            });
+          },
+          onError: (error) {
+            debugPrint('Error listening to pharmacies: $error');
+            if (!mounted) return;
+            setState(() {
+              _isLocationLoading = false;
+            });
+          },
         );
-
-        final pharmaciesWithDistance = _currentPosition == null
-            ? pharmacies
-            : _attachDistances(
-          pharmacies: pharmacies,
-          currentPosition: _currentPosition!,
-        );
-
-        final filtered = _currentPosition == null
-            ? <PharmacyModel>[]
-            : pharmaciesWithDistance.where((pharmacy) {
-          final distance = pharmacy.distance;
-          if (distance == null) return false;
-          return (distance / 1000) <= _selectedDistance;
-        }).toList()
-          ..sort(
-                (a, b) => (a.distance ?? double.infinity)
-                .compareTo(b.distance ?? double.infinity),
-          );
-
-        if (!mounted) return;
-
-        setState(() {
-          _allPharmacies = pharmaciesWithDistance;
-          _filteredPharmacies = filtered;
-          _isLocationLoading = false;
-        });
-      },
-      onError: (error) {
-        debugPrint('Error listening to pharmacies: $error');
-        if (!mounted) return;
-        setState(() {
-          _isLocationLoading = false;
-        });
-      },
-    );
   }
 
   List<PharmacyModel> _attachDistances({
@@ -137,16 +162,17 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _filterPharmaciesByDistance(double maxDistanceInKm) {
-    final filtered = _allPharmacies.where((pharmacy) {
-      final distance = pharmacy.distance;
-      if (distance == null) return false;
+    final filtered =
+        _allPharmacies.where((pharmacy) {
+          final distance = pharmacy.distance;
+          if (distance == null) return false;
 
-      return (distance / 1000) <= maxDistanceInKm;
-    }).toList()
-      ..sort(
-            (a, b) => (a.distance ?? double.infinity)
-            .compareTo(b.distance ?? double.infinity),
-      );
+          return (distance / 1000) <= maxDistanceInKm;
+        }).toList()..sort(
+          (a, b) => (a.distance ?? double.infinity).compareTo(
+            b.distance ?? double.infinity,
+          ),
+        );
 
     setState(() {
       _selectedDistance = maxDistanceInKm;
@@ -160,15 +186,16 @@ class _HomePageState extends State<HomePage> {
       currentPosition: position,
     );
 
-    final filtered = pharmaciesWithDistance.where((pharmacy) {
-      final distance = pharmacy.distance;
-      if (distance == null) return false;
-      return (distance / 1000) <= _selectedDistance;
-    }).toList()
-      ..sort(
-            (a, b) => (a.distance ?? double.infinity)
-            .compareTo(b.distance ?? double.infinity),
-      );
+    final filtered =
+        pharmaciesWithDistance.where((pharmacy) {
+          final distance = pharmacy.distance;
+          if (distance == null) return false;
+          return (distance / 1000) <= _selectedDistance;
+        }).toList()..sort(
+          (a, b) => (a.distance ?? double.infinity).compareTo(
+            b.distance ?? double.infinity,
+          ),
+        );
 
     if (!mounted) return;
 
@@ -217,40 +244,41 @@ class _HomePageState extends State<HomePage> {
 
     _positionStream?.cancel();
 
-    _positionStream = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 30,
-      ),
-    ).listen(
+    _positionStream =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 30,
+          ),
+        ).listen(
           (Position position) async {
-        final current = LatLng(position.latitude, position.longitude);
+            final current = LatLng(position.latitude, position.longitude);
 
-        if (_currentPosition != null) {
-          final movedMeters = LocationUtils.calculateDistance(
-            _currentPosition!,
-            current,
-          );
+            if (_currentPosition != null) {
+              final movedMeters = LocationUtils.calculateDistance(
+                _currentPosition!,
+                current,
+              );
 
-          if (movedMeters < 15) return;
-        }
+              if (movedMeters < 15) return;
+            }
 
-        try {
-          await _updateCurrentLocationAndPharmacies(current);
-        } catch (e) {
-          debugPrint('Error updating live location: $e');
-          if (mounted) {
-            setState(() => _isLocationLoading = false);
-          }
-        }
-      },
-      onError: (error) {
-        debugPrint('Location stream error: $error');
-        if (mounted) {
-          setState(() => _isLocationLoading = false);
-        }
-      },
-    );
+            try {
+              await _updateCurrentLocationAndPharmacies(current);
+            } catch (e) {
+              debugPrint('Error updating live location: $e');
+              if (mounted) {
+                setState(() => _isLocationLoading = false);
+              }
+            }
+          },
+          onError: (error) {
+            debugPrint('Location stream error: $error');
+            if (mounted) {
+              setState(() => _isLocationLoading = false);
+            }
+          },
+        );
   }
 
   Future<void> _refreshLocation() async {
@@ -319,14 +347,19 @@ class _HomePageState extends State<HomePage> {
     return Obx(() {
       final currentIndex = _navController.currentIndex.value;
 
-      return Scaffold(
-        body: IndexedStack(
-          index: currentIndex,
-          children: pages,
-        ),
-        bottomNavigationBar: CustomBottomNavigationBar(
-          currentIndex: currentIndex,
-          onTap: _navController.changeIndex,
+      return PopScope(
+        canPop: currentIndex == 0,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && currentIndex != 0) {
+            _navController.goHome();
+          }
+        },
+        child: Scaffold(
+          body: IndexedStack(index: currentIndex, children: pages),
+          bottomNavigationBar: CustomBottomNavigationBar(
+            currentIndex: currentIndex,
+            onTap: _onBottomNavigationTap,
+          ),
         ),
       );
     });

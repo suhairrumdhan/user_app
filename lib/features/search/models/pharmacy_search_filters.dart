@@ -9,7 +9,7 @@ class PharmacySearchFilters {
   final double? maxPrice;
 
   const PharmacySearchFilters({
-    this.maxDistanceKm = 5,
+    this.maxDistanceKm = 4,
     this.insuranceOnly = false,
     this.availableNowOnly = false,
     this.fullMatchOnly = false,
@@ -28,6 +28,8 @@ class PharmacySearchFilters {
     String? sortBy,
     double? minPrice,
     double? maxPrice,
+    bool clearMinPrice = false,
+    bool clearMaxPrice = false,
   }) {
     return PharmacySearchFilters(
       maxDistanceKm: maxDistanceKm ?? this.maxDistanceKm,
@@ -36,8 +38,8 @@ class PharmacySearchFilters {
       fullMatchOnly: fullMatchOnly ?? this.fullMatchOnly,
       alternativesAllowed: alternativesAllowed ?? this.alternativesAllowed,
       sortBy: sortBy ?? this.sortBy,
-      minPrice: minPrice ?? this.minPrice,
-      maxPrice: maxPrice ?? this.maxPrice,
+      minPrice: clearMinPrice ? null : minPrice ?? this.minPrice,
+      maxPrice: clearMaxPrice ? null : maxPrice ?? this.maxPrice,
     );
   }
 }

@@ -11,9 +11,7 @@ import '../services/chat_upload_service.dart';
 class ChatDetailController extends GetxController {
   final ChatThread thread;
 
-  ChatDetailController({
-    required this.thread,
-  });
+  ChatDetailController({required this.thread});
 
   final ChatService _chatService = ChatService.instance;
   final ChatUploadService _uploadService = ChatUploadService.instance;
@@ -52,10 +50,7 @@ class ChatDetailController extends GetxController {
 
     try {
       isSending.value = true;
-      await _chatService.sendTextMessage(
-        chatId: thread.chatId,
-        text: text,
-      );
+      await _chatService.sendTextMessage(chatId: thread.chatId, text: text);
       messageController.clear();
       scrollToBottom();
     } finally {
@@ -81,6 +76,8 @@ class ChatDetailController extends GetxController {
         imageUrl: uploaded.url,
       );
       scrollToBottom();
+    } catch (error, stackTrace) {
+      _handleAttachmentError(error, stackTrace, attachmentType: 'الصورة');
     } finally {
       isUploading.value = false;
     }
@@ -108,9 +105,43 @@ class ChatDetailController extends GetxController {
         fileSizeBytes: uploaded.sizeBytes,
       );
       scrollToBottom();
+    } catch (error, stackTrace) {
+      _handleAttachmentError(error, stackTrace, attachmentType: 'الملف');
     } finally {
       isUploading.value = false;
     }
+  }
+
+  void _handleAttachmentError(
+    Object error,
+    StackTrace stackTrace, {
+    required String attachmentType,
+  }) {
+    debugPrint('Failed to attach $attachmentType: $error');
+    debugPrintStack(stackTrace: stackTrace);
+
+    final rawError = error.toString().toLowerCase();
+    final message =
+        rawError.contains('network') ||
+            rawError.contains('connection') ||
+            rawError.contains('unavailable')
+        ? 'تعذر رفع $attachmentType. تحقق من اتصال الإنترنت وحاول مرة أخرى.'
+        : rawError.contains('permission') ||
+              rawError.contains('unauthorized') ||
+              rawError.contains('denied')
+        ? 'لا توجد صلاحية كافية لإرفاق $attachmentType.'
+        : rawError.contains('path is missing') || rawError.contains('not found')
+        ? 'تعذر الوصول إلى $attachmentType المحدد. اختره مرة أخرى.'
+        : 'حدث خطأ أثناء إرفاق $attachmentType. حاول مرة أخرى.';
+
+    Get.snackbar(
+      'تعذر إرسال المرفق',
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.red.shade700,
+      colorText: Colors.white,
+      margin: const EdgeInsets.all(12),
+    );
   }
 
   void scrollToBottom() {

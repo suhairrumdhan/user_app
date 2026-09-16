@@ -7,6 +7,9 @@ part 'medication_reminder_model.g.dart';
 class MedicationReminderModel {
   Id id = Isar.autoIncrement;
 
+  @Index(caseSensitive: true)
+  String ownerUserId = '';
+
   @Index(caseSensitive: false)
   late String medicineName;
 

@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:user_application/features/reminders/widgets/reminder_section_header.dart';
 
 import '../controllers/reminders_controller.dart';
 import '../data/models/appointment_reminder_model.dart';
 import '../views/reminder_details_page.dart';
-import 'action_sheet.dart';
 import 'reminder_card.dart';
 
 class AppointmentCard extends StatelessWidget {
@@ -32,7 +30,7 @@ class AppointmentCard extends StatelessWidget {
           : Colors.orange.withOpacity(0.18),
       onTap: () {
         Get.to(
-              () => ReminderDetailsPage(
+          () => ReminderDetailsPage(
             reminderId: reminder.id,
             reminderType: 'appointment',
           ),
@@ -43,20 +41,20 @@ class AppointmentCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
                   color: isActive
                       ? rWarningColor.withOpacity(0.10)
                       : Colors.grey.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(11),
                 ),
                 child: Icon(
                   Iconsax.calendar_1,
                   color: isActive ? rWarningColor : Colors.black45,
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,18 +62,15 @@ class AppointmentCard extends StatelessWidget {
                     Text(
                       reminder.title,
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF2C3E50),
                       ),
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 2),
                     Text(
                       _formatDateTime(reminder.appointmentDateTime),
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 12.5,
-                      ),
+                      style: TextStyle(color: Colors.grey[600], fontSize: 11),
                     ),
                   ],
                 ),
@@ -95,7 +90,7 @@ class AppointmentCard extends StatelessWidget {
                       break;
                     case 'details':
                       Get.to(
-                            () => ReminderDetailsPage(
+                        () => ReminderDetailsPage(
                           reminderId: reminder.id,
                           reminderType: 'appointment',
                         ),
@@ -112,21 +107,18 @@ class AppointmentCard extends StatelessWidget {
                     value: 'details',
                     child: Text('عرض التفاصيل'),
                   ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('حذف'),
-                  ),
+                  const PopupMenuItem(value: 'delete', child: Text('حذف')),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 9),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
             decoration: BoxDecoration(
               color: const Color(0xFFF5FBFF),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: rPrimaryColor.withOpacity(0.08)),
             ),
             child: Column(
@@ -134,9 +126,9 @@ class AppointmentCard extends StatelessWidget {
                 _InfoRow(
                   icon: Iconsax.profile_2user,
                   title: 'المستفيد',
-                  value: '${reminder.owner.name} • ${reminder.owner.relation}',
+                  value: reminder.owner.name,
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
                 _InfoRow(
                   icon: Iconsax.notification_bing,
                   title: 'التذكير قبل',
@@ -144,7 +136,7 @@ class AppointmentCard extends StatelessWidget {
                 ),
                 if (reminder.location != null &&
                     reminder.location!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   _InfoRow(
                     icon: Iconsax.location,
                     title: 'المكان',
@@ -152,19 +144,6 @@ class AppointmentCard extends StatelessWidget {
                   ),
                 ],
               ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () => ReminderActionSheet.showForAppointment(
-                context: context,
-                reminder: reminder,
-                controller: controller,
-              ),
-              icon: const Icon(Iconsax.more, size: 16),
-              label: const Text('خيارات أكثر'),
             ),
           ),
         ],

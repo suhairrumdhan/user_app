@@ -1,86 +1,159 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum OrderStatus {
-  pending,
-  reviewing,
-  confirmed,
-  partiallyConfirmed,
-  rejected,
+  received,
+  underReview,
+  partialOfferPending,
+  confirmedReserved,
+  preparing,
   ready,
   completed,
   cancelled,
+  rejected,
+  notCollected,
+  unknown,
 }
 
 extension OrderStatusX on OrderStatus {
+  bool canTransitionTo(OrderStatus next, {required String actorType}) {
+    if (actorType == 'user') {
+      if (this == OrderStatus.partialOfferPending &&
+          next == OrderStatus.confirmedReserved) {
+        return true;
+      }
+      if (this == OrderStatus.received && next == OrderStatus.underReview) {
+        return true;
+      }
+      return next == OrderStatus.cancelled &&
+          (this == OrderStatus.received ||
+              this == OrderStatus.underReview ||
+              this == OrderStatus.partialOfferPending ||
+              this == OrderStatus.confirmedReserved);
+    }
+
+    if (actorType == 'system') {
+      return this == OrderStatus.received && next == OrderStatus.underReview;
+    }
+    if (actorType != 'pharmacy') return false;
+
+    switch (this) {
+      case OrderStatus.received:
+        return false;
+      case OrderStatus.underReview:
+        return next == OrderStatus.confirmedReserved ||
+            next == OrderStatus.partialOfferPending ||
+            next == OrderStatus.rejected;
+      case OrderStatus.partialOfferPending:
+        return next == OrderStatus.partialOfferPending;
+      case OrderStatus.confirmedReserved:
+        return next == OrderStatus.preparing ||
+            next == OrderStatus.partialOfferPending;
+      case OrderStatus.preparing:
+        return next == OrderStatus.ready || next == OrderStatus.cancelled;
+      case OrderStatus.ready:
+        return next == OrderStatus.completed ||
+            next == OrderStatus.cancelled ||
+            next == OrderStatus.notCollected;
+      case OrderStatus.completed:
+      case OrderStatus.cancelled:
+      case OrderStatus.rejected:
+      case OrderStatus.notCollected:
+      case OrderStatus.unknown:
+        return false;
+    }
+  }
+
   String get value {
     switch (this) {
-      case OrderStatus.pending:
-        return 'pending';
-      case OrderStatus.reviewing:
-        return 'reviewing';
-      case OrderStatus.confirmed:
-        return 'confirmed';
-      case OrderStatus.partiallyConfirmed:
-        return 'partiallyConfirmed';
-      case OrderStatus.rejected:
-        return 'rejected';
+      case OrderStatus.received:
+        return 'received';
+      case OrderStatus.underReview:
+        return 'underReview';
+      case OrderStatus.partialOfferPending:
+        return 'partialOfferPending';
+      case OrderStatus.confirmedReserved:
+        return 'confirmedReserved';
+      case OrderStatus.preparing:
+        return 'preparing';
       case OrderStatus.ready:
         return 'ready';
       case OrderStatus.completed:
         return 'completed';
       case OrderStatus.cancelled:
         return 'cancelled';
+      case OrderStatus.rejected:
+        return 'rejected';
+      case OrderStatus.notCollected:
+        return 'notCollected';
+      case OrderStatus.unknown:
+        return 'unknown';
     }
   }
 
   static OrderStatus fromValue(String? value) {
     switch (value) {
+      case 'underReview':
       case 'reviewing':
-        return OrderStatus.reviewing;
+        return OrderStatus.underReview;
+      case 'confirmedReserved':
       case 'confirmed':
-        return OrderStatus.confirmed;
+      case 'accepted':
+        return OrderStatus.confirmedReserved;
+      case 'partialOfferPending':
       case 'partiallyConfirmed':
-        return OrderStatus.partiallyConfirmed;
-      case 'rejected':
-        return OrderStatus.rejected;
+      case 'partially_confirmed':
+        return OrderStatus.partialOfferPending;
+      case 'preparing':
+        return OrderStatus.preparing;
       case 'ready':
         return OrderStatus.ready;
       case 'completed':
+      case 'delivered':
         return OrderStatus.completed;
       case 'cancelled':
+      case 'canceled':
         return OrderStatus.cancelled;
+      case 'rejected':
+        return OrderStatus.rejected;
+      case 'notCollected':
+        return OrderStatus.notCollected;
+      case 'received':
       case 'pending':
+        return OrderStatus.received;
       default:
-        return OrderStatus.pending;
+        return OrderStatus.unknown;
     }
   }
 
   String get label {
     switch (this) {
-      case OrderStatus.pending:
-        return 'معلقة';
-      case OrderStatus.reviewing:
+      case OrderStatus.received:
+        return 'مستلم';
+      case OrderStatus.underReview:
         return 'قيد المراجعة';
-      case OrderStatus.confirmed:
-        return 'تم التأكيد';
-      case OrderStatus.partiallyConfirmed:
-        return 'متوفر جزئيًا';
-      case OrderStatus.rejected:
-        return 'مرفوض';
+      case OrderStatus.partialOfferPending:
+        return 'بانتظار قرار العرض الجزئي';
+      case OrderStatus.confirmedReserved:
+        return 'مؤكد ومحجوز';
+      case OrderStatus.preparing:
+        return 'قيد التجهيز';
       case OrderStatus.ready:
-        return 'جاهز';
+        return 'جاهز للاستلام';
       case OrderStatus.completed:
         return 'مكتمل';
       case OrderStatus.cancelled:
         return 'ملغي';
+      case OrderStatus.rejected:
+        return 'مرفوض';
+      case OrderStatus.notCollected:
+        return 'لم يستلم';
+      case OrderStatus.unknown:
+        return 'حالة غير معروفة';
     }
   }
 }
 
-enum OrderRequestSource {
-  manual,
-  prescription,
-}
+enum OrderRequestSource { manual, prescription }
 
 extension OrderRequestSourceX on OrderRequestSource {
   String get value {
@@ -112,10 +185,7 @@ extension OrderRequestSourceX on OrderRequestSource {
   }
 }
 
-enum BeneficiaryType {
-  self,
-  family,
-}
+enum BeneficiaryType { self, family }
 
 extension BeneficiaryTypeX on BeneficiaryType {
   String get value {
@@ -345,7 +415,9 @@ class OrderBeneficiarySnapshot {
       familyMemberId: map['familyMemberId']?.toString(),
       gender: map['gender']?.toString(),
       bloodType: map['bloodType']?.toString(),
-      age: map['age'] is int ? map['age'] as int : int.tryParse('${map['age']}'),
+      age: map['age'] is int
+          ? map['age'] as int
+          : int.tryParse('${map['age']}'),
       dateOfBirth: _toDateTime(map['dateOfBirth']),
       allergies: _toStringList(map['allergies']),
       healthConditions: _toStringList(map['healthConditions']),
@@ -366,7 +438,9 @@ class OrderBeneficiarySnapshot {
       'gender': gender,
       'bloodType': bloodType,
       'age': age,
-      'dateOfBirth': dateOfBirth != null ? Timestamp.fromDate(dateOfBirth!) : null,
+      'dateOfBirth': dateOfBirth != null
+          ? Timestamp.fromDate(dateOfBirth!)
+          : null,
       'allergies': allergies,
       'healthConditions': healthConditions,
       'currentMedications': currentMedications,
@@ -611,6 +685,7 @@ class OrderStatusLog {
 }
 
 class OrderModel {
+  final int schemaVersion;
   final String id;
   final String? orderNumber;
   final String? orderDateKey;
@@ -642,8 +717,30 @@ class OrderModel {
   final DateTime? reviewedAt;
   final DateTime? completedAt;
   final DateTime? cancelledAt;
+  final String? operationId;
+  final String? payloadHash;
+  final String? commandResultRef;
+  final String? invoiceId;
+  final int offerVersion;
+  final Map<String, dynamic> partialOffer;
+  final String? reservationId;
+  final String? reservationState;
+  final DateTime? reviewStartedAt;
+  final DateTime? pharmacyDelayAt;
+  final DateTime? userDecisionStartedAt;
+  final DateTime? userDecisionDeadline;
+  final DateTime? preparingAt;
+  final DateTime? readyAt;
+  final DateTime? pickupDeadline;
+  final bool pickupOverdue;
+  final bool pharmacyDelayed;
+  final DateTime? deliveredAt;
+  final DateTime? collectedAt;
+  final DateTime? rejectedAt;
+  final DateTime? notCollectedAt;
 
   const OrderModel({
+    this.schemaVersion = 3,
     this.id = '',
     this.orderNumber,
     this.orderDateKey,
@@ -655,8 +752,8 @@ class OrderModel {
     required this.requestSource,
     required this.requestSourceLabel,
     required this.medicines,
-    this.status = OrderStatus.pending,
-    this.statusLabel = 'معلقة',
+    this.status = OrderStatus.received,
+    this.statusLabel = 'مستلم',
     this.userNote,
     this.pharmacyNote,
     this.chatId,
@@ -675,14 +772,39 @@ class OrderModel {
     this.reviewedAt,
     this.completedAt,
     this.cancelledAt,
+    this.operationId,
+    this.payloadHash,
+    this.commandResultRef,
+    this.invoiceId,
+    this.offerVersion = 0,
+    this.partialOffer = const {},
+    this.reservationId,
+    this.reservationState,
+    this.reviewStartedAt,
+    this.pharmacyDelayAt,
+    this.userDecisionStartedAt,
+    this.userDecisionDeadline,
+    this.preparingAt,
+    this.readyAt,
+    this.pickupDeadline,
+    this.pickupOverdue = false,
+    this.pharmacyDelayed = false,
+    this.deliveredAt,
+    this.collectedAt,
+    this.rejectedAt,
+    this.notCollectedAt,
   });
 
-  bool get isPending => status == OrderStatus.pending;
+  bool get isPending =>
+      status == OrderStatus.received || status == OrderStatus.underReview;
   bool get isManual => requestSource == OrderRequestSource.manual;
   bool get isPrescription => requestSource == OrderRequestSource.prescription;
 
   factory OrderModel.fromMap(String id, Map<String, dynamic> map) {
     return OrderModel(
+      schemaVersion: map['schemaVersion'] is int
+          ? map['schemaVersion'] as int
+          : int.tryParse('${map['schemaVersion']}') ?? 0,
       id: id,
       orderNumber: map['orderNumber']?.toString(),
       orderDateKey: map['orderDateKey']?.toString(),
@@ -701,8 +823,9 @@ class OrderModel {
       insurance: OrderInsuranceSnapshot.fromMap(
         Map<String, dynamic>.from(map['insurance'] ?? {}),
       ),
-      requestSource:
-      OrderRequestSourceX.fromValue(map['requestSource']?.toString()),
+      requestSource: OrderRequestSourceX.fromValue(
+        map['requestSource']?.toString(),
+      ),
       requestSourceLabel: (map['requestSourceLabel'] ?? '').toString(),
       medicines: (map['medicines'] as List<dynamic>? ?? [])
           .map((e) => OrderMedicineItem.fromMap(Map<String, dynamic>.from(e)))
@@ -731,6 +854,29 @@ class OrderModel {
       reviewedAt: _toDateTime(map['reviewedAt']),
       completedAt: _toDateTime(map['completedAt']),
       cancelledAt: _toDateTime(map['cancelledAt']),
+      operationId: map['operationId']?.toString(),
+      payloadHash: map['payloadHash']?.toString(),
+      commandResultRef: map['commandResultRef']?.toString(),
+      invoiceId: map['invoiceId']?.toString(),
+      offerVersion: map['offerVersion'] is int
+          ? map['offerVersion'] as int
+          : int.tryParse('${map['offerVersion']}') ?? 0,
+      partialOffer: Map<String, dynamic>.from(map['partialOffer'] ?? const {}),
+      reservationId: map['reservationId']?.toString(),
+      reservationState: map['reservationState']?.toString(),
+      reviewStartedAt: _toDateTime(map['reviewStartedAt']),
+      pharmacyDelayAt: _toDateTime(map['pharmacyDelayAt']),
+      userDecisionStartedAt: _toDateTime(map['userDecisionStartedAt']),
+      userDecisionDeadline: _toDateTime(map['userDecisionDeadline']),
+      preparingAt: _toDateTime(map['preparingAt']),
+      readyAt: _toDateTime(map['readyAt']),
+      pickupDeadline: _toDateTime(map['pickupDeadline']),
+      pickupOverdue: map['pickupOverdue'] == true,
+      pharmacyDelayed: map['pharmacyDelayed'] == true,
+      deliveredAt: _toDateTime(map['deliveredAt']),
+      collectedAt: _toDateTime(map['collectedAt']),
+      rejectedAt: _toDateTime(map['rejectedAt']),
+      notCollectedAt: _toDateTime(map['notCollectedAt']),
     );
   }
 
@@ -740,6 +886,7 @@ class OrderModel {
 
   Map<String, dynamic> toMap() {
     return {
+      'schemaVersion': schemaVersion,
       'user': user.toMap(),
       'orderNumber': orderNumber,
       'orderDateKey': orderDateKey,
@@ -768,17 +915,60 @@ class OrderModel {
           ? Timestamp.fromDate(createdAt!)
           : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-      'submittedAt':
-      submittedAt != null ? Timestamp.fromDate(submittedAt!) : null,
+      'submittedAt': submittedAt != null
+          ? Timestamp.fromDate(submittedAt!)
+          : null,
       'reviewedAt': reviewedAt != null ? Timestamp.fromDate(reviewedAt!) : null,
-      'completedAt':
-      completedAt != null ? Timestamp.fromDate(completedAt!) : null,
-      'cancelledAt':
-      cancelledAt != null ? Timestamp.fromDate(cancelledAt!) : null,
+      'completedAt': completedAt != null
+          ? Timestamp.fromDate(completedAt!)
+          : null,
+      'cancelledAt': cancelledAt != null
+          ? Timestamp.fromDate(cancelledAt!)
+          : null,
+      'operationId': operationId,
+      'payloadHash': payloadHash,
+      'commandResultRef': commandResultRef,
+      'invoiceId': invoiceId,
+      'offerVersion': offerVersion,
+      'partialOffer': partialOffer,
+      'reservationId': reservationId,
+      'reservationState': reservationState,
+      'reviewStartedAt': reviewStartedAt != null
+          ? Timestamp.fromDate(reviewStartedAt!)
+          : null,
+      'pharmacyDelayAt': pharmacyDelayAt != null
+          ? Timestamp.fromDate(pharmacyDelayAt!)
+          : null,
+      'userDecisionStartedAt': userDecisionStartedAt != null
+          ? Timestamp.fromDate(userDecisionStartedAt!)
+          : null,
+      'userDecisionDeadline': userDecisionDeadline != null
+          ? Timestamp.fromDate(userDecisionDeadline!)
+          : null,
+      'preparingAt': preparingAt != null
+          ? Timestamp.fromDate(preparingAt!)
+          : null,
+      'readyAt': readyAt != null ? Timestamp.fromDate(readyAt!) : null,
+      'pickupDeadline': pickupDeadline != null
+          ? Timestamp.fromDate(pickupDeadline!)
+          : null,
+      'pickupOverdue': pickupOverdue,
+      'pharmacyDelayed': pharmacyDelayed,
+      'deliveredAt': deliveredAt != null
+          ? Timestamp.fromDate(deliveredAt!)
+          : null,
+      'collectedAt': collectedAt != null
+          ? Timestamp.fromDate(collectedAt!)
+          : null,
+      'rejectedAt': rejectedAt != null ? Timestamp.fromDate(rejectedAt!) : null,
+      'notCollectedAt': notCollectedAt != null
+          ? Timestamp.fromDate(notCollectedAt!)
+          : null,
     };
   }
 
   OrderModel copyWith({
+    int? schemaVersion,
     String? id,
     String? orderNumber,
     String? orderDateKey,
@@ -810,8 +1000,30 @@ class OrderModel {
     DateTime? reviewedAt,
     DateTime? completedAt,
     DateTime? cancelledAt,
+    String? operationId,
+    String? payloadHash,
+    String? commandResultRef,
+    String? invoiceId,
+    int? offerVersion,
+    Map<String, dynamic>? partialOffer,
+    String? reservationId,
+    String? reservationState,
+    DateTime? reviewStartedAt,
+    DateTime? pharmacyDelayAt,
+    DateTime? userDecisionStartedAt,
+    DateTime? userDecisionDeadline,
+    DateTime? preparingAt,
+    DateTime? readyAt,
+    DateTime? pickupDeadline,
+    bool? pickupOverdue,
+    bool? pharmacyDelayed,
+    DateTime? deliveredAt,
+    DateTime? collectedAt,
+    DateTime? rejectedAt,
+    DateTime? notCollectedAt,
   }) {
     return OrderModel(
+      schemaVersion: schemaVersion ?? this.schemaVersion,
       id: id ?? this.id,
       orderNumber: orderNumber ?? this.orderNumber,
       orderDateKey: orderDateKey ?? this.orderDateKey,
@@ -831,7 +1043,7 @@ class OrderModel {
       totalItemsCount: totalItemsCount ?? this.totalItemsCount,
       estimatedTotalPrice: estimatedTotalPrice ?? this.estimatedTotalPrice,
       hasSensitiveHealthData:
-      hasSensitiveHealthData ?? this.hasSensitiveHealthData,
+          hasSensitiveHealthData ?? this.hasSensitiveHealthData,
       containsInsurance: containsInsurance ?? this.containsInsurance,
       prescriptionId: prescriptionId ?? this.prescriptionId,
       prescriptionImageUrl: prescriptionImageUrl ?? this.prescriptionImageUrl,
@@ -844,6 +1056,28 @@ class OrderModel {
       reviewedAt: reviewedAt ?? this.reviewedAt,
       completedAt: completedAt ?? this.completedAt,
       cancelledAt: cancelledAt ?? this.cancelledAt,
+      operationId: operationId ?? this.operationId,
+      payloadHash: payloadHash ?? this.payloadHash,
+      commandResultRef: commandResultRef ?? this.commandResultRef,
+      invoiceId: invoiceId ?? this.invoiceId,
+      offerVersion: offerVersion ?? this.offerVersion,
+      partialOffer: partialOffer ?? this.partialOffer,
+      reservationId: reservationId ?? this.reservationId,
+      reservationState: reservationState ?? this.reservationState,
+      reviewStartedAt: reviewStartedAt ?? this.reviewStartedAt,
+      pharmacyDelayAt: pharmacyDelayAt ?? this.pharmacyDelayAt,
+      userDecisionStartedAt:
+          userDecisionStartedAt ?? this.userDecisionStartedAt,
+      userDecisionDeadline: userDecisionDeadline ?? this.userDecisionDeadline,
+      preparingAt: preparingAt ?? this.preparingAt,
+      readyAt: readyAt ?? this.readyAt,
+      pickupDeadline: pickupDeadline ?? this.pickupDeadline,
+      pickupOverdue: pickupOverdue ?? this.pickupOverdue,
+      pharmacyDelayed: pharmacyDelayed ?? this.pharmacyDelayed,
+      deliveredAt: deliveredAt ?? this.deliveredAt,
+      collectedAt: collectedAt ?? this.collectedAt,
+      rejectedAt: rejectedAt ?? this.rejectedAt,
+      notCollectedAt: notCollectedAt ?? this.notCollectedAt,
     );
   }
 }

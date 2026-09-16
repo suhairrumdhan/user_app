@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../models/chat_thread_model.dart';
 import '../services/chat_search_service.dart';
@@ -31,11 +32,17 @@ class ChatsController extends GetxController {
 
   void _listenThreads() {
     _threadsSub?.cancel();
-    _threadsSub = _chatService.getUserChatsStream().listen((threads) {
-      allThreads.assignAll(threads);
-      _rebuild();
-      isLoading.value = false;
-    });
+    _threadsSub = _chatService.getUserChatsStream().listen(
+      (threads) {
+        allThreads.assignAll(threads);
+        _rebuild();
+        isLoading.value = false;
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint('Failed to load cached chats: $error');
+        isLoading.value = false;
+      },
+    );
   }
 
   void _listenUnreadCount() {

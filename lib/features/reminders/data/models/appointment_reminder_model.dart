@@ -7,6 +7,9 @@ part 'appointment_reminder_model.g.dart';
 class AppointmentReminderModel {
   Id id = Isar.autoIncrement;
 
+  @Index(caseSensitive: true)
+  String ownerUserId = '';
+
   @Index(caseSensitive: false)
   late String title;
 

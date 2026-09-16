@@ -1,0 +1,316 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn(){ return request.auth != null; }
+    function adminDoc(){ return get(/databases/$(database)/documents/adminEmployees/$(request.auth.uid)); }
+    function isAdmin(){ return signedIn() && adminDoc().data.isActive == true; }
+    function isSuper(){ return isAdmin() && adminDoc().data.role == 'super_admin'; }
+    function can(key){ return isSuper() || (isAdmin() && adminDoc().data.permissions[key] == true); }
+    function own(uid){ return signedIn() && request.auth.uid == uid; }
+    function employeeTokenFor(pharmacyId) {
+      return signedIn()
+        && request.auth.token.get('actorType', '') == 'pharmacy_employee'
+        && request.auth.token.get('pharmacyId', '') == pharmacyId
+        && request.auth.token.get('employeeId', '') is string
+        && request.auth.token.get('employeeId', '').size() > 0
+        && request.auth.token.get('sessionId', '') is string
+        && request.auth.token.get('sessionId', '').size() > 0
+        && request.auth.token.get('credentialVersion', -1) is int;
+    }
+    function employeeData(pharmacyId) {
+      return get(/databases/$(database)/documents/pharmacies/$(pharmacyId)/employees/$(request.auth.token.get('employeeId', '_'))).data;
+    }
+    function employeeSessionData(pharmacyId) {
+      return get(/databases/$(database)/documents/pharmacies/$(pharmacyId)/employeeSessions/$(request.auth.token.get('sessionId', '_'))).data;
+    }
+    function employeeSessionValid(pharmacyId) {
+      let employee = employeeData(pharmacyId);
+      let session = employeeSessionData(pharmacyId);
+      let pharmacy = get(/databases/$(database)/documents/pharmacies/$(pharmacyId)).data;
+      return employeeTokenFor(pharmacyId)
+        && pharmacy.status == 'approved' && pharmacy.get('isActive', true) == true
+        && employee.isActive == true
+        && employee.credentialVersion == request.auth.token.get('credentialVersion', -1)
+        && session.actorUid == request.auth.uid
+        && session.pharmacyId == pharmacyId
+        && session.employeeId == request.auth.token.get('employeeId', '')
+        && session.credentialVersion == request.auth.token.get('credentialVersion', -1)
+        && session.get('revokedAt', null) == null
+        && session.expiresAt > request.time;
+    }
+    function employeeCan(pharmacyId, key) {
+      let employee = employeeData(pharmacyId);
+      let overrides = employee.get('permissionOverrides', {});
+      let role = get(/databases/$(database)/documents/pharmacies/$(pharmacyId)/permissions/$(employee.roleId)).data;
+      return employeeSessionValid(pharmacyId)
+        && ((key in overrides && overrides[key] == true)
+          || (!(key in overrides) && role.get('permissions', {}).get(key, false) == true));
+    }
+    function pharmacyMember(pharmacyId) {
+      return own(pharmacyId) || employeeSessionValid(pharmacyId);
+    }
+    function pharmacyCan(pharmacyId, key) {
+      return own(pharmacyId) || employeeCan(pharmacyId, key);
+    }
+    function selfEmployee(pharmacyId, employeeId) {
+      return employeeSessionValid(pharmacyId)
+        && request.auth.token.get('employeeId', '') == employeeId;
+    }
+    function pharmacyReadAccess(pharmacyId, collection) {
+      return own(pharmacyId)
+        || (collection in ['medicines'] && employeeCan(pharmacyId, 'inventory.view'))
+        || (collection in ['suppliers'] && employeeCan(pharmacyId, 'suppliers.view'))
+        || (collection in ['insurance_companies', 'insurance_collections'] && employeeCan(pharmacyId, 'insurance.view'))
+        || (collection in ['purchase_invoices'] && employeeCan(pharmacyId, 'purchases.view'))
+        || (collection in ['shifts', 'shift_states', 'dailyClosings'] && employeeCan(pharmacyId, 'shifts.view'))
+        || (collection in ['expenses', 'salary_payments'] && employeeCan(pharmacyId, 'finance.view'))
+        || (collection in ['notifications'] && employeeCan(pharmacyId, 'dashboard.view'))
+        || (collection in ['settings'] && employeeCan(pharmacyId, 'settings.view'))
+        || (collection in ['audit_logs'] && employeeSessionValid(pharmacyId))
+        || (collection in ['roles', 'permissions'] && employeeCan(pharmacyId, 'employees.view'));
+    }
+    function pharmacyWriteAccess(pharmacyId, collection) {
+      return own(pharmacyId)
+        || (collection in ['medicines'] && (employeeCan(pharmacyId, 'inventory.create')
+          || employeeCan(pharmacyId, 'inventory.update') || employeeCan(pharmacyId, 'inventory.delete')))
+        || (collection in ['suppliers'] && (employeeCan(pharmacyId, 'suppliers.create')
+          || employeeCan(pharmacyId, 'suppliers.update') || employeeCan(pharmacyId, 'suppliers.delete')))
+        || (collection in ['insurance_companies'] && (employeeCan(pharmacyId, 'insurance.create')
+          || employeeCan(pharmacyId, 'insurance.update') || employeeCan(pharmacyId, 'insurance.delete')))
+        || (collection in ['purchase_invoices'] && (employeeCan(pharmacyId, 'purchases.create')
+          || employeeCan(pharmacyId, 'purchases.payment') || employeeCan(pharmacyId, 'purchases.delete')))
+        || (collection in ['shifts', 'shift_states', 'dailyClosings'] && (employeeCan(pharmacyId, 'shifts.open')
+          || employeeCan(pharmacyId, 'shifts.close')))
+        || (collection in ['expenses', 'salary_payments'] && employeeCan(pharmacyId, 'finance.view'))
+        || (collection in ['notifications'] && employeeCan(pharmacyId, 'dashboard.view'))
+        || (collection in ['settings'] && employeeCan(pharmacyId, 'settings.update'))
+        || (collection in ['audit_logs'] && employeeSessionValid(pharmacyId))
+        || (collection in ['roles', 'permissions'] && employeeCan(pharmacyId, 'roles.manage'));
+    }
+    function ownsSearchIndex(data, id) {
+      return data.pharmacyId is string && data.medicineId is string
+        && pharmacyCan(data.pharmacyId, 'inventory.update') && data.medicineId.size() > 0
+        && id == data.pharmacyId + '_' + data.medicineId;
+    }
+    function chatParticipant(data) {
+      return signedIn()
+        && (data.userId == request.auth.uid || pharmacyCan(data.pharmacyId, 'messages.view'));
+    }
+    function orderParticipant(data) {
+      return signedIn() && (data.user.userId == request.auth.uid
+        || pharmacyCan(data.pharmacy.pharmacyId, 'orders.view'));
+    }
+    function chatParticipantAfter(chatId) {
+      return chatParticipant(
+        getAfter(/databases/$(database)/documents/chats/$(chatId)).data
+      );
+    }
+    function chatParticipantById(chatId) {
+      return chatParticipant(
+        get(/databases/$(database)/documents/chats/$(chatId)).data
+      );
+    }
+    function missingDeterministicOrderChat(chatId) {
+      return signedIn()
+        && chatId.matches('order_.+')
+        && !exists(/databases/$(database)/documents/chats/$(chatId));
+    }
+    function chatOrderOpen(chatId) {
+      let chat = getAfter(/databases/$(database)/documents/chats/$(chatId)).data;
+      return chat.orderId is string
+        && existsAfter(/databases/$(database)/documents/orders/$(chat.orderId))
+        && !(getAfter(/databases/$(database)/documents/orders/$(chat.orderId)).data.status
+          in ['completed', 'cancelled', 'rejected', 'notCollected']);
+    }
+    function directSale(data, pharmacyId) {
+      return data.get('source', '') == 'pos'
+        && data.get('orderId', null) in [null, '']
+        && data.get('sourceOrderId', null) in [null, '']
+        && (data.get('refSaleId', null) in [null, '']
+          || getAfter(/databases/$(database)/documents/pharmacies/$(pharmacyId)/sales/$(data.refSaleId)).data.source == 'pos');
+    }
+    function directFinancialEntry(data, pharmacyId) {
+      return (data.get('metadata', null) == null
+          || !(data.metadata.get('source', '') in ['order', 'orderRefund']))
+        && (data.get('referenceCollection', '') != 'sales'
+          || getAfter(/databases/$(database)/documents/pharmacies/$(pharmacyId)/sales/$(data.referenceId)).data.source == 'pos');
+    }
+
+    match /adminEmployees/{uid} {
+      allow read: if isSuper() || can('employees.view') || own(uid);
+      allow create: if can('employees.create');
+      allow update: if can('employees.update') || can('employees.disable');
+      allow delete: if false;
+    }
+    match /adminAuditLogs/{id} {
+      allow read: if can('audit.view');
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+    match /adminBroadcastNotifications/{id} {
+      allow read: if can('notifications.view');
+      allow create: if can('notifications.send');
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+    match /pharmacyRequests/{id} {
+      allow create: if signedIn();
+      allow read: if can('requests.view') || (signedIn() && (resource.data.pharmacyId == request.auth.uid || resource.data.id == request.auth.uid));
+      allow update: if can('requests.review') || can('requests.approve') || can('requests.reject') || (signedIn() && resource.data.id == request.auth.uid && resource.data.status in ['draft','requires_changes']);
+      allow delete: if false;
+    }
+    match /pharmacies/{id} {
+      allow read: if signedIn();
+      allow create: if can('requests.approve');
+      allow update: if can('pharmacies.manage') || can('requests.approve')
+        || (employeeCan(id, 'settings.update')
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'status', 'isBlocked', 'isActive', 'approvedDate', 'approvedBy',
+            'sourceRequestId', 'id', 'ownerUid'
+          ]))
+        || (own(id) && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'status', 'isBlocked', 'isActive', 'approvedDate', 'approvedBy', 'sourceRequestId'
+        ]));
+      allow delete: if false;
+      match /settings/businessHours {
+        allow read: if signedIn();
+        allow write: if pharmacyCan(id, 'settings.update');
+      }
+      match /employees/{employeeId} {
+        allow read: if own(id) || selfEmployee(id, employeeId)
+          || employeeCan(id, 'employees.view');
+        // Account, role, active-state and override mutations are callable-only.
+        allow create, update, delete: if false;
+      }
+      match /employeeCredentials/{employeeId} {
+        allow read, write: if false;
+      }
+      match /employeeUsernames/{usernameId} {
+        allow read, write: if false;
+      }
+      match /employeeSessions/{sessionId} {
+        allow read, write: if false;
+      }
+      match /employeeLoginAttempts/{attemptId} {
+        allow read, write: if false;
+      }
+      match /sales/{saleId} {
+        allow read: if pharmacyCan(id, 'sales.view');
+        allow create: if pharmacyCan(id, 'sales.create') && !saleId.matches('order-.*')
+          && directSale(request.resource.data, id);
+        allow update: if (own(id) || employeeCan(id, 'sales.edit'))
+          && directSale(resource.data, id)
+          && directSale(request.resource.data, id);
+        allow delete: if false;
+      }
+      match /financial_transactions/{entryId} {
+        allow read: if pharmacyCan(id, 'finance.view');
+        allow create: if pharmacyCan(id, 'sales.create')
+          && directFinancialEntry(request.resource.data, id);
+        allow update: if (own(id) || employeeCan(id, 'sales.edit'))
+          && directFinancialEntry(resource.data, id)
+          && directFinancialEntry(request.resource.data, id);
+        allow delete: if false;
+      }
+      match /{collection}/{sub=**} {
+        allow read: if pharmacyReadAccess(id, collection)
+          && !(collection in [
+          'employeeCredentials', 'employeeUsernames', 'employeeSessions',
+          'employeeLoginAttempts'
+        ]);
+        allow write: if pharmacyWriteAccess(id, collection)
+          && !(collection in [
+            'sales', 'financial_transactions', 'quarantinedReturns', 'employees',
+            'employeeCredentials', 'employeeUsernames', 'employeeSessions',
+            'employeeLoginAttempts'
+          ]);
+      }
+    }
+    match /users/{uid} {
+      allow read: if own(uid) || can('users.view');
+      allow create: if own(uid);
+      allow update: if own(uid) || can('users.block');
+      allow delete: if own(uid);
+      match /{collection}/{sub=**} {
+        allow read: if own(uid);
+        allow write: if own(uid) && collection != 'orderIncidents';
+      }
+    }
+    match /orders/{id} {
+      allow read: if orderParticipant(resource.data);
+      allow create: if false;
+      allow update: if signedIn()
+        && (resource.data.user.userId == request.auth.uid
+          || pharmacyCan(resource.data.pharmacy.pharmacyId, 'orders.update_status'))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userNote','pharmacyNote','chatId','updatedAt']);
+      allow delete: if false;
+      match /{sub=**}{
+        allow read: if signedIn()
+          && (get(/databases/$(database)/documents/orders/$(id)).data.user.userId == request.auth.uid
+            || pharmacyCan(get(/databases/$(database)/documents/orders/$(id)).data.pharmacy.pharmacyId, 'orders.view'));
+        allow write: if false;
+      }
+    }
+    match /chats/{chatId} {
+      // The clients use a transaction to guard deterministic first creation.
+      // A get of the not-yet-created id must be allowed; list queries and every
+      // existing document remain participant-only.
+      allow get: if missingDeterministicOrderChat(chatId)
+        || chatParticipant(resource.data);
+      allow list: if chatParticipant(resource.data);
+      allow create: if chatParticipant(request.resource.data)
+        && request.resource.data.orderId is string
+        && chatId == 'order_' + request.resource.data.orderId
+        && exists(/databases/$(database)/documents/orders/$(request.resource.data.orderId))
+        && get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.user.userId
+          == request.resource.data.userId
+        && get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.pharmacy.pharmacyId
+          == request.resource.data.pharmacyId;
+      allow update: if chatParticipant(resource.data)
+        && chatParticipant(request.resource.data)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.pharmacyId == resource.data.pharmacyId
+        && request.resource.data.orderId == resource.data.orderId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'lastMessage', 'lastMessageType', 'lastMessageTime', 'updatedAt',
+          'userUnreadCount', 'pharmacyUnreadCount', 'pharmacyIsOnline'
+        ]);
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if chatParticipantById(chatId);
+        allow create: if chatParticipantAfter(chatId)
+          && chatOrderOpen(chatId)
+          && (request.resource.data.senderId == request.auth.uid
+            || (messageId == 'conversation_created'
+              && request.resource.data.senderId == 'system'
+              && request.resource.data.senderType == 'system'));
+        allow update: if chatParticipantById(chatId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['isRead', 'status']);
+        allow delete: if false;
+      }
+    }
+    match /orderOperations/{id} { allow read, write: if false; }
+    match /adminOrderSummaries/{id} {
+      allow read: if can('orders.view');
+      allow write: if false;
+    }
+    match /complaints/{id} {
+      allow create: if signedIn();
+      allow read: if can('complaints.view') || (signedIn() && resource.data.createdBy == request.auth.uid);
+      allow update: if can('complaints.review');
+      allow delete: if false;
+    }
+    match /medicine_search_index/{id} {
+      allow read: if true;
+      allow create: if ownsSearchIndex(request.resource.data, id)
+        && exists(/databases/$(database)/documents/pharmacies/$(request.resource.data.pharmacyId)/medicines/$(request.resource.data.medicineId));
+      allow update: if ownsSearchIndex(resource.data, id)
+        && ownsSearchIndex(request.resource.data, id)
+        && exists(/databases/$(database)/documents/pharmacies/$(request.resource.data.pharmacyId)/medicines/$(request.resource.data.medicineId));
+      allow delete: if ownsSearchIndex(resource.data, id);
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

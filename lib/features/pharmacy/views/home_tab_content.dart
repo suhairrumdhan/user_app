@@ -6,6 +6,8 @@ import 'dart:io';
 import 'package:latlong2/latlong.dart';
 import '../../prescription/services/drug_parser.dart';
 import '../../prescription/services/prescription_api_service.dart';
+import '../../prescription/services/prescription_diagnostics.dart';
+import '../../prescription/services/text_preprocessor.dart';
 import '../../prescription/views/manual_medicine_search_page.dart';
 import '../models/pharmacy_model.dart';
 import 'map_tab.dart';
@@ -48,7 +50,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
   bool _isLoading = false;
   final MapController _mapController = MapController();
   final FamilyController _familyController =
-  Get.isRegistered<FamilyController>()
+      Get.isRegistered<FamilyController>()
       ? Get.find<FamilyController>()
       : Get.put(FamilyController());
 
@@ -56,8 +58,6 @@ class _HomeTabContentState extends State<HomeTabContent> {
   final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(0);
   final List<double> _distanceOptions = [1, 2, 3, 4, 5, 10, 15, 20];
   double _tempDistance = 4;
-
-
 
   @override
   void initState() {
@@ -70,46 +70,59 @@ class _HomeTabContentState extends State<HomeTabContent> {
     final lng = pharmacy.longitude;
 
     if (lat == null || lng == null || lat == 0.0 || lng == 0.0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('موقع الصيدلية غير متوفر')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('موقع الصيدلية غير متوفر')));
       return;
     }
 
-    _mapController.move(
-      LatLng(lat, lng),
-      17.0,
-    );
+    _mapController.move(LatLng(lat, lng), 17.0);
   }
 
   Future<bool> _showPreviewDialog(File file, String type) async {
     return await showDialog<bool>(
-      context: context,
-      builder: (context) => PreviewScreen(
-        file: file,
-        fileType: type,
-        onConfirm: () => Navigator.pop(context, true),
-        onCancel: () => Navigator.pop(context, false),
-      ),
-    ) ??
+          context: context,
+          builder: (context) => PreviewScreen(
+            file: file,
+            fileType: type,
+            onConfirm: () => Navigator.pop(context, true),
+            onCancel: () => Navigator.pop(context, false),
+          ),
+        ) ??
         false;
   }
 
-  Future<void> _processExtractedText(String text) async {
+  Future<void> _processExtractedText(
+    String text, {
+    required String diagnosticId,
+  }) async {
+    final textForMatching = TextPreprocessor.normalize(text);
+    PrescriptionDiagnostics.text(
+      diagnosticId,
+      'TEXT_SENT_TO_FLASK',
+      textForMatching,
+    );
     try {
       setState(() => _isLoading = true);
 
-      final response = await PrescriptionApiService.analyzePrescription(text);
+      final response = await PrescriptionApiService.analyzePrescription(
+        textForMatching,
+      );
+      PrescriptionDiagnostics.flaskResponse(diagnosticId, response);
       final medicines = response['medicines'] as List<dynamic>? ?? [];
+      final unmatched = response['unmatchedLines'] as List<dynamic>? ?? [];
 
-      if (medicines.isEmpty) {
-        throw Exception('لم يتم العثور على أدوية في الوصفة');
+      if (medicines.isEmpty && unmatched.isEmpty) {
+        throw Exception('لم يتم العثور على أسماء أدوية للمراجعة في الوصفة');
       }
 
-      final parsedMedicines = DrugParser.parseMedicineModels(medicines);
+      final parsedMedicines = [
+        ...DrugParser.parseMedicineModels(medicines),
+        ...DrugParser.parseUnmatchedMedicineModels(unmatched),
+      ];
       final parsedRequests = DrugParser.parseSearchRequests(medicines);
 
-      if (parsedMedicines.isEmpty || parsedRequests.isEmpty) {
+      if (parsedMedicines.isEmpty) {
         throw Exception('فشل تحليل الأدوية');
       }
 
@@ -131,16 +144,22 @@ class _HomeTabContentState extends State<HomeTabContent> {
             initialMedicines: parsedMedicines,
             searchSource: 'prescription',
             isReviewMode: true,
+            unmatchedMedicineCount: unmatched.length,
             prescriptionFile: _selectedFile,
             prescriptionFileType: _fileType,
           ),
         ),
       );
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ: $e')),
+      PrescriptionDiagnostics.text(
+        diagnosticId,
+        'PROCESSING_ERROR',
+        e.toString(),
       );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('خطأ: $e')));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -158,11 +177,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF5EABD6),
-              Color(0xFF7BC4EA),
-              Color(0xFF9BD8F0),
-            ],
+            colors: [Color(0xFF5EABD6), Color(0xFF7BC4EA), Color(0xFF9BD8F0)],
             stops: [0.1, 0.5, 0.9],
           ),
         ),
@@ -177,13 +192,14 @@ class _HomeTabContentState extends State<HomeTabContent> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 18),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                      ),
+                      border: Border.all(color: Colors.white.withOpacity(0.3)),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -211,8 +227,12 @@ class _HomeTabContentState extends State<HomeTabContent> {
                         SliderTheme(
                           data: SliderTheme.of(context).copyWith(
                             trackHeight: 3,
-                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-                            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                            thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 8,
+                            ),
+                            overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 14,
+                            ),
                           ),
                           child: Slider(
                             value: _tempDistance,
@@ -276,14 +296,19 @@ class _HomeTabContentState extends State<HomeTabContent> {
                                   child: PageView.builder(
                                     controller: _pageController,
                                     itemCount: widget.pharmacies.length,
-                                    onPageChanged: (i) => _currentIndexNotifier.value = i,
+                                    onPageChanged: (i) =>
+                                        _currentIndexNotifier.value = i,
                                     itemBuilder: (context, index) {
                                       return AnimatedScale(
                                         scale: currentIndex == index ? 1 : 0.88,
-                                        duration: const Duration(milliseconds: 300),
+                                        duration: const Duration(
+                                          milliseconds: 300,
+                                        ),
                                         child: GestureDetector(
                                           onTap: () {
-                                            _focusPharmacyOnMap(widget.pharmacies[index]);
+                                            _focusPharmacyOnMap(
+                                              widget.pharmacies[index],
+                                            );
                                           },
                                           child: PharmacyGlassCard(
                                             pharmacy: widget.pharmacies[index],
@@ -298,9 +323,13 @@ class _HomeTabContentState extends State<HomeTabContent> {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: List.generate(
                                     widget.pharmacies.length,
-                                        (i) => AnimatedContainer(
-                                      duration: const Duration(milliseconds: 250),
-                                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                                    (i) => AnimatedContainer(
+                                      duration: const Duration(
+                                        milliseconds: 250,
+                                      ),
+                                      margin: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
                                       width: currentIndex == i ? 14 : 7,
                                       height: 7,
                                       decoration: BoxDecoration(
@@ -316,7 +345,8 @@ class _HomeTabContentState extends State<HomeTabContent> {
                               ],
                             );
                           },
-                        )                      else if (!widget.isLoading && widget.pharmacies.isEmpty)
+                        )
+                      else if (!widget.isLoading && widget.pharmacies.isEmpty)
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
@@ -362,13 +392,13 @@ class _HomeTabContentState extends State<HomeTabContent> {
                       child: widget.isLoading
                           ? const Center(child: CircularProgressIndicator())
                           : MapTab(
-                        currentPosition: widget.currentPosition,
-                        pharmacies: widget.pharmacies,
-                        allPharmacies: widget.allPharmacies,
-                        onRefresh: widget.onRefresh,
-                        selectedDistance: widget.selectedDistance,
-                        mapController: _mapController,
-                      ),
+                              currentPosition: widget.currentPosition,
+                              pharmacies: widget.pharmacies,
+                              allPharmacies: widget.allPharmacies,
+                              onRefresh: widget.onRefresh,
+                              selectedDistance: widget.selectedDistance,
+                              mapController: _mapController,
+                            ),
                     ),
                   ),
                 ),
@@ -395,7 +425,8 @@ class _HomeTabContentState extends State<HomeTabContent> {
                             builder: (_) => const ManualMedicineSearchPage(),
                           ),
                         );
-                      },                      isSmallScreen: isSmallScreen,
+                      },
+                      isSmallScreen: isSmallScreen,
                     ),
                     const SizedBox(width: 12),
                     _buildGlassFAB(
@@ -409,16 +440,29 @@ class _HomeTabContentState extends State<HomeTabContent> {
                           try {
                             final imageFile = await FileUtils.pickImage(source);
                             if (imageFile != null) {
-                              final confirmed = await _showPreviewDialog(imageFile, 'image');
+                              final confirmed = await _showPreviewDialog(
+                                imageFile,
+                                'image',
+                              );
                               if (confirmed) {
-                                final extractedText = await FileUtils.extractTextFromImage(imageFile);
+                                final diagnosticId =
+                                    PrescriptionDiagnostics.newRunId();
+                                final extractedText =
+                                    await FileUtils.extractTextFromImage(
+                                      imageFile,
+                                      diagnosticId: diagnosticId,
+                                    );
                                 setState(() {
                                   _selectedFile = imageFile;
                                   _fileType = 'image';
                                   _extractedText = extractedText;
                                 });
                                 if (mounted) {
-                                  await _processExtractedText(extractedText);                                }
+                                  await _processExtractedText(
+                                    extractedText,
+                                    diagnosticId: diagnosticId,
+                                  );
+                                }
                               }
                             }
                           } catch (e) {
@@ -436,16 +480,29 @@ class _HomeTabContentState extends State<HomeTabContent> {
                           try {
                             final pdfFile = await FileUtils.pickPDF();
                             if (pdfFile != null) {
-                              final confirmed = await _showPreviewDialog(pdfFile, 'pdf');
+                              final confirmed = await _showPreviewDialog(
+                                pdfFile,
+                                'pdf',
+                              );
                               if (confirmed) {
-                                final extractedText = await FileUtils.extractTextFromPDF(pdfFile);
+                                final diagnosticId =
+                                    PrescriptionDiagnostics.newRunId();
+                                final extractedText =
+                                    await FileUtils.extractTextFromPDF(
+                                      pdfFile,
+                                      diagnosticId: diagnosticId,
+                                    );
                                 setState(() {
                                   _selectedFile = pdfFile;
                                   _fileType = 'pdf';
                                   _extractedText = extractedText;
                                 });
                                 if (mounted) {
-                                  await _processExtractedText(extractedText);                                }
+                                  await _processExtractedText(
+                                    extractedText,
+                                    diagnosticId: diagnosticId,
+                                  );
+                                }
                               }
                             }
                           } catch (e) {
@@ -469,9 +526,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
             if (_isLoading)
               Container(
                 color: Colors.black54,
-                child: const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                child: const Center(child: CircularProgressIndicator()),
               ),
           ],
         ),
@@ -496,10 +551,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
         ),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              color.withOpacity(0.9),
-              color.withOpacity(0.7),
-            ],
+            colors: [color.withOpacity(0.9), color.withOpacity(0.7)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -511,19 +563,12 @@ class _HomeTabContentState extends State<HomeTabContent> {
               offset: const Offset(0, 6),
             ),
           ],
-          border: Border.all(
-            color: Colors.white.withOpacity(0.3),
-            width: 1.5,
-          ),
+          border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: Colors.white,
-              size: isSmallScreen ? 20 : 24,
-            ),
+            Icon(icon, color: Colors.white, size: isSmallScreen ? 20 : 24),
             SizedBox(width: isSmallScreen ? 8 : 10),
             Text(
               label,

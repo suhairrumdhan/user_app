@@ -1,0 +1,37 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn(){ return request.auth != null; }
+    function isAdmin(){ return signedIn() && firestore.get(/databases/(default)/documents/adminEmployees/$(request.auth.uid)).data.isActive == true; }
+    function validDocument(){ return request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('(image/.*|application/pdf)'); }
+    function employeeSessionValid(pharmacyId) {
+      let employee = firestore.get(/databases/(default)/documents/pharmacies/$(pharmacyId)/employees/$(request.auth.token.get('employeeId', '_'))).data;
+      let session = firestore.get(/databases/(default)/documents/pharmacies/$(pharmacyId)/employeeSessions/$(request.auth.token.get('sessionId', '_'))).data;
+      let pharmacy = firestore.get(/databases/(default)/documents/pharmacies/$(pharmacyId)).data;
+      return signedIn()
+        && request.auth.token.get('actorType', '') == 'pharmacy_employee'
+        && request.auth.token.get('pharmacyId', '') == pharmacyId
+        && pharmacy.status == 'approved' && pharmacy.get('isActive', true) == true
+        && employee.isActive == true
+        && employee.credentialVersion == request.auth.token.get('credentialVersion', -1)
+        && session.actorUid == request.auth.uid
+        && session.employeeId == request.auth.token.get('employeeId', '')
+        && session.credentialVersion == request.auth.token.get('credentialVersion', -1)
+        && session.get('revokedAt', null) == null
+        && session.expiresAt > request.time;
+    }
+    match /pharmacy_requests_uploads/{tempId}/{allPaths=**} {
+      allow read: if isAdmin();
+      allow create: if validDocument();
+      allow update, delete: if false;
+    }
+    match /pharmacies/{pharmacyId}/{allPaths=**} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == pharmacyId)
+        || employeeSessionValid(pharmacyId);
+      allow write: if ((signedIn() && request.auth.uid == pharmacyId)
+        || employeeSessionValid(pharmacyId)) && validDocument();
+    }
+    match /users/{uid}/{allPaths=**} { allow read, write: if signedIn() && request.auth.uid == uid; }
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}

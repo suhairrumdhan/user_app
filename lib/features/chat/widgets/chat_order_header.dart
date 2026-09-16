@@ -18,14 +18,20 @@ class ChatOrderHeader extends StatelessWidget {
 
   Color _statusColor(String status) {
     switch (status) {
+      case 'received':
       case 'pending':
         return Colors.orange;
+      case 'underReview':
       case 'reviewing':
         return Colors.deepOrange;
+      case 'confirmedReserved':
       case 'confirmed':
         return Colors.green;
+      case 'partialOfferPending':
       case 'partiallyConfirmed':
         return Colors.teal;
+      case 'preparing':
+        return Colors.deepPurple;
       case 'rejected':
         return Colors.red;
       case 'ready':
@@ -34,6 +40,8 @@ class ChatOrderHeader extends StatelessWidget {
         return Colors.blueGrey;
       case 'cancelled':
         return Colors.redAccent;
+      case 'notCollected':
+        return Colors.brown;
       default:
         return primaryColor;
     }
@@ -47,10 +55,8 @@ class ChatOrderHeader extends StatelessWidget {
         final pharmacy = pharmacySnapshot.data;
 
         final pharmacyName = pharmacy?.displayName ?? thread.pharmacyName;
-        final pharmacyImageUrl =
-            pharmacy?.imageUrl ?? thread.pharmacyImageUrl;
-        final pharmacyIsOnline =
-            pharmacy?.isOnline ?? thread.pharmacyIsOnline;
+        final pharmacyImageUrl = pharmacy?.imageUrl ?? thread.pharmacyImageUrl;
+        final pharmacyIsOnline = pharmacy?.isOnline ?? thread.pharmacyIsOnline;
 
         final hasImage = pharmacyImageUrl.trim().isNotEmpty;
 
@@ -65,9 +71,9 @@ class ChatOrderHeader extends StatelessWidget {
 
             /// 🔥 أهم سطر (حل المشكلة)
             final orderNumberText =
-            (order != null &&
-                order.orderNumber != null &&
-                order.orderNumber!.trim().isNotEmpty)
+                (order != null &&
+                    order.orderNumber != null &&
+                    order.orderNumber!.trim().isNotEmpty)
                 ? 'طلب #${order.orderNumber}'
                 : 'طلب جاري التحميل...';
 
@@ -100,16 +106,16 @@ class ChatOrderHeader extends StatelessWidget {
                               borderRadius: BorderRadius.circular(14),
                               image: hasImage
                                   ? DecorationImage(
-                                image: NetworkImage(pharmacyImageUrl),
-                                fit: BoxFit.cover,
-                              )
+                                      image: NetworkImage(pharmacyImageUrl),
+                                      fit: BoxFit.cover,
+                                    )
                                   : null,
                             ),
                             child: !hasImage
                                 ? Icon(
-                              Icons.local_pharmacy_rounded,
-                              color: primaryColor,
-                            )
+                                    Icons.local_pharmacy_rounded,
+                                    color: primaryColor,
+                                  )
                                 : null,
                           ),
                           if (pharmacyIsOnline)
@@ -150,7 +156,7 @@ class ChatOrderHeader extends StatelessWidget {
                             /// 👤 المستفيد
                             Text(
                               thread.beneficiaryName.isNotEmpty
-                                  ? '${thread.beneficiaryName} • ${thread.relationLabel}'
+                                  ? thread.beneficiaryName
                                   : 'المستفيد غير محدد',
                               style: TextStyle(
                                 color: Colors.grey[700],
@@ -164,7 +170,9 @@ class ChatOrderHeader extends StatelessWidget {
                             /// 🔥 رقم الطلب (المهم)
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 5),
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF4F7FB),
                                 borderRadius: BorderRadius.circular(999),

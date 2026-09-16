@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -50,6 +49,9 @@ class ChatUploadService {
       type: FileType.image,
       allowMultiple: false,
       withData: kIsWeb,
+      // file_picker's Android compression writes to the public Pictures folder
+      // and can crash under scoped storage. Upload the selected original file.
+      allowCompression: false,
     );
 
     if (result == null || result.files.isEmpty) return null;
@@ -101,22 +103,14 @@ class ChatUploadService {
     required String chatId,
     required PickedChatFile file,
   }) async {
-    return _uploadFile(
-      folder: 'chat_images',
-      chatId: chatId,
-      file: file,
-    );
+    return _uploadFile(folder: 'chat_images', chatId: chatId, file: file);
   }
 
   Future<ChatUploadResult> uploadFile({
     required String chatId,
     required PickedChatFile file,
   }) async {
-    return _uploadFile(
-      folder: 'chat_files',
-      chatId: chatId,
-      file: file,
-    );
+    return _uploadFile(folder: 'chat_files', chatId: chatId, file: file);
   }
 
   Future<ChatUploadResult> _uploadFile({
@@ -125,15 +119,12 @@ class ChatUploadService {
     required PickedChatFile file,
   }) async {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final ext = (file.extension ?? '').trim();
-    final safeExt = ext.isNotEmpty ? '.$ext' : '';
-    final storagePath = '$folder/$chatId/${timestamp}_${file.fileName}$safeExt';
+    final safeFileName = _sanitizeFileName(file.fileName);
+    final storagePath = '$folder/$chatId/${timestamp}_$safeFileName';
 
     final ref = _storage.ref().child(storagePath);
 
-    final metadata = SettableMetadata(
-      contentType: file.mimeType,
-    );
+    final metadata = SettableMetadata(contentType: file.mimeType);
 
     UploadTask uploadTask;
 
@@ -162,10 +153,10 @@ class ChatUploadService {
   }
 
   String _inferMimeType(
-      String fileName,
-      String? extension, {
-        required String fallback,
-      }) {
+    String fileName,
+    String? extension, {
+    required String fallback,
+  }) {
     final ext = (extension ?? _extractExtension(fileName)).toLowerCase();
 
     switch (ext) {
@@ -221,5 +212,14 @@ class ChatUploadService {
     final index = fileName.lastIndexOf('.');
     if (index == -1 || index == fileName.length - 1) return '';
     return fileName.substring(index + 1);
+  }
+
+  String _sanitizeFileName(String fileName) {
+    final sanitized = fileName
+        .trim()
+        .replaceAll(RegExp(r'[\\/]'), '_')
+        .replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '');
+
+    return sanitized.isEmpty ? 'attachment' : sanitized;
   }
 }

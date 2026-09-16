@@ -1,9 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import 'api_config.dart';
+
 class ApiService {
-  static Future<List<dynamic>> analyzePrescription(String prescriptionText) async {
-    final url = Uri.parse("http://10.0.2.2:5000/analyze"); // لو Emulator
+  static Future<List<dynamic>> analyzePrescription(
+    String prescriptionText,
+  ) async {
+    final url = Uri.parse('${ApiConfig.baseUrl}/analyze-prescription');
 
     try {
       final response = await http.post(

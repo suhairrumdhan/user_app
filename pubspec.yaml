@@ -52,6 +52,7 @@ dependencies:
   isar_flutter_libs: ^3.1.0+1
   timezone: ^0.9.4
   url_launcher: ^6.3.2
+  app_links: ^6.4.1
   flutter_chat_core: ^2.0.0
   flutter_chat_ui: ^2.0.0
   flutter_chat_types: ^3.6.2
@@ -61,6 +62,8 @@ dependencies:
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
   isar_generator: ^3.1.0+1
   build_runner: ^2.4.13
@@ -79,6 +82,11 @@ flutter:
     - assets/images/Quran.jpg
     - assets/icons/
     - assets/images/welcome_medicine.png
+
+  fonts:
+    - family: Cairo
+      fonts:
+        - asset: assets/fonts/Cairo-Variable.ttf
 
 flutter_launcher_icons:
   android: true

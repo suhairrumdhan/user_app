@@ -5,9 +5,9 @@ import 'package:iconsax/iconsax.dart';
 import '../controllers/reminders_controller.dart';
 import '../data/models/appointment_reminder_model.dart';
 import '../data/models/medication_reminder_model.dart';
+import 'add_medication_reminder_page.dart';
 import '../widgets/action_sheet.dart';
 import '../widgets/owner_badge.dart';
-import '../widgets/reminder_section_header.dart';
 import '../widgets/time_chip.dart';
 
 class ReminderDetailsPage extends StatelessWidget {
@@ -35,7 +35,7 @@ class ReminderDetailsPage extends StatelessWidget {
         child: Obx(() {
           if (reminderType == 'medication') {
             final reminder = controller.medicationReminders.firstWhereOrNull(
-                  (e) => e.id == reminderId,
+              (e) => e.id == reminderId,
             );
 
             if (reminder == null) {
@@ -47,12 +47,15 @@ class ReminderDetailsPage extends StatelessWidget {
               );
             }
 
-            final logs = controller.logs
-                .where((e) =>
-            e.reminderType == 'medication' &&
-                e.reminderLocalId == reminder.id)
-                .toList()
-              ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+            final logs =
+                controller.logs
+                    .where(
+                      (e) =>
+                          e.reminderType == 'medication' &&
+                          e.reminderLocalId == reminder.id,
+                    )
+                    .toList()
+                  ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
             return _MedicationDetailsBody(
               reminder: reminder,
@@ -62,7 +65,7 @@ class ReminderDetailsPage extends StatelessWidget {
           }
 
           final reminder = controller.appointmentReminders.firstWhereOrNull(
-                (e) => e.id == reminderId,
+            (e) => e.id == reminderId,
           );
 
           if (reminder == null) {
@@ -74,12 +77,15 @@ class ReminderDetailsPage extends StatelessWidget {
             );
           }
 
-          final logs = controller.logs
-              .where((e) =>
-          e.reminderType == 'appointment' &&
-              e.reminderLocalId == reminder.id)
-              .toList()
-            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          final logs =
+              controller.logs
+                  .where(
+                    (e) =>
+                        e.reminderType == 'appointment' &&
+                        e.reminderLocalId == reminder.id,
+                  )
+                  .toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
           return _AppointmentDetailsBody(
             reminder: reminder,
@@ -130,6 +136,23 @@ class _MedicationDetailsBody extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+              ),
+              IconButton(
+                tooltip: 'تعديل',
+                icon: const Icon(Iconsax.edit, color: Colors.white),
+                onPressed: () async {
+                  final updated = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          AddMedicationReminderPage(reminder: reminder),
+                    ),
+                  );
+                  if (updated == true && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('تم تحديث التذكير بنجاح')),
+                    );
+                  }
+                },
               ),
               GestureDetector(
                 onTap: () => ReminderActionSheet.showForMedication(
@@ -209,7 +232,7 @@ class _MedicationDetailsBody extends StatelessWidget {
                 _InfoBox(
                   title: 'تاريخ البداية',
                   value:
-                  '${reminder.startDate.year}/${reminder.startDate.month}/${reminder.startDate.day}',
+                      '${reminder.startDate.year}/${reminder.startDate.month}/${reminder.startDate.day}',
                   icon: Iconsax.calendar_1,
                 ),
                 const SizedBox(height: 12),
@@ -407,7 +430,7 @@ class _AppointmentDetailsBody extends StatelessWidget {
                 _InfoBox(
                   title: 'الموعد',
                   value:
-                  '${reminder.appointmentDateTime.year}/${reminder.appointmentDateTime.month}/${reminder.appointmentDateTime.day} • ${reminder.appointmentDateTime.hour.toString().padLeft(2, '0')}:${reminder.appointmentDateTime.minute.toString().padLeft(2, '0')}',
+                      '${reminder.appointmentDateTime.year}/${reminder.appointmentDateTime.month}/${reminder.appointmentDateTime.day} • ${reminder.appointmentDateTime.hour.toString().padLeft(2, '0')}:${reminder.appointmentDateTime.minute.toString().padLeft(2, '0')}',
                   icon: Iconsax.calendar_1,
                 ),
                 const SizedBox(height: 12),
@@ -524,10 +547,7 @@ class _ActionButton extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 title,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(color: color, fontWeight: FontWeight.bold),
               ),
             ],
           ),

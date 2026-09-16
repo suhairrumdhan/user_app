@@ -2,6 +2,20 @@ import '../../search/models/medicine_search_request.dart';
 import '../models/medicine_model.dart';
 
 class DrugParser {
+  static List<MedicineModel> parseUnmatchedMedicineModels(List<dynamic> items) {
+    return items
+        .whereType<Map>()
+        .map(
+          (item) => MedicineModel(
+            name: (item['name'] ?? '').toString().trim(),
+            dosage: _nullableString(item['strength']),
+            route: _nullableString(item['dosageForm']),
+          ),
+        )
+        .where((medicine) => medicine.name.isNotEmpty)
+        .toList();
+  }
+
   static List<MedicineModel> parseMedicineModels(List<dynamic> items) {
     return items
         .whereType<Map>()

@@ -1,3 +1,3 @@
 class ApiConfig {
-  static const String baseUrl = 'http://172.20.10.4:8080';
+  static const String baseUrl = 'https://user-app-31nd.onrender.com';
 }

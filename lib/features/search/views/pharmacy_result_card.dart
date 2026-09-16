@@ -29,6 +29,23 @@ class PharmacyResultCard extends StatelessWidget {
     this.onSelectAlternative,
   });
 
+  /// Opens the same detailed view used by the details button on the list card.
+  /// This keeps the map popup and the list view on one details implementation.
+  static void showDetails(
+    BuildContext context, {
+    required PharmacyModel pharmacy,
+    void Function({
+      required String pharmacyId,
+      required String requestKey,
+      required MatchedMedicineResult newSelection,
+    })? onSelectAlternative,
+  }) {
+    PharmacyResultCard(
+      pharmacy: pharmacy,
+      onSelectAlternative: onSelectAlternative,
+    )._showDetailsDialog(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final statusColor = pharmacy.isOpenNow || pharmacy.is24Hours
@@ -238,6 +255,16 @@ class PharmacyResultCard extends StatelessWidget {
   Widget _buildMainStats() {
     return Row(
       children: [
+        Expanded(
+          child: _statCard(
+            icon: Iconsax.location,
+            title: 'المسافة',
+            value: pharmacy.hasKnownDistance
+                ? pharmacy.displayDistance
+                : 'غير متاحة',
+          ),
+        ),
+        const SizedBox(width: 8),
         Expanded(
           child: _statCard(
             icon: Iconsax.money_4,

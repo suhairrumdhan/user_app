@@ -6,6 +6,9 @@ part 'reminder_log_model.g.dart';
 class ReminderLogModel {
   Id id = Isar.autoIncrement;
 
+  @Index(caseSensitive: true)
+  String ownerUserId = '';
+
   /// medication أو appointment
   @Index()
   late String reminderType;

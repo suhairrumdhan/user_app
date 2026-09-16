@@ -8,11 +8,14 @@ import '../../health_records/controllers/health_record_controller.dart';
 import '../../prescription/models/beneficiary_model.dart';
 import '../../profile/controllers/user_controller.dart';
 import '../controllers/add_medication_reminder_controller.dart';
+import '../data/models/medication_reminder_model.dart';
 import '../widgets/time_chip.dart';
 import '../../previous_medications/services/previous_medications_service.dart';
 
 class AddMedicationReminderPage extends StatefulWidget {
-  const AddMedicationReminderPage({super.key});
+  const AddMedicationReminderPage({super.key, this.reminder});
+
+  final MedicationReminderModel? reminder;
 
   @override
   State<AddMedicationReminderPage> createState() =>
@@ -32,12 +35,15 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
   late final HealthRecordController healthRecordController;
 
   final _formKey = GlobalKey<FormState>();
+  bool _saveInProgress = false;
   final PreviousMedicationsService previousMedicationsService =
-  PreviousMedicationsService();
+      PreviousMedicationsService();
   @override
   void initState() {
     super.initState();
-    controller = Get.put(AddMedicationReminderController());
+    controller = Get.put(
+      AddMedicationReminderController(existingReminder: widget.reminder),
+    );
     familyController = Get.isRegistered<FamilyController>()
         ? Get.find<FamilyController>()
         : Get.put(FamilyController());
@@ -182,14 +188,6 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
                                       fontSize: 15,
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    item.relation,
-                                    style: const TextStyle(
-                                      color: Colors.black54,
-                                      fontSize: 12,
-                                    ),
-                                  ),
                                 ],
                               ),
                             ),
@@ -288,7 +286,7 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
       );
     } else {
       final member = familyController.members.firstWhereOrNull(
-            (e) => e.id == beneficiary.id,
+        (e) => e.id == beneficiary.id,
       );
       if (member == null) return;
 
@@ -317,43 +315,50 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
   }
 
   Future<void> _save() async {
-    final beneficiaryError = controller.validateBeneficiary();
-    final timesError = controller.validateTimes();
-    final rangeError = controller.validateDateRange();
+    if (_saveInProgress) return;
+    setState(() => _saveInProgress = true);
 
-    if (!_formKey.currentState!.validate()) return;
+    try {
+      final beneficiaryError = controller.validateBeneficiary();
+      final timesError = controller.validateTimes();
+      final rangeError = controller.validateDateRange();
 
-    if (beneficiaryError != null) {
-      _showError(beneficiaryError);
-      return;
+      if (!_formKey.currentState!.validate()) return;
+
+      if (beneficiaryError != null) {
+        _showError(beneficiaryError);
+        return;
+      }
+
+      if (timesError != null) {
+        _showError(timesError);
+        return;
+      }
+
+      if (rangeError != null) {
+        _showError(rangeError);
+        return;
+      }
+
+      final reminder = await controller.saveReminder();
+      if (reminder == null) return;
+
+      if (!controller.isEditing) {
+        await _syncMedicationToHealthRecord(linkedReminderLocalId: reminder.id);
+      }
+
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      final wasEditing = controller.isEditing;
+      Navigator.of(context).pop(true);
+      if (!wasEditing) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('تم إنشاء تذكير الدواء بنجاح')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saveInProgress = false);
     }
-
-    if (timesError != null) {
-      _showError(timesError);
-      return;
-    }
-
-    if (rangeError != null) {
-      _showError(rangeError);
-      return;
-    }
-
-    final reminder = await controller.saveReminder();
-    if (reminder == null) return;
-
-    await _syncMedicationToHealthRecord(
-      linkedReminderLocalId: reminder.id,
-    );
-
-    if (!mounted) return;
-    Get.back();
-    Get.snackbar(
-      'تم الحفظ',
-      'تم إنشاء تذكير الدواء بنجاح',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: const Color(0xFF4CAF50),
-      colorText: Colors.white,
-    );
   }
 
   void _showError(String message) {
@@ -379,8 +384,7 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
         child: Column(
           children: [
             Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
                   IconButton(
@@ -388,10 +392,12 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
                     onPressed: () => Navigator.pop(context),
                   ),
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'إضافة تذكير دواء',
-                      style: TextStyle(
+                      controller.isEditing
+                          ? 'تعديل تذكير الدواء'
+                          : 'إضافة تذكير دواء',
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -439,10 +445,7 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
                             CircleAvatar(
                               radius: 26,
                               backgroundColor: Colors.white24,
-                              child: Icon(
-                                Iconsax.book,
-                                color: Colors.white,
-                              ),
+                              child: Icon(Iconsax.book, color: Colors.white),
                             ),
                             SizedBox(width: 12),
                             Expanded(
@@ -486,13 +489,14 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
                       ),
                       const SizedBox(height: 16),
                       Obx(() {
-                        final beneficiary = controller.selectedBeneficiary.value;
+                        final beneficiary =
+                            controller.selectedBeneficiary.value;
                         return _buildPickerCard(
                           icon: Iconsax.profile_2user,
                           label: 'المستفيد',
                           value: beneficiary == null
                               ? 'اختر المستفيد'
-                              : '${beneficiary.name} • ${beneficiary.relation}',
+                              : beneficiary.name,
                           onTap: _pickBeneficiary,
                         );
                       }),
@@ -589,8 +593,9 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
                         return SwitchListTile(
                           value: controller.saveToHealthRecord.value,
                           onChanged: controller.toggleSaveToHealthRecord,
-                          contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 4),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                          ),
                           activeColor: rPrimaryColor,
                           title: const Text(
                             'إضافته إلى السجل الصحي',
@@ -606,11 +611,12 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
                       }),
                       const SizedBox(height: 20),
                       Obx(() {
+                        final isSaving = controller.isSaving.value;
+                        final saveDisabled = _saveInProgress || isSaving;
                         return SizedBox(
                           height: 54,
                           child: ElevatedButton(
-                            onPressed:
-                            controller.isSaving.value ? null : _save,
+                            onPressed: saveDisabled ? null : _save,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: rPrimaryColor,
                               foregroundColor: Colors.white,
@@ -618,22 +624,24 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
                                 borderRadius: BorderRadius.circular(16),
                               ),
                             ),
-                            child: controller.isSaving.value
+                            child: saveDisabled
                                 ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                                : const Text(
-                              'حفظ التذكير',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(
+                                    controller.isEditing
+                                        ? 'حفظ التعديلات'
+                                        : 'حفظ التذكير',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
                           ),
                         );
                       }),
@@ -707,10 +715,7 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
                 children: [
                   Text(
                     label,
-                    style: TextStyle(
-                      color: Colors.grey[700],
-                      fontSize: 12.5,
-                    ),
+                    style: TextStyle(color: Colors.grey[700], fontSize: 12.5),
                   ),
                   const SizedBox(height: 4),
                   Text(

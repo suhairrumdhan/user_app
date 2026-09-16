@@ -158,14 +158,6 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
                                       fontSize: 15,
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    item.relation,
-                                    style: const TextStyle(
-                                      color: Colors.black54,
-                                      fontSize: 12,
-                                    ),
-                                  ),
                                 ],
                               ),
                             ),
@@ -292,8 +284,7 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
         child: Column(
           children: [
             Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
                   IconButton(
@@ -393,13 +384,14 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
                       ),
                       const SizedBox(height: 14),
                       Obx(() {
-                        final beneficiary = controller.selectedBeneficiary.value;
+                        final beneficiary =
+                            controller.selectedBeneficiary.value;
                         return _buildPickerCard(
                           icon: Iconsax.profile_2user,
                           label: 'المستفيد',
                           value: beneficiary == null
                               ? 'اختر المستفيد'
-                              : '${beneficiary.name} • ${beneficiary.relation}',
+                              : beneficiary.name,
                           onTap: _pickBeneficiary,
                         );
                       }),
@@ -436,8 +428,11 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
                           children: [
                             const Row(
                               children: [
-                                Icon(Iconsax.notification_bing,
-                                    color: rPrimaryColor, size: 20),
+                                Icon(
+                                  Iconsax.notification_bing,
+                                  color: rPrimaryColor,
+                                  size: 20,
+                                ),
                                 SizedBox(width: 8),
                                 Text(
                                   'التذكير قبل الموعد',
@@ -456,30 +451,34 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
                                 children: AddAppointmentController
                                     .reminderOptions
                                     .map((minutes) {
-                                  final isSelected =
-                                      controller.remindBeforeMinutes.value ==
+                                      final isSelected =
+                                          controller
+                                              .remindBeforeMinutes
+                                              .value ==
                                           minutes;
-                                  return ChoiceChip(
-                                    label: Text(
-                                      _remindLabel(minutes),
-                                      style: TextStyle(
-                                        color: isSelected
-                                            ? Colors.white
-                                            : rTextDarkColor,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    selected: isSelected,
-                                    onSelected: (_) =>
-                                        controller.setRemindBeforeMinutes(
-                                            minutes),
-                                    selectedColor: rPrimaryColor,
-                                    backgroundColor: Colors.white,
-                                    side: BorderSide(
-                                      color: rPrimaryColor.withOpacity(0.14),
-                                    ),
-                                  );
-                                }).toList(),
+                                      return ChoiceChip(
+                                        label: Text(
+                                          _remindLabel(minutes),
+                                          style: TextStyle(
+                                            color: isSelected
+                                                ? Colors.white
+                                                : rTextDarkColor,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        selected: isSelected,
+                                        onSelected: (_) => controller
+                                            .setRemindBeforeMinutes(minutes),
+                                        selectedColor: rPrimaryColor,
+                                        backgroundColor: Colors.white,
+                                        side: BorderSide(
+                                          color: rPrimaryColor.withOpacity(
+                                            0.14,
+                                          ),
+                                        ),
+                                      );
+                                    })
+                                    .toList(),
                               );
                             }),
                           ],
@@ -490,8 +489,9 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
                         return SwitchListTile(
                           value: controller.saveToHealthRecord.value,
                           onChanged: controller.toggleSaveToHealthRecord,
-                          contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 4),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                          ),
                           activeColor: rPrimaryColor,
                           title: const Text(
                             'ربطه كسجل صحي مهم',
@@ -510,8 +510,7 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
                         return SizedBox(
                           height: 54,
                           child: ElevatedButton(
-                            onPressed:
-                            controller.isSaving.value ? null : _save,
+                            onPressed: controller.isSaving.value ? null : _save,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: rPrimaryColor,
                               foregroundColor: Colors.white,
@@ -521,20 +520,20 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
                             ),
                             child: controller.isSaving.value
                                 ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
                                 : const Text(
-                              'حفظ الموعد',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
+                                    'حفظ الموعد',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
                           ),
                         );
                       }),
@@ -617,10 +616,7 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
                 children: [
                   Text(
                     label,
-                    style: TextStyle(
-                      color: Colors.grey[700],
-                      fontSize: 12.5,
-                    ),
+                    style: TextStyle(color: Colors.grey[700], fontSize: 12.5),
                   ),
                   const SizedBox(height: 4),
                   Text(
