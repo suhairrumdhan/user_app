@@ -1,314 +1,117 @@
+"""Name recognition, not clinical substitution.
+
+A spelling score is a suggestion only. Missing or conflicting product details
+must never be repaired by choosing a different catalog product.
+"""
 from typing import List, Dict, Optional
 from rapidfuzz import fuzz
-
 from services.normalization import (
-    normalize_text,
-    clean_brand_name,
-    extract_strength,
-    extract_dosage_form,
+    normalize_text, clean_brand_name, extract_strength,
+    extract_dosage_form, strip_posology,
 )
 
-MIN_CANDIDATE_LEN = 4
 MATCH_THRESHOLD = 80
-HIGH_CONFIDENCE = 90
 MAX_RELEVANT_RESULTS = 300
-MAX_CANDIDATES = 40
-
-STOPWORDS = {
-    "and", "or", "with", "for", "the", "of", "to", "in"
-}
-
-
-def is_medicine_like(candidate: str) -> bool:
-    candidate = normalize_text(candidate)
-    if len(candidate) < MIN_CANDIDATE_LEN:
-        return False
-
-    brand = clean_brand_name(candidate)
-    if len(brand) < 3:
-        return False
-
-    return True
-
-
-def clean_candidate(candidate: str) -> str:
-    tokens = candidate.split()
-
-    while tokens and tokens[0] in STOPWORDS:
-        tokens.pop(0)
-
-    while tokens and tokens[-1] in STOPWORDS:
-        tokens.pop()
-
-    return " ".join(tokens).strip()
-
-
-def trim_candidate_tail(candidate: str) -> str:
-    tokens = candidate.split()
-    if not tokens:
-        return candidate
-
-    dosage_forms = {
-        "tab", "cap", "syrup", "susp", "drop",
-        "cream", "ointment", "gel", "spray",
-        "vial", "amp", "inj",
-    }
-
-    for i, tok in enumerate(tokens):
-        if tok in dosage_forms:
-            return " ".join(tokens[:i + 1]).strip()
-
-    return candidate
-
-
-def has_suspicious_connector(candidate: str) -> bool:
-    tokens = candidate.split()
-    connectors = {"and", "or", "with"}
-    return any(tok in connectors for tok in tokens)
 
 
 def generate_candidates(text: str, max_n: int = 5) -> List[str]:
-    text = normalize_text(text)
-    tokens = text.split()
-    line_strength = extract_strength(text)
-    line_form = extract_dosage_form(text)
-
-    candidates = []
-    seen = set()
-
-    for i in range(len(tokens)):
-        for n in range(1, max_n + 1):
-            if i + n > len(tokens):
-                continue
-
-            phrase = " ".join(tokens[i:i + n]).strip()
-            phrase = clean_candidate(phrase)
-            if not phrase:
-                continue
-
-            # The strength/form present in this medicine line cannot be omitted
-            # just to obtain a higher fuzzy score for a different product.
-            if line_strength and extract_strength(phrase) != line_strength:
-                continue
-            if line_form and extract_dosage_form(phrase) != line_form:
-                continue
-
-            if has_suspicious_connector(phrase):
-                continue
-
-            if len(phrase) < MIN_CANDIDATE_LEN:
-                continue
-
-            if len(phrase.split()) > 4:
-                continue
-
-            if not is_medicine_like(phrase):
-                continue
-
-            generic_tokens = {"mg", "ml", "tab", "cap", "syrup", "drop", "cream", "gel"}
-
-            if phrase in generic_tokens:
-                continue
+    # Whole lines preserve PLUS/XR and all components of a combination.
+    candidate = normalize_text(strip_posology(text))
+    return [candidate] if len(clean_brand_name(candidate)) >= 3 else []
 
 
-            if phrase not in seen:
-                seen.add(phrase)
-                candidates.append(phrase)
-
-    candidates.sort(key=lambda x: (-len(x.split()), x))
-    return candidates[:MAX_CANDIDATES]
-
-
-def _add_items(results: List[Dict], seen_ids: set, items: List[Dict]) -> bool:
-    for med in items:
-        med_id = med.get("id")
-        if med_id in seen_ids:
+def get_relevant_meds(candidate: str, search_index: Dict) -> List[Dict]:
+    brand = clean_brand_name(candidate)
+    exact = search_index["brand_index"].get(brand, [])
+    if exact:
+        return exact
+    found = {}
+    for token in brand.split():
+        if len(token) < 3:
             continue
-
-        seen_ids.add(med_id)
-        results.append(med)
-
-        if len(results) >= MAX_RELEVANT_RESULTS:
-            return True
-
-    return False
+        for med in search_index["prefix_index"].get(token[:3], []):
+            found[med["id"]] = med
+            if len(found) >= MAX_RELEVANT_RESULTS:
+                return list(found.values())
+    return list(found.values())
 
 
-def get_relevant_meds(candidate: str, search_index: Dict[str, Dict[str, List[Dict]]]) -> List[Dict]:
-    candidate_norm = normalize_text(candidate)
-    candidate_brand = clean_brand_name(candidate)
-    full_name_index = search_index["full_name_index"]
-    brand_index = search_index["brand_index"]
-    token_index = search_index["token_index"]
-    prefix_index = search_index["prefix_index"]
-
-    results: List[Dict] = []
-    seen_ids = set()
-
-    # 1) exact full
-    if _add_items(results, seen_ids, full_name_index.get(candidate_norm, [])):
-        return results
-
-    # 2) exact brand
-    if candidate_brand:
-        if _add_items(results, seen_ids, brand_index.get(candidate_brand, [])):
-            return results
-
-    # 3) token matches from full normalized text
-    for tok in candidate_norm.split():
-        tok = tok.strip()
-        if tok.isdigit() or tok in {"mg", "ml", "mcg", "g", "tab", "cap"}:
-            continue
-        if len(tok) >= 2:
-            if _add_items(results, seen_ids, token_index.get(tok, [])):
-                return results
-        if len(tok) >= 3:
-            if _add_items(results, seen_ids, prefix_index.get(tok[:3], [])):
-                return results
-
-    # 4) token matches from brand name
-    for tok in candidate_brand.split():
-        tok = tok.strip()
-        if len(tok) >= 2:
-            if _add_items(results, seen_ids, token_index.get(tok, [])):
-                return results
-        if len(tok) >= 3:
-            if _add_items(results, seen_ids, prefix_index.get(tok[:3], [])):
-                return results
-
-    # A common strength or dosage form alone is not evidence of a medicine name.
-    return results
+def _brands(med: Dict) -> set:
+    return {med.get("brand_name", ""), *med.get("name_aliases", [])} - {""}
 
 
-def _score_candidate(candidate: str, med: Dict) -> Dict:
-    candidate_norm = normalize_text(candidate)
-    candidate_brand = clean_brand_name(candidate)
-    candidate_strength = extract_strength(candidate)
-    candidate_form = extract_dosage_form(candidate)
-
-    med_full = med.get("normalized_full") or ""
-    med_brand = med.get("brand_name") or ""
-
-    full_score = fuzz.ratio(candidate_norm, med_full)
-    brand_score = fuzz.ratio(candidate_brand, med_brand) if candidate_brand and med_brand else 0
-    token_score = fuzz.token_set_ratio(candidate_norm, med_full)
-
-    score = (
-        0.40 * brand_score +
-        0.30 * full_score +
-        0.30 * token_score
-    )
-
-    candidate_tokens = set(candidate_norm.split())
-    med_tokens = set(med_full.split())
-    overlap = len(candidate_tokens & med_tokens)
-    score += overlap * 2.5
-
-    if candidate_strength and med.get("strength"):
-        if candidate_strength == med["strength"]:
-            score += 8
-        else:
-            score -= 7
-
-    if candidate_form and med.get("dosage_form"):
-        if candidate_form == med["dosage_form"]:
-            score += 5
-        else:
-            score -= 4
-
-    match_type = "fuzzy"
-
-    if candidate_norm == med_full:
-        score += 8
-        match_type = "exact_full"
-    elif candidate_brand and candidate_brand == med_brand:
-        score += 6
-        match_type = "exact_brand"
-    elif (
-        candidate_brand and candidate_strength and
-        candidate_brand == med_brand and candidate_strength == med.get("strength")
-    ):
-        score += 9
-        match_type = "exact_brand_strength"
-
-    final_score = max(0.0, min(score, 100.0))
-
-    return {
-        "medicine": med,
-        "score": round(final_score, 2),
-        "match_type": match_type,
-    }
+def _compatible(candidate: str, med: Dict) -> bool:
+    for source, key in [(extract_strength(candidate), "strength"),
+                        (extract_dosage_form(candidate), "dosage_form")]:
+        if source and med.get(key) and source != med[key]:
+            return False
+    return True
 
 
 def find_best_matches(candidate: str, relevant: List[Dict], top_k: int = 3) -> List[Dict]:
-    scored = [_score_candidate(candidate, med) for med in relevant]
-    scored.sort(key=lambda x: x["score"], reverse=True)
+    brand = clean_brand_name(candidate)
+    strength = extract_strength(candidate)
+    form = extract_dosage_form(candidate)
+    scored = []
+    for med in relevant:
+        if not _compatible(candidate, med):
+            continue
+        exact = brand in _brands(med)
+        score = max((fuzz.ratio(brand, name) for name in _brands(med)), default=0)
+        details = int(bool(strength and med.get("strength") == strength))
+        details += int(bool(form and med.get("dosage_form") == form))
+        scored.append({"medicine": med, "score": score, "exact": exact,
+                       "details": details,
+                       "match_type": "exact_identity" if exact else "spelling_suggestion"})
+    scored.sort(key=lambda x: (x["exact"], x["details"], x["score"],
+                              not x["medicine"].get("review_only", False),
+                              x["medicine"].get("source_quality") == "official"), reverse=True)
     return scored[:top_k]
 
 
-def select_final_match(
-    candidate: str,
-    dictionary: List[Dict],
-    index: Dict[str, Dict[str, List[Dict]]],
-) -> Optional[Dict]:
+def select_final_match(candidate: str, dictionary: List[Dict], index: Dict) -> Optional[Dict]:
     relevant = get_relevant_meds(candidate, index)
-
-    candidate_strength = extract_strength(candidate)
-    candidate_form = extract_dosage_form(candidate)
-    if candidate_strength:
-        # A different listed strength is not a safe automatic match.
-        relevant = [
-            med for med in relevant
-            if not med.get("strength") or med["strength"] == candidate_strength
-        ]
-    if candidate_form:
-        relevant = [
-            med for med in relevant
-            if not med.get("dosage_form") or med["dosage_form"] == candidate_form
-        ]
-
-    if not relevant:
+    top = find_best_matches(candidate, relevant)
+    if not top or top[0]["score"] < MATCH_THRESHOLD:
         return None
-
-    top = find_best_matches(candidate, relevant, top_k=3)
-    if not top:
-        return None
-
     best = top[0]
-    second = top[1] if len(top) > 1 else None
-
-    if best["score"] < MATCH_THRESHOLD:
-        return None
-
-    ambiguous = second is not None and (best["score"] - second["score"] < 3)
-
     med = best["medicine"]
-    missing_catalog_detail = bool(
-        (candidate_strength and not med.get("strength")) or
-        (candidate_form and not med.get("dosage_form")) or
-        (not candidate_strength and med.get("strength"))
-    )
-    confidence = round(best["score"] / 100.0, 2)
-    if missing_catalog_detail:
-        confidence = min(confidence, 0.89)
-
+    strength = extract_strength(candidate)
+    form = extract_dosage_form(candidate)
+    reasons = []
+    if not best["exact"]:
+        reasons.append("spelling_suggestion")
+    if strength and not med.get("strength"):
+        reasons.append("unverified_strength")
+    if form and not med.get("dosage_form"):
+        reasons.append("unverified_form")
+    compatible = [m for m in relevant if _compatible(candidate, m)]
+    if not strength and any(m.get("strength") for m in compatible):
+        reasons.append("missing_strength")
+    if not form and any(m.get("dosage_form") for m in compatible):
+        reasons.append("missing_form")
+    if med.get("review_only"):
+        reasons.append("reference_catalog_only")
+    ingredients = {m.get("ingredient_key") for m in compatible
+                   if m.get("ingredient_key") and clean_brand_name(candidate) in _brands(m)}
+    if len(ingredients) > 1:
+        reasons.append("ambiguous_ingredients")
+    suggestions = [{
+        "name": item["medicine"]["raw_name"],
+        "catalogId": item["medicine"]["id"],
+        "source": item["medicine"].get("source"),
+        "market": item["medicine"].get("market"),
+        "similarity": round(item["score"] / 100, 2),
+    } for item in top if item["score"] >= MATCH_THRESHOLD]
     return {
-        "candidate": candidate,
-        "raw_name": med["raw_name"],
-        "parsedBrandName": med["brand_name"] or None,
+        "candidate": candidate, "raw_name": med["raw_name"],
+        "parsedBrandName": clean_brand_name(candidate),
         "parsedScientificName": None,
-        "strength": med.get("strength"),
-        "dosageForm": med.get("dosage_form"),
+        # Never fill missing prescription details from a catalog.
+        "strength": strength, "dosageForm": form,
         "normalizedText": normalize_text(candidate),
-        "confidence": confidence,
-        "matchType": best["match_type"],
-        "needsReview": best["score"] < HIGH_CONFIDENCE or ambiguous or missing_catalog_detail,
-        "alternatives": [
-            {
-                "name": item["medicine"]["raw_name"],
-                "confidence": round(item["score"] / 100.0, 2),
-            }
-            for item in top[1:]
-            if item["score"] >= MATCH_THRESHOLD - 3
-        ],
+        "confidence": 1.0 if not reasons else min(round(best["score"] / 100, 2), 0.89),
+        "matchType": best["match_type"], "needsReview": bool(reasons),
+        "reviewReasons": reasons, "alternatives": suggestions,
+        "catalogId": med["id"], "source": med.get("source"), "market": med.get("market"),
     }

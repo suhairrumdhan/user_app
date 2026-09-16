@@ -2,7 +2,7 @@ import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-from services.dictionary_builder import build_dictionary_from_csvs, build_search_index
+from services.dictionary_builder import load_catalog, build_search_index
 from services.analyzer import analyze_text
 
 app = Flask(__name__)
@@ -57,11 +57,6 @@ CORS(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
-CSV_PATHS = [
-    os.path.join(DATA_DIR, "medItems1.csv"),
-    os.path.join(DATA_DIR, "medItems2.csv"),
-]
-
 MEDICINE_DICTIONARY = []
 MEDICINE_INDEX = {}
 
@@ -69,11 +64,11 @@ MEDICINE_INDEX = {}
 def load_medicine_data() -> None:
     global MEDICINE_DICTIONARY, MEDICINE_INDEX
 
-    MEDICINE_DICTIONARY = build_dictionary_from_csvs(CSV_PATHS)
+    MEDICINE_DICTIONARY = load_catalog(DATA_DIR)
     MEDICINE_INDEX = build_search_index(MEDICINE_DICTIONARY)
 
     print(f"Loaded medicines: {len(MEDICINE_DICTIONARY)}")
-    print(f"Index tokens: {len(MEDICINE_INDEX)}")
+    print(f"Index tokens: {len(MEDICINE_INDEX['token_index'])}")
 
 
 @app.get("/")
@@ -89,7 +84,9 @@ def health():
     return jsonify({
         "status": "ok",
         "dictionaryCount": len(MEDICINE_DICTIONARY),
-        "indexTokenCount": len(MEDICINE_INDEX),
+        "indexTokenCount": len(MEDICINE_INDEX['token_index']),
+        "matchingPolicy": "source-preserving-v2",
+        "catalogSources": sorted({med['source'] for med in MEDICINE_DICTIONARY}),
     })
 
 
@@ -112,6 +109,7 @@ def analyze_prescription():
         "cleanedText": result["cleanedText"],
         "medicines": result["medicines"],
         "unmatchedLines": result["unmatchedLines"],
+        "items": result["items"],
         "rejectedCandidates": result["rejectedCandidates"],
     })
 
@@ -132,7 +130,7 @@ def analyze_manual():
 
     return jsonify({
         "status": "success",
-        "medicines": result["medicines"][:5],
+        **result,
     })
 
 load_medicine_data()

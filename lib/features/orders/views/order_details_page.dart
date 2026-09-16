@@ -40,7 +40,11 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     _pickupTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted ||
           _order.status != OrderStatus.ready ||
-          _order.pickupDeadline == null) {
+          PickupTimeRemaining.resolveDeadline(
+                explicitDeadline: _order.pickupDeadline,
+                readyAt: _order.readyAt,
+              ) ==
+              null) {
         return;
       }
       setState(() => _now = DateTime.now());
@@ -63,9 +67,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
             if (!mounted) return;
             ScaffoldMessenger.maybeOf(context)?.showSnackBar(
               const SnackBar(
-                content: Text(
-                  'تعذر تحديث حالة الطلب. تحقق من الاتصال وأعد فتح الطلب.',
-                ),
+                content: Text('تعذر تحديث الطلب. تحقق من الاتصال.'),
               ),
             );
           },
@@ -148,7 +150,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                         _row('الاسم', order.beneficiary.name),
                         _row(
                           'التأمين',
-                          order.containsInsurance ? 'متضمن' : 'غير متضمن',
+                          order.containsInsurance ? 'مستخدم' : 'غير مستخدم',
                         ),
                       ],
                     ),
@@ -166,7 +168,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                         _row('رقم الطلب', _orderReference),
                         _row('عدد العناصر', '${order.totalItemsCount}'),
                         _row(
-                          'السعر ',
+                          'السعر',
                           estimatedTotal > 0
                               ? '${estimatedTotal.toStringAsFixed(2)} د.ل'
                               : 'غير محدد',
@@ -259,7 +261,10 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   }
 
   Widget _orderStatusCard() {
-    final deadline = order.pickupDeadline;
+    final deadline = PickupTimeRemaining.resolveDeadline(
+      explicitDeadline: order.pickupDeadline,
+      readyAt: order.status == OrderStatus.ready ? order.readyAt : null,
+    );
     final isOverdue = PickupTimeRemaining.isOverdue(
       isReady: order.status == OrderStatus.ready,
       serverMarkedOverdue: order.pickupOverdue,
@@ -267,6 +272,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       now: _now,
     );
     final accentColor = isOverdue ? Colors.deepOrange : SearchUiColors.primary;
+    final displayedStatus = isOverdue
+        ? 'متأخر عن الاستلام'
+        : order.status.label;
 
     return Container(
       width: double.infinity,
@@ -282,7 +290,11 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         children: [
           Row(
             children: [
-              Icon(Iconsax.info_circle, color: accentColor, size: 21),
+              Icon(
+                isOverdue ? Iconsax.warning_2 : Iconsax.info_circle,
+                color: accentColor,
+                size: 21,
+              ),
               const SizedBox(width: 9),
               Expanded(
                 child: Text.rich(
@@ -290,7 +302,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                     children: [
                       const TextSpan(text: 'الحالة: '),
                       TextSpan(
-                        text: order.status.label,
+                        text: displayedStatus,
                         style: TextStyle(color: accentColor),
                       ),
                     ],
@@ -304,44 +316,46 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               ),
             ],
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 9),
-            child: Divider(height: 1),
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Iconsax.calendar_tick, color: accentColor, size: 21),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'آخر موعد للاستلام',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        color: accentColor,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
+          if (deadline != null || order.status == OrderStatus.ready) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 9),
+              child: Divider(height: 1),
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Iconsax.calendar_tick, color: accentColor, size: 21),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'آخر موعد للاستلام',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          color: accentColor,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      deadline == null
-                          ? 'يُحدَّد عند جاهزية الطلب للاستلام'
-                          : _formatDateTime(deadline),
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                      const SizedBox(height: 2),
+                      Text(
+                        deadline == null
+                            ? 'بانتظار تحديد الموعد'
+                            : _formatDateTime(deadline),
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
           if (order.readyAt != null) ...[
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 9),
@@ -354,7 +368,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               color: accentColor,
             ),
           ],
-          if (order.status == OrderStatus.ready && deadline != null) ...[
+          if (order.status == OrderStatus.ready &&
+              deadline != null &&
+              !isOverdue) ...[
             const SizedBox(height: 10),
             Text(
               PickupTimeRemaining.format(deadline: deadline, now: _now)!,
@@ -367,20 +383,55 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
             ),
           ],
           if (isOverdue) ...[
-            const SizedBox(height: 9),
-            const Text(
-              'تجاوزت مهلة الاستلام. طلبك ما زال جاهزًا؛ تواصل مع الصيدلية.',
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                color: Colors.deepOrange,
-                fontWeight: FontWeight.w600,
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.deepOrange.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.deepOrange.withValues(alpha: 0.45),
+                  width: 1.4,
+                ),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Iconsax.danger, color: Colors.deepOrange, size: 22),
+                  SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'تأخر استلام الطلب',
+                          style: TextStyle(
+                            color: Colors.deepOrange,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(height: 3),
+                        Text(
+                          'انتهت مهلة الاستلام. تواصل مع الصيدلية لمعرفة حالة الطلب.',
+                          style: TextStyle(
+                            color: Color(0xFF9A3412),
+                            fontWeight: FontWeight.w700,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
           if (order.pharmacyDelayed) ...[
             const SizedBox(height: 9),
             const Text(
-              'تجاوزت مدة معالجة الصيدلية 24 ساعة دون احتساب انتظار قرارك.',
+              'لم تراجع الصيدلية الطلب خلال 24 ساعة.',
               textAlign: TextAlign.right,
               style: TextStyle(fontWeight: FontWeight.w600),
             ),
@@ -432,24 +483,37 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
   Widget _statusHistoryCard() {
     final history = order.statusHistory;
-    return _section(
-      title: 'سجل حالات الطلب',
-      icon: Iconsax.clock,
-      children: history.isEmpty
-          ? [
-              const Text(
-                'لا يتوفر سجل للحالات لهذا الطلب.',
-                textAlign: TextAlign.right,
-              ),
-            ]
-          : history.map(_statusHistoryRow).toList(),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 9),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ExpansionTile(
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: const Icon(Iconsax.clock, color: SearchUiColors.primary),
+        title: const Text(
+          'سجل الطلب',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            color: SearchUiColors.primary,
+          ),
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+        children: history.isEmpty
+            ? [const Text('لا توجد تحديثات سابقة.', textAlign: TextAlign.right)]
+            : history.map(_statusHistoryRow).toList(),
+      ),
     );
   }
 
   Widget _statusHistoryRow(OrderStatusLog entry) {
-    final label = entry.label.trim().isNotEmpty
+    final parsedStatus = OrderStatusX.fromValue(entry.status);
+    final label =
+        parsedStatus == OrderStatus.unknown && entry.label.trim().isNotEmpty
         ? entry.label.trim()
-        : OrderStatusX.fromValue(entry.status).label;
+        : parsedStatus.label;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
@@ -501,7 +565,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       ),
       child: Column(
         children: [
-          if (hasMatched) _row(' العنصر', matchedName),
+          _row('الدواء', hasMatched ? matchedName : item.requestedName),
           _row('الكمية', '${item.quantity}'),
           _row(
             'السعر',
@@ -519,15 +583,12 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('تأكيد الإلغاء'),
-        content: const Text(
-          'هل أنت متأكد من إلغاء هذا الطلب؟',
-          style: TextStyle(height: 1.5),
-        ),
+        title: const Text('إلغاء الطلب؟'),
+        content: const Text('لن تتمكن من التراجع بعد الإلغاء.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('رجوع'),
+            child: const Text('الاحتفاظ بالطلب'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -597,14 +658,12 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       setState(() => _isOpeningChat = false);
 
       Get.to(() => ChatDetailScreen(thread: thread));
-    } catch (e) {
+    } catch (_) {
       if (!mounted || !context.mounted) return;
 
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
-          content: Text(
-            'تعذر فتح المحادثة: ${e.toString().replaceFirst('Exception: ', '')}',
-          ),
+          content: Text('تعذر فتح المحادثة. حاول مجددًا.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -685,18 +744,15 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'عرض جزئي يحتاج قرارك',
+                      'عرض من الصيدلية',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    Text(
-                      'النسخة الحالية: ${order.offerVersion}',
-                      style: const TextStyle(
-                        color: Color(0xFF9A4B17),
-                        fontWeight: FontWeight.w700,
-                      ),
+                    const Text(
+                      'بعض الأدوية فقط متوفرة',
+                      style: TextStyle(color: Color(0xFF9A4B17)),
                     ),
                   ],
                 ),
@@ -704,11 +760,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
             ],
           ),
           const SizedBox(height: 12),
-          const Text(
-            'الصيدلية وفّرت الأصناف التالية فقط:',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 4),
           if (items.isEmpty)
             const Text('تعذر عرض تفاصيل الأصناف. حدّث الصفحة وحاول مجددًا.')
           else
@@ -716,7 +768,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
           if (order.userDecisionDeadline != null) ...[
             const SizedBox(height: 6),
             Text(
-              'المهلة حتى: ${_formatDateTime(order.userDecisionDeadline!)}',
+              'الرد قبل: ${_formatDateTime(order.userDecisionDeadline!)}',
               style: const TextStyle(
                 color: Color(0xFF9A4B17),
                 fontWeight: FontWeight.w700,
@@ -733,7 +785,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Text(
-                'الكمية المتاحة للحجز غير كافية حاليًا. يمكنك إعادة المحاولة بعد توفرها، أو التواصل مع الصيدلية لتعديل العرض.',
+                'الكمية لم تعد متاحة. حاول لاحقًا أو تواصل مع الصيدلية.',
                 style: TextStyle(
                   color: Colors.red,
                   fontWeight: FontWeight.w800,
@@ -781,7 +833,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
           ),
           const SizedBox(height: 7),
           const Text(
-            'لن يُحجز أي دواء إلا بعد قبولك لهذه النسخة.',
+            'يتم الحجز بعد قبول العرض.',
             style: TextStyle(fontSize: 12, color: Colors.black54),
           ),
         ],
@@ -859,11 +911,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                   );
                   if (!mounted) return;
                   ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'تمت متابعة الطلب دون تأمين وبدأت مراجعة الصيدلية',
-                      ),
-                    ),
+                    const SnackBar(content: Text('تمت متابعة الطلب دون تأمين')),
                   );
                 } catch (error) {
                   if (!mounted) return;
@@ -943,20 +991,20 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   String _offerDecisionError(Object error) {
     final value = error.toString().toLowerCase();
     if (_isUnavailableOfferError(error)) {
-      return 'تعذر قبول العرض: الكمية المتاحة للحجز غير كافية، أو الدواء غير صالح للبيع. تواصل مع الصيدلية أو أعد المحاولة بعد توفره.';
+      return 'الكمية لم تعد متاحة. حاول لاحقًا أو تواصل مع الصيدلية.';
     }
     if (value.contains('stale-offer-version') ||
         value.contains('partial offer changed')) {
-      return 'قامت الصيدلية بتحديث العرض. راجع النسخة الجديدة قبل القبول.';
+      return 'تم تحديث العرض. راجعه قبل القبول.';
     }
     if (value.contains('unauthenticated') ||
         value.contains('permission-denied')) {
-      return 'انتهت جلسة الدخول أو لا توجد صلاحية. سجّل الدخول ثم حاول مجددًا.';
+      return 'سجّل الدخول ثم حاول مجددًا.';
     }
     if (value.contains('unavailable') || value.contains('deadline-exceeded')) {
-      return 'تعذر الاتصال بالخادم حاليًا. تحقق من الإنترنت ثم حاول مجددًا.';
+      return 'تعذر الاتصال. تحقق من الإنترنت وحاول مجددًا.';
     }
-    return 'تعذر تنفيذ قرار العرض. حاول مجددًا أو تواصل مع الصيدلية.';
+    return 'تعذر تنفيذ القرار. حاول مجددًا.';
   }
 
   Future<void> _cancelOrder(BuildContext context) async {
@@ -975,13 +1023,11 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
       ScaffoldMessenger.maybeOf(
         context,
-      )?.showSnackBar(const SnackBar(content: Text('تم إلغاء الطلب بنجاح')));
+      )?.showSnackBar(const SnackBar(content: Text('تم إلغاء الطلب')));
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(
-          content: Text('فشل في إلغاء الطلب. تحقق من الاتصال وحاول مجددًا.'),
-        ),
+        const SnackBar(content: Text('تعذر إلغاء الطلب. حاول مجددًا.')),
       );
     } finally {
       if (mounted) setState(() => _isCancelling = false);

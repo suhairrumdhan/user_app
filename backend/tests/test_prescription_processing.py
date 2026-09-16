@@ -61,20 +61,20 @@ class PrescriptionProcessingTests(unittest.TestCase):
                             for candidate in candidates))
         self.assertNotIn("ciprobay tab", candidates)
         result = analyze_text("Ciprobay tab 500mg 1x2x5days", self.dictionary, self.index)
-        self.assertTrue(result["medicines"])
-        self.assertTrue(all(med["matchedDisplayName"] != "Ciprobay 250mg"
-                            for med in result["medicines"]))
+        self.assertFalse(result["medicines"])
+        self.assertEqual(result["unmatchedLines"][0]["strength"], "500 mg")
+        self.assertIn("unverified_form", result["unmatchedLines"][0]["reviewReasons"])
 
     def test_unmatched_medicine_lines_are_kept_for_user_review(self):
         result = analyze_text(
             "Ciprobay tab 500mg\nTreto Cap 1X2X15days\nDoliprane 1gm tab",
             self.dictionary, self.index,
         )
+        # The fixture does not state a form for Ciprobay/Doliprane: those
+        # details must be reviewed too, not silently assumed from the input.
         self.assertEqual([entry["name"] for entry in result["unmatchedLines"]],
-                         ["Treto"])
-        self.assertEqual(result["unmatchedLines"][0]["dosageForm"], "cap")
-        self.assertTrue(any(med["matchedDisplayName"] == "Ciprobay 500mg"
-                            for med in result["medicines"]))
+                         ["ciprobay", "treto", "doliprane"])
+        self.assertEqual(result["unmatchedLines"][1]["dosageForm"], "cap")
 
     def test_unverified_catalog_strength_is_not_marked_confirmed(self):
         med = item("Omnic 0.4 30 Cap", "omnic")
@@ -82,9 +82,11 @@ class PrescriptionProcessingTests(unittest.TestCase):
         dictionary = [med]
         index = build_search_index(dictionary)
         match = select_final_match("Omnic 0.4 mg cap", dictionary, index)
-        self.assertIsNotNone(match)
-        self.assertTrue(match["needsReview"])
-        self.assertLess(match["confidence"], 0.90)
+        # A number without a unit is not evidence of 0.4 mg.
+        self.assertTrue(match is None or match["needsReview"])
+        result = analyze_text("Omnic 0.4 mg cap", dictionary, index)
+        self.assertFalse(result["medicines"])
+        self.assertEqual(result["unmatchedLines"][0]["strength"], "0.4 mg")
 
     def test_each_medicine_line_produces_at_most_one_result(self):
         result = analyze_text(

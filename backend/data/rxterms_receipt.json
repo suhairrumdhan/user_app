@@ -1,0 +1,9 @@
+{
+  "source": "https://lhncbc.nlm.nih.gov/MOR/RxTerms/",
+  "download": "https://data.lhncbc.nlm.nih.gov/public/rxterms/release/RxTerms202609.zip",
+  "version": "202609",
+  "archive_sha256": "c7aefff1974144b7a43f38f43d7a034b5b39d1339e53635ff90a94ea555965f2",
+  "output_sha256": "f42ce86d46d62390b3df63b56cb7446be1dd8cca9d0266da629e039aeccb84e3",
+  "record_count": 4818,
+  "scope": "Current ordinary oral single-strength tablets/capsules only; US reference, not Libya availability."
+}

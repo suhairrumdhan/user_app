@@ -10,10 +10,7 @@ class ChatSearchDelegate extends SearchDelegate<String> {
   final ChatsController controller;
   final Color primaryColor;
 
-  ChatSearchDelegate({
-    required this.controller,
-    required this.primaryColor,
-  });
+  ChatSearchDelegate({required this.controller, required this.primaryColor});
 
   List<ChatThread> get _results {
     final q = query.trim().toLowerCase();
@@ -25,8 +22,7 @@ class ChatSearchDelegate extends SearchDelegate<String> {
           thread.lastMessage.toLowerCase().contains(q) ||
           thread.orderId.toLowerCase().contains(q) ||
           thread.relationLabel.toLowerCase().contains(q);
-    }).toList()
-      ..sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+    }).toList()..sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
   }
 
   @override
@@ -36,26 +32,29 @@ class ChatSearchDelegate extends SearchDelegate<String> {
   List<Widget>? buildActions(BuildContext context) {
     return [
       if (query.isNotEmpty)
-        IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => query = '',
-        ),
+        IconButton(icon: const Icon(Icons.close), onPressed: () => query = ''),
     ];
   }
 
   @override
   Widget? buildLeading(BuildContext context) {
     return IconButton(
-      icon: const Icon(Icons.arrow_back_ios_new_rounded),
+      icon: const Icon(Icons.arrow_forward_ios_rounded),
       onPressed: () => close(context, ''),
     );
   }
 
   @override
-  Widget buildResults(BuildContext context) => _buildBody(context);
+  Widget buildResults(BuildContext context) => Directionality(
+    textDirection: TextDirection.rtl,
+    child: _buildBody(context),
+  );
 
   @override
-  Widget buildSuggestions(BuildContext context) => _buildBody(context);
+  Widget buildSuggestions(BuildContext context) => Directionality(
+    textDirection: TextDirection.rtl,
+    child: _buildBody(context),
+  );
 
   Widget _buildBody(BuildContext context) {
     final results = _results;

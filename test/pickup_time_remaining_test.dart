@@ -10,14 +10,14 @@ void main() {
         deadline: now.add(const Duration(days: 1, hours: 2, minutes: 3)),
         now: now,
       ),
-      'الوقت المتبقي: 1 يوم و2 ساعة و3 دقيقة',
+      'متبقي 1 يوم و2 ساعة و3 دقيقة',
     );
     expect(
       PickupTimeRemaining.format(
         deadline: now.add(const Duration(microseconds: 1)),
         now: now,
       ),
-      'الوقت المتبقي: 1 دقيقة',
+      'متبقي 1 دقيقة',
     );
     expect(PickupTimeRemaining.format(deadline: null, now: now), isNull);
   });
@@ -54,6 +54,18 @@ void main() {
         now: deadline,
       ),
       isFalse,
+    );
+  });
+
+  test('uses the 24-hour pickup window for legacy ready orders', () {
+    final readyAt = DateTime.utc(2026, 9, 14, 9);
+
+    expect(
+      PickupTimeRemaining.resolveDeadline(
+        explicitDeadline: null,
+        readyAt: readyAt,
+      ),
+      readyAt.add(const Duration(hours: 24)),
     );
   });
 }

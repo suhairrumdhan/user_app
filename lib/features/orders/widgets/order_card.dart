@@ -117,7 +117,7 @@ class OrderCard extends StatelessWidget {
                     SizedBox(width: 7),
                     Expanded(
                       child: Text(
-                        'وصل عرض جزئي — اضغط لمراجعته والقبول أو الرفض',
+                        'لديك عرض من الصيدلية بانتظار ردك',
                         style: TextStyle(
                           color: Color(0xFF9A3F00),
                           fontSize: 11,
@@ -195,7 +195,7 @@ class OrderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(9),
       ),
       child: Text(
-        order.statusLabel,
+        order.status.label,
         style: TextStyle(
           color: color,
           fontSize: 10,

@@ -94,7 +94,7 @@ class ChatListItem extends StatelessWidget {
       background: Container(
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        alignment: Alignment.centerRight,
+        alignment: AlignmentDirectional.centerEnd,
         decoration: BoxDecoration(
           color: Colors.red,
           borderRadius: BorderRadius.circular(22),

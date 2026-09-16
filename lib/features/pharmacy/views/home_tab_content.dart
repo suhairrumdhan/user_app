@@ -116,11 +116,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
         throw Exception('لم يتم العثور على أسماء أدوية للمراجعة في الوصفة');
       }
 
-      final parsedMedicines = [
-        ...DrugParser.parseMedicineModels(medicines),
-        ...DrugParser.parseUnmatchedMedicineModels(unmatched),
-      ];
-      final parsedRequests = DrugParser.parseSearchRequests(medicines);
+      final parsedMedicines = DrugParser.parseReviewResponse(response);
 
       if (parsedMedicines.isEmpty) {
         throw Exception('فشل تحليل الأدوية');
@@ -133,7 +129,6 @@ class _HomeTabContentState extends State<HomeTabContent> {
       searchController.clearAll();
       searchController.setSearchSource('prescription');
       searchController.setExtractedText(text);
-      searchController.setRequests(parsedRequests);
 
       if (!mounted) return;
 
@@ -144,7 +139,9 @@ class _HomeTabContentState extends State<HomeTabContent> {
             initialMedicines: parsedMedicines,
             searchSource: 'prescription',
             isReviewMode: true,
-            unmatchedMedicineCount: unmatched.length,
+            unmatchedMedicineCount: parsedMedicines
+                .where((m) => m.needsReview)
+                .length,
             prescriptionFile: _selectedFile,
             prescriptionFileType: _fileType,
           ),
@@ -431,7 +428,7 @@ class _HomeTabContentState extends State<HomeTabContent> {
                     const SizedBox(width: 12),
                     _buildGlassFAB(
                       icon: Icons.add,
-                      label: "رفع وصفة",
+                      label: "إضافة وصفة",
                       color: const Color(0xFF5EABD6),
                       onTap: () => showImageSourceDialog(
                         context: context,
@@ -468,7 +465,9 @@ class _HomeTabContentState extends State<HomeTabContent> {
                           } catch (e) {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Error: $e')),
+                                const SnackBar(
+                                  content: Text('تعذر إضافة الوصفة'),
+                                ),
                               );
                             }
                           } finally {
@@ -508,7 +507,9 @@ class _HomeTabContentState extends State<HomeTabContent> {
                           } catch (e) {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Error: $e')),
+                                const SnackBar(
+                                  content: Text('تعذر إضافة الوصفة'),
+                                ),
                               );
                             }
                           } finally {

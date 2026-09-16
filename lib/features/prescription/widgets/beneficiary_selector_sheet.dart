@@ -28,7 +28,7 @@ class BeneficiarySelectorSheet extends StatefulWidget {
     this.showSaveOption = true,
     this.initialSaveValue = false,
     this.title = 'اختيار المستفيد',
-    this.subtitle = 'اختر الشخص الذي تخصه الوصفة أو الطلب',
+    this.subtitle = '',
   });
 
   @override
@@ -61,45 +61,49 @@ class _BeneficiarySelectorSheetState extends State<BeneficiarySelectorSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHandle(),
-            const SizedBox(height: 16),
-            _buildHeader(),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                widget.subtitle,
-                style: const TextStyle(color: Colors.black54, fontSize: 13),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            Flexible(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  children: [
-                    ...widget.beneficiaries.map(_buildBeneficiaryItem),
-                    if (widget.showSaveOption) ...[
-                      const SizedBox(height: 6),
-                      _buildSavePrescriptionCard(),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHandle(),
+              const SizedBox(height: 16),
+              _buildHeader(),
+              if (widget.subtitle.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    widget.subtitle,
+                    style: const TextStyle(color: Colors.black54, fontSize: 13),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: [
+                      ...widget.beneficiaries.map(_buildBeneficiaryItem),
+                      if (widget.showSaveOption) ...[
+                        const SizedBox(height: 6),
+                        _buildSavePrescriptionCard(),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -230,27 +234,13 @@ class _BeneficiarySelectorSheetState extends State<BeneficiarySelectorSheet> {
             ),
             const SizedBox(width: 12),
             const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'حفظ هذه الوصفة',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1F2937),
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'سيتم حفظ الأدوية مع المستفيد، ومع الملف الأصلي إذا كانت الوصفة مرفقة.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      height: 1.4,
-                      color: Colors.black54,
-                    ),
-                  ),
-                ],
+              child: Text(
+                'حفظ الوصفة',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1F2937),
+                ),
               ),
             ),
             const SizedBox(width: 8),

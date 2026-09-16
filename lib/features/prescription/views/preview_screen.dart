@@ -26,22 +26,25 @@ class PreviewScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      backgroundColor: Colors.transparent,
-      child: Container(
-        decoration: _buildDialogDecoration(),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildDragHandle(),
-            const SizedBox(height: 16),
-            _buildHeader(),
-            const SizedBox(height: 14),
-            _buildPreviewContent(),
-            const SizedBox(height: 18),
-            _buildActionButtons(),
-          ],
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        backgroundColor: Colors.transparent,
+        child: Container(
+          decoration: _buildDialogDecoration(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDragHandle(),
+              const SizedBox(height: 16),
+              _buildHeader(),
+              const SizedBox(height: 14),
+              _buildPreviewContent(),
+              const SizedBox(height: 18),
+              _buildActionButtons(),
+            ],
+          ),
         ),
       ),
     );
@@ -84,9 +87,9 @@ class PreviewScreen extends StatelessWidget {
           _buildIconContainer(),
           const SizedBox(width: 14),
           Expanded(
-            child: Text(
-              fileType == 'image' ? 'معاينة الصورة' : 'معاينة ملف PDF',
-              style: const TextStyle(
+            child: const Text(
+              'معاينة الوصفة',
+              style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: _darkTextColor,
@@ -120,7 +123,9 @@ class PreviewScreen extends StatelessWidget {
         ],
       ),
       child: Icon(
-        fileType == 'image' ? Icons.image_outlined : Icons.picture_as_pdf_outlined,
+        fileType == 'image'
+            ? Icons.image_outlined
+            : Icons.picture_as_pdf_outlined,
         color: Colors.white,
         size: 28,
       ),
@@ -136,10 +141,7 @@ class PreviewScreen extends StatelessWidget {
         width: double.infinity,
         decoration: BoxDecoration(
           color: _backgroundColor,
-          border: Border.all(
-            color: Colors.grey.shade100,
-            width: 1,
-          ),
+          border: Border.all(color: Colors.grey.shade100, width: 1),
         ),
         child: fileType == 'image' ? _buildImageViewer() : _buildPdfViewer(),
       ),
@@ -161,10 +163,7 @@ class PreviewScreen extends StatelessWidget {
               children: [
                 Icon(Icons.broken_image, size: 64, color: Colors.grey),
                 SizedBox(height: 12),
-                Text(
-                  'تعذر تحميل الصورة',
-                  style: TextStyle(color: Colors.grey),
-                ),
+                Text('تعذر تحميل الصورة', style: TextStyle(color: Colors.grey)),
               ],
             ),
           );
@@ -181,8 +180,7 @@ class PreviewScreen extends StatelessWidget {
       pageSpacing: 8,
       canShowScrollHead: true,
       canShowPageLoadingIndicator: true,
-      onDocumentLoaded: (details) {
-      },
+      onDocumentLoaded: (details) {},
       onPageChanged: (details) {
         debugPrint('Page changed to: ${details.newPageNumber}');
       },
@@ -211,13 +209,8 @@ class PreviewScreen extends StatelessWidget {
         foregroundColor: _grayTextColor,
         side: BorderSide(color: Colors.grey.shade300, width: 1.5),
         padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        textStyle: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
       ),
       child: const Text('إلغاء'),
     );
@@ -232,15 +225,10 @@ class PreviewScreen extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        textStyle: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
       ),
-      child: const Text('تأكيد ومتابعة'),
+      child: const Text('متابعة'),
     );
   }
 }

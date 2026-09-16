@@ -89,8 +89,8 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
 
     if (!_hasSelectedMedicines) {
       Get.snackbar(
-        'تنبيه',
-        'اختر دواءً واحدًا على الأقل لإرسال الطلب',
+        'اختر دواءً',
+        'اختر دواءً واحدًا على الأقل',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.orange,
         colorText: Colors.white,
@@ -157,8 +157,8 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
       if (!mounted) return;
 
       Get.snackbar(
-        'خطأ',
-        'فشل في إرسال الطلب: $e',
+        'تعذر إرسال الطلب',
+        'حاول مجددًا',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,
@@ -206,7 +206,7 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
                 ),
                 SizedBox(height: 12),
                 Text(
-                  'تم إرسال الطلب بنجاح',
+                  'تم إرسال الطلب',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
@@ -215,12 +215,6 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'تم حفظ طلبك وإرساله إلى الصيدلية.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(height: 1.5),
-                ),
-                const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
@@ -259,7 +253,7 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
                 ),
                 const SizedBox(height: 11),
                 const Text(
-                  'احتفظ بهذا الرقم لمتابعة الطلب. الإرسال لا يمثل شراءً أو حجزًا نهائيًا للكميات.',
+                  'ستراجع الصيدلية السعر والتوفر قبل التأكيد.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: SearchUiColors.softText,
@@ -284,7 +278,7 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
                     ),
                   ),
                   child: const Text(
-                    'متابعة الطلب',
+                    'تم',
                     style: TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
@@ -325,7 +319,7 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
     if (!pharmacyDoc.exists ||
         pharmacyData == null ||
         !pharmacyAcceptsNewOrders(pharmacyData)) {
-      return 'هذه الصيدلية غير متاحة لاستقبال الطلب حاليًا.';
+      return 'الصيدلية لا تستقبل طلبات حاليًا.';
     }
 
     final snapshot = await FirebaseFirestore.instance
@@ -346,15 +340,15 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
               soldByPiece: item.match.soldByPiece,
             );
       if (quote == null) {
-        return 'لم يعد ${item.match.matchedMedicineName} متوفرًا؛ حدّث نتائج البحث.';
+        return 'لم يعد ${item.match.matchedMedicineName} متوفرًا.';
       }
       final available = quote.availableQuantity;
       if (available < item.quantity) {
-        return 'الكمية المتاحة حاليًا من ${item.match.matchedMedicineName} هي $available فقط.';
+        return 'المتاح من ${item.match.matchedMedicineName}: $available فقط.';
       }
       final currentPrice = quote.price;
       if ((currentPrice - item.match.price).abs() > 0.001) {
-        return 'تغير سعر ${item.match.matchedMedicineName}؛ حدّث نتائج البحث قبل الإرسال.';
+        return 'تغير سعر ${item.match.matchedMedicineName}. حدّث النتائج.';
       }
     }
     return null;
@@ -373,260 +367,265 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
       (sum, item) => sum + item.quantity,
     );
 
-    return SafeArea(
-      top: false,
-      child: Container(
-        constraints: BoxConstraints(maxHeight: media.size.height * 0.94),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Padding(
-          padding: EdgeInsets.only(bottom: bottomInset),
-          child: Column(
-            children: [
-              const SizedBox(height: 7),
-              Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              const SizedBox(height: 5),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'تأكيد الطلب',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: SearchUiColors.primary,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      onPressed: _isSubmitting
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildOrderPartiesCard(),
-                      const SizedBox(height: 10),
-                      _sectionCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _sectionHeader(
-                              icon: Iconsax.box,
-                              title: 'الأدوية المطلوبة',
-                              trailing: _countBadge(_selectedItems.length),
-                            ),
-                            const SizedBox(height: 8),
-                            if (_availableMedicines.isEmpty)
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.08),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Colors.orange.withOpacity(0.18),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'لا توجد أدوية متوفرة في هذه الصيدلية لإرسالها في الطلب.',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              )
-                            else
-                              ...List.generate(_availableMedicines.length, (
-                                index,
-                              ) {
-                                final item = _availableMedicines[index];
-
-                                return Padding(
-                                  padding: EdgeInsets.only(
-                                    bottom:
-                                        index == _availableMedicines.length - 1
-                                        ? 0
-                                        : 7,
-                                  ),
-                                  child: _selectableMedicineTile(
-                                    index: index + 1,
-                                    item: item,
-                                    onToggle: (value) {
-                                      setState(() {
-                                        item.isSelected = value;
-                                        if (!item.isSelected) {
-                                          item.quantity = 1;
-                                        }
-                                      });
-                                    },
-                                    onIncrease: () {
-                                      setState(() {
-                                        if (item.quantity < item.maxQuantity) {
-                                          item.quantity++;
-                                        }
-                                      });
-                                    },
-                                    onDecrease: () {
-                                      setState(() {
-                                        if (item.quantity > 1) {
-                                          item.quantity--;
-                                        }
-                                      });
-                                    },
-                                  ),
-                                );
-                              }),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      _buildNotesTile(),
-                      const SizedBox(height: 8),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: SearchUiColors.primary.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: SearchUiColors.primary.withOpacity(0.08),
-                          ),
-                        ),
-                        child: const Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Iconsax.info_circle,
-                              color: SearchUiColors.primary,
-                              size: 18,
-                            ),
-                            SizedBox(width: 7),
-                            Expanded(
-                              child: Text(
-                                'السعر والتوفر تقديريان ويخضعان لمراجعة الصيدلية. إرسال الطلب لا يمثل شراءً أو حجزًا نهائيًا للكميات.',
-                                style: TextStyle(
-                                  height: 1.35,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: SearchUiColors.darkText,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: SafeArea(
+        top: false,
+        child: Container(
+          constraints: BoxConstraints(maxHeight: media.size.height * 0.94),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Padding(
+            padding: EdgeInsets.only(bottom: bottomInset),
+            child: Column(
+              children: [
+                const SizedBox(height: 7),
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(20),
                   ),
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(14, 9, 14, 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 14,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
-                ),
-                child: SafeArea(
-                  top: false,
+                const SizedBox(height: 5),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
                   child: Row(
                     children: [
-                      SizedBox(
-                        width: 92,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '${_selectedItems.length} عنصر • $totalPieces قطعة',
-                              style: const TextStyle(
-                                color: SearchUiColors.softText,
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              _selectedEstimatedTotal > 0
-                                  ? '${_selectedEstimatedTotal.toStringAsFixed(2)} د.ل'
-                                  : 'السعر غير محدد',
-                              style: const TextStyle(
-                                color: SearchUiColors.darkText,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ],
+                      const Expanded(
+                        child: Text(
+                          'مراجعة الطلب',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: SearchUiColors.primary,
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: (_isSubmitting || !_hasSelectedMedicines)
-                              ? null
-                              : _submitOrder,
-                          icon: _isSubmitting
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Iconsax.tick_circle, size: 19),
-                          label: Text(
-                            _isSubmitting ? 'جاري الإرسال...' : 'إرسال الطلب',
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: SearchUiColors.primary,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            minimumSize: const Size.fromHeight(44),
-                            textStyle: const TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                        ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _isSubmitting
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close_rounded),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+                Expanded(
+                  child: SingleChildScrollView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildOrderPartiesCard(),
+                        const SizedBox(height: 10),
+                        _sectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _sectionHeader(
+                                icon: Iconsax.box,
+                                title: 'الأدوية المطلوبة',
+                                trailing: _countBadge(_selectedItems.length),
+                              ),
+                              const SizedBox(height: 8),
+                              if (_availableMedicines.isEmpty)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.orange.withOpacity(0.18),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'لا توجد أدوية متاحة للطلب.',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                )
+                              else
+                                ...List.generate(_availableMedicines.length, (
+                                  index,
+                                ) {
+                                  final item = _availableMedicines[index];
+
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom:
+                                          index ==
+                                              _availableMedicines.length - 1
+                                          ? 0
+                                          : 7,
+                                    ),
+                                    child: _selectableMedicineTile(
+                                      index: index + 1,
+                                      item: item,
+                                      onToggle: (value) {
+                                        setState(() {
+                                          item.isSelected = value;
+                                          if (!item.isSelected) {
+                                            item.quantity = 1;
+                                          }
+                                        });
+                                      },
+                                      onIncrease: () {
+                                        setState(() {
+                                          if (item.quantity <
+                                              item.maxQuantity) {
+                                            item.quantity++;
+                                          }
+                                        });
+                                      },
+                                      onDecrease: () {
+                                        setState(() {
+                                          if (item.quantity > 1) {
+                                            item.quantity--;
+                                          }
+                                        });
+                                      },
+                                    ),
+                                  );
+                                }),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _buildNotesTile(),
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: SearchUiColors.primary.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: SearchUiColors.primary.withOpacity(0.08),
+                            ),
+                          ),
+                          child: const Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Iconsax.info_circle,
+                                color: SearchUiColors.primary,
+                                size: 18,
+                              ),
+                              SizedBox(width: 7),
+                              Expanded(
+                                child: Text(
+                                  'تؤكد الصيدلية السعر والتوفر قبل الحجز.',
+                                  style: TextStyle(
+                                    height: 1.35,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: SearchUiColors.darkText,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(14, 9, 14, 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 14,
+                        offset: const Offset(0, -4),
+                      ),
+                    ],
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 92,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${_selectedItems.length} أدوية • $totalPieces قطعة',
+                                style: const TextStyle(
+                                  color: SearchUiColors.softText,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                _selectedEstimatedTotal > 0
+                                    ? '${_selectedEstimatedTotal.toStringAsFixed(2)} د.ل'
+                                    : 'السعر غير محدد',
+                                style: const TextStyle(
+                                  color: SearchUiColors.darkText,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: (_isSubmitting || !_hasSelectedMedicines)
+                                ? null
+                                : _submitOrder,
+                            icon: _isSubmitting
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Iconsax.tick_circle, size: 19),
+                            label: Text(
+                              _isSubmitting ? 'جاري الإرسال...' : 'إرسال الطلب',
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: SearchUiColors.primary,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              minimumSize: const Size.fromHeight(44),
+                              textStyle: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -755,7 +754,7 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
             size: 19,
           ),
           title: const Text(
-            'إضافة ملاحظة للصيدلية (اختياري)',
+            'ملاحظة للصيدلية',
             style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
           ),
           children: [
@@ -764,7 +763,7 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
               minLines: 2,
               maxLines: 3,
               decoration: InputDecoration(
-                hintText: 'وقت الاستلام أو أي تفاصيل إضافية',
+                hintText: 'وقت الاستلام أو تفاصيل أخرى (اختياري)',
                 hintStyle: const TextStyle(fontSize: 11.5),
                 filled: true,
                 fillColor: SearchUiColors.light,

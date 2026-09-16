@@ -18,46 +18,49 @@ class NotificationsPage extends StatelessWidget {
       permanent: true,
     );
 
-    return Scaffold(
-      backgroundColor: SearchUiColors.primary,
-      body: StreamBuilder<List<AppNotificationModel>>(
-        stream: controller.notificationsStream,
-        builder: (context, snapshot) {
-          final allNotifications = snapshot.data ?? [];
-          final unreadCount = controller.countUnread(allNotifications);
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: SearchUiColors.primary,
+        body: StreamBuilder<List<AppNotificationModel>>(
+          stream: controller.notificationsStream,
+          builder: (context, snapshot) {
+            final allNotifications = snapshot.data ?? [];
+            final unreadCount = controller.countUnread(allNotifications);
 
-          return Column(
-            children: [
-              Obx(
-                () => NotificationsHeader(
-                  totalCount: allNotifications.length,
-                  unreadCount: unreadCount,
-                  isProcessing: controller.isProcessing.value,
-                  onMarkAllAsRead: unreadCount == 0
-                      ? null
-                      : () => controller.markAllAsRead(context: context),
+            return Column(
+              children: [
+                Obx(
+                  () => NotificationsHeader(
+                    totalCount: allNotifications.length,
+                    unreadCount: unreadCount,
+                    isProcessing: controller.isProcessing.value,
+                    onMarkAllAsRead: unreadCount == 0
+                        ? null
+                        : () => controller.markAllAsRead(context: context),
+                  ),
                 ),
-              ),
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: SearchUiColors.light,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(24),
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: SearchUiColors.light,
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(24),
+                      ),
+                    ),
+                    child: _buildBody(
+                      context: context,
+                      controller: controller,
+                      snapshot: snapshot,
+                      allNotifications: allNotifications,
                     ),
                   ),
-                  child: _buildBody(
-                    context: context,
-                    controller: controller,
-                    snapshot: snapshot,
-                    allNotifications: allNotifications,
-                  ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }

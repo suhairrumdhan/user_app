@@ -128,25 +128,25 @@ extension OrderStatusX on OrderStatus {
   String get label {
     switch (this) {
       case OrderStatus.received:
-        return 'مستلم';
+        return 'تم إرسال الطلب';
       case OrderStatus.underReview:
         return 'قيد المراجعة';
       case OrderStatus.partialOfferPending:
-        return 'بانتظار قرار العرض الجزئي';
+        return 'بانتظار ردك';
       case OrderStatus.confirmedReserved:
-        return 'مؤكد ومحجوز';
+        return 'تم التأكيد والحجز';
       case OrderStatus.preparing:
         return 'قيد التجهيز';
       case OrderStatus.ready:
         return 'جاهز للاستلام';
       case OrderStatus.completed:
-        return 'مكتمل';
+        return 'تم الاستلام';
       case OrderStatus.cancelled:
-        return 'ملغي';
+        return 'تم الإلغاء';
       case OrderStatus.rejected:
-        return 'مرفوض';
+        return 'رفضته الصيدلية';
       case OrderStatus.notCollected:
-        return 'لم يستلم';
+        return 'لم يتم الاستلام';
       case OrderStatus.unknown:
         return 'حالة غير معروفة';
     }
@@ -753,7 +753,7 @@ class OrderModel {
     required this.requestSourceLabel,
     required this.medicines,
     this.status = OrderStatus.received,
-    this.statusLabel = 'مستلم',
+    this.statusLabel = 'تم إرسال الطلب',
     this.userNote,
     this.pharmacyNote,
     this.chatId,

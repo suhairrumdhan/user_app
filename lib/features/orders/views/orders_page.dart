@@ -31,96 +31,100 @@ class _OrdersPageState extends State<OrdersPage> {
   Widget build(BuildContext context) {
     final currentUser = _userController.user.value;
 
-    return Scaffold(
-      backgroundColor: SearchUiColors.primary,
-      body: currentUser == null
-          ? const _OrdersShell(
-              child: _OrdersMessageState(
-                icon: Iconsax.user_octagon,
-                title: 'يجب تسجيل الدخول أولاً',
-                subtitle: 'سجلي الدخول لعرض طلباتك ومتابعة حالتها.',
-              ),
-            )
-          : _OrdersShell(
-              onSearchTap: _openSearch,
-              child: StreamBuilder<List<OrderModel>>(
-                stream: OrderService.instance.getUserOrdersStream(
-                  currentUser.id,
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: SearchUiColors.primary,
+        body: currentUser == null
+            ? const _OrdersShell(
+                child: _OrdersMessageState(
+                  icon: Iconsax.user_octagon,
+                  title: 'يجب تسجيل الدخول أولاً',
+                  subtitle: 'سجّل الدخول لعرض طلباتك.',
                 ),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(
-                        color: SearchUiColors.primary,
-                      ),
-                    );
-                  }
-
-                  if (snapshot.hasError) {
-                    return const _OrdersMessageState(
-                      icon: Iconsax.warning_2,
-                      title: 'حدث خطأ',
-                      subtitle: 'تعذر تحميل الطلبات حالياً.',
-                    );
-                  }
-
-                  final orders = snapshot.data ?? [];
-                  _latestOrders = orders;
-
-                  if (orders.isEmpty) {
-                    return const _OrdersMessageState(
-                      icon: Iconsax.box,
-                      title: 'لا توجد طلبات بعد',
-                      subtitle:
-                          'عند إرسال أول طلب سيظهر هنا لتتمكن من متابعته.',
-                    );
-                  }
-
-                  return Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 5),
-                        child: _OrdersSummaryCard(
-                          totalOrders: orders.length,
-                          pendingCount: orders
-                              .where(
-                                (o) =>
-                                    o.status == OrderStatus.received ||
-                                    o.status == OrderStatus.underReview ||
-                                    o.status == OrderStatus.confirmedReserved ||
-                                    o.status == OrderStatus.partialOfferPending ||
-                                    o.status == OrderStatus.preparing ||
-                                    o.status == OrderStatus.ready,
-                              )
-                              .length,
-                          completedCount: orders
-                              .where((o) => o.status == OrderStatus.completed)
-                              .length,
+              )
+            : _OrdersShell(
+                onSearchTap: _openSearch,
+                child: StreamBuilder<List<OrderModel>>(
+                  stream: OrderService.instance.getUserOrdersStream(
+                    currentUser.id,
+                  ),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          color: SearchUiColors.primary,
                         ),
-                      ),
-                      Expanded(
-                        child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(14, 6, 14, 16),
-                          itemCount: orders.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 8),
-                          itemBuilder: (context, index) {
-                            final order = orders[index];
+                      );
+                    }
 
-                            return OrderCard(
-                              order: order,
-                              onTap: () {
-                                Get.to(() => OrderDetailsPage(order: order));
-                              },
-                            );
-                          },
+                    if (snapshot.hasError) {
+                      return const _OrdersMessageState(
+                        icon: Iconsax.warning_2,
+                        title: 'حدث خطأ',
+                        subtitle: 'تعذر تحميل الطلبات حالياً.',
+                      );
+                    }
+
+                    final orders = snapshot.data ?? [];
+                    _latestOrders = orders;
+
+                    if (orders.isEmpty) {
+                      return const _OrdersMessageState(
+                        icon: Iconsax.box,
+                        title: 'لا توجد طلبات بعد',
+                        subtitle: 'ستظهر طلباتك هنا بعد إرسالها.',
+                      );
+                    }
+
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 5),
+                          child: _OrdersSummaryCard(
+                            totalOrders: orders.length,
+                            pendingCount: orders
+                                .where(
+                                  (o) =>
+                                      o.status == OrderStatus.received ||
+                                      o.status == OrderStatus.underReview ||
+                                      o.status ==
+                                          OrderStatus.confirmedReserved ||
+                                      o.status ==
+                                          OrderStatus.partialOfferPending ||
+                                      o.status == OrderStatus.preparing ||
+                                      o.status == OrderStatus.ready,
+                                )
+                                .length,
+                            completedCount: orders
+                                .where((o) => o.status == OrderStatus.completed)
+                                .length,
+                          ),
                         ),
-                      ),
-                    ],
-                  );
-                },
+                        Expanded(
+                          child: ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(14, 6, 14, 16),
+                            itemCount: orders.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final order = orders[index];
+
+                              return OrderCard(
+                                order: order,
+                                onTap: () {
+                                  Get.to(() => OrderDetailsPage(order: order));
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
+      ),
     );
   }
 }
@@ -228,7 +232,7 @@ class _OrdersSummaryCard extends StatelessWidget {
         children: [
           Expanded(
             child: _summaryItem(
-              title: 'إجمالي الطلبات',
+              title: 'الكل',
               value: '$totalOrders',
               icon: Iconsax.box,
             ),
@@ -244,7 +248,7 @@ class _OrdersSummaryCard extends StatelessWidget {
           const SizedBox(width: 5),
           Expanded(
             child: _summaryItem(
-              title: 'مكتملة',
+              title: 'تم استلامها',
               value: '$completedCount',
               icon: Iconsax.tick_circle,
             ),
@@ -375,10 +379,7 @@ class _OrderSearchDelegate extends SearchDelegate<String> {
   @override
   List<Widget>? buildActions(BuildContext context) => [
     if (query.isNotEmpty)
-      IconButton(
-        icon: const Icon(Icons.close),
-        onPressed: () => query = '',
-      ),
+      IconButton(icon: const Icon(Icons.close), onPressed: () => query = ''),
   ];
 
   @override
@@ -388,10 +389,16 @@ class _OrderSearchDelegate extends SearchDelegate<String> {
   );
 
   @override
-  Widget buildResults(BuildContext context) => _buildBody(context);
+  Widget buildResults(BuildContext context) => Directionality(
+    textDirection: TextDirection.rtl,
+    child: _buildBody(context),
+  );
 
   @override
-  Widget buildSuggestions(BuildContext context) => _buildBody(context);
+  Widget buildSuggestions(BuildContext context) => Directionality(
+    textDirection: TextDirection.rtl,
+    child: _buildBody(context),
+  );
 
   Widget _buildBody(BuildContext context) {
     final searchText = query.trim().toLowerCase();
@@ -409,9 +416,10 @@ class _OrderSearchDelegate extends SearchDelegate<String> {
           (order.orderNumber?.toLowerCase().contains(searchText) ?? false) ||
           order.pharmacy.pharmacyName.toLowerCase().contains(searchText) ||
           order.beneficiary.name.toLowerCase().contains(searchText) ||
-          order.statusLabel.toLowerCase().contains(searchText) ||
+          order.status.label.toLowerCase().contains(searchText) ||
           order.medicines.any(
-            (medicine) => medicine.displayName.toLowerCase().contains(searchText) ||
+            (medicine) =>
+                medicine.displayName.toLowerCase().contains(searchText) ||
                 medicine.requestedName.toLowerCase().contains(searchText),
           );
     }).toList();

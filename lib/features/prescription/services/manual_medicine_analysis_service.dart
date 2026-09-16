@@ -57,6 +57,8 @@ class ManualMedicineAnalysisService {
 
       for (final item in medicines) {
         if (item is! Map) continue;
+        // Legacy servers included uncertain products among accepted medicines.
+        if (item['needsReview'] == true) continue;
         final suggestion =
             (item['matchedDisplayName'] ?? item['parsedBrandName'])
                 ?.toString()

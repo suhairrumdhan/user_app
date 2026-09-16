@@ -1,6 +1,7 @@
 import '../models/medicine_search_request.dart';
 import '../models/matched_medicine_result.dart';
 import 'medicine_normalizer.dart';
+import 'medicine_identity.dart';
 import '../models/medicine_sale_quote.dart';
 
 class MedicineMatcher {
@@ -25,120 +26,20 @@ class MedicineMatcher {
 
     final quote = MedicineSaleQuote.fromIndex(medicineData);
     if (quote == null) return null;
-    final String normalizedRequest = request.normalizedText;
-    final String normalizedName = MedicineNormalizer.normalize(name);
-    final String normalizedScientific = MedicineNormalizer.normalize(
-      scientificName,
-    );
-
-    // ✅ الجديد
-    final String requestBase =
-        request.baseName ??
-        MedicineNormalizer.extractBaseName(normalizedRequest);
-
-    final String nameBase = MedicineNormalizer.extractBaseName(normalizedName);
-
-    final List<String> requestTokens = request.searchTokens.isNotEmpty
-        ? request.searchTokens
-        : MedicineNormalizer.buildSearchTokens(normalizedRequest);
-
-    final String? medicineStrength = _extractMedicineStrength(
-      medicineData,
-      name,
-    );
-    final String? medicineDosageForm = _extractMedicineDosageForm(
-      medicineData,
-      name,
-    );
-
-    double score = 0;
-    String matchType = '';
-    bool matched = false;
-
-    /// 1) BASE NAME MATCH (الأهم)
-    if (requestBase.isNotEmpty && nameBase.isNotEmpty) {
-      if (requestBase == nameBase) {
-        score = 98;
-        matchType = 'base_exact';
-        matched = true;
-      }
+    if (!MedicineIdentity.matches(
+      requestedName: request.rawText,
+      availableName: name,
+      requestedStrength: request.strength,
+      availableStrength: medicineData['strength']?.toString(),
+      requestedForm: request.dosageForm,
+      availableForm:
+          medicineData['dosageForm']?.toString() ??
+          medicineData['unit']?.toString(),
+    )) {
+      return null;
     }
-
-    /// 2) FIRST WORD MATCH (PANADOL → PANADOL EXTRA)
-    if (!matched && requestBase.isNotEmpty && nameBase.isNotEmpty) {
-      final reqParts = requestBase.split(' ');
-      final nameParts = nameBase.split(' ');
-
-      if (reqParts.isNotEmpty &&
-          nameParts.isNotEmpty &&
-          reqParts.first == nameParts.first) {
-        score = 92;
-        matchType = 'base_family';
-        matched = true;
-      }
-    }
-
-    /// 3) TOKENS MATCH
-    if (!matched && requestTokens.isNotEmpty) {
-      int hits = 0;
-
-      for (final token in requestTokens) {
-        if (token.length < 3) continue;
-
-        if (normalizedName.contains(token) ||
-            normalizedScientific.contains(token)) {
-          hits++;
-        }
-      }
-
-      if (hits > 0) {
-        score = 80 + (hits * 3);
-        matchType = 'token_match';
-        matched = true;
-      }
-    }
-
-    /// 4) CONTAINS (fallback)
-    if (!matched &&
-        MedicineNormalizer.containsNormalized(
-          normalizedName,
-          normalizedRequest,
-        )) {
-      score = 78;
-      matchType = 'contains';
-      matched = true;
-    }
-
-    /// 5) FUZZY (آخر حل)
-    if (!matched) {
-      final fuzzyNameScore = MedicineNormalizer.similarityScore(
-        normalizedRequest,
-        normalizedName,
-      );
-
-      if (fuzzyNameScore >= 0.85) {
-        score = 60 + (fuzzyNameScore * 30);
-        matchType = 'fuzzy';
-        matched = true;
-      }
-    }
-
-    if (!matched) return null;
-
-    // تحسين/خصم حسب التركيز والشكل الدوائي
-    score = _applyStrengthAdjustment(
-      score: score,
-      requestStrength: request.strength,
-      medicineStrength: medicineStrength,
-    );
-
-    score = _applyDosageFormAdjustment(
-      score: score,
-      requestDosageForm: request.dosageForm,
-      medicineDosageForm: medicineDosageForm,
-    );
-
-    score = score.clamp(0, 100).toDouble();
+    const double score = 100;
+    const String matchType = 'exact_name_and_requested_details';
 
     final String? unit = medicineData['unit']?.toString();
     final String? imageUrl = medicineData['imageUrl']?.toString();
@@ -246,82 +147,5 @@ class MedicineMatcher {
       });
 
     return result.take(limit).toList();
-  }
-
-  static double _applyStrengthAdjustment({
-    required double score,
-    required String? requestStrength,
-    required String? medicineStrength,
-  }) {
-    if (requestStrength == null || requestStrength.trim().isEmpty) {
-      return score;
-    }
-
-    if (medicineStrength == null || medicineStrength.trim().isEmpty) {
-      return score - 4;
-    }
-
-    final a = MedicineNormalizer.normalize(requestStrength);
-    final b = MedicineNormalizer.normalize(medicineStrength);
-
-    if (a == b) return score + 8;
-
-    return score - 10;
-  }
-
-  static double _applyDosageFormAdjustment({
-    required double score,
-    required String? requestDosageForm,
-    required String? medicineDosageForm,
-  }) {
-    if (requestDosageForm == null || requestDosageForm.trim().isEmpty) {
-      return score;
-    }
-
-    if (medicineDosageForm == null || medicineDosageForm.trim().isEmpty) {
-      return score - 3;
-    }
-
-    final a = MedicineNormalizer.normalize(requestDosageForm);
-    final b = MedicineNormalizer.normalize(medicineDosageForm);
-
-    if (a == b) return score + 6;
-
-    return score - 8;
-  }
-
-  static String? _extractMedicineStrength(
-    Map<String, dynamic> medicineData,
-    String fallbackName,
-  ) {
-    final fromField = medicineData['strength']?.toString();
-    if (fromField != null && fromField.trim().isNotEmpty) {
-      return MedicineNormalizer.extractStrength(fromField);
-    }
-
-    final fromName = MedicineNormalizer.extractStrength(fallbackName);
-    if (fromName != null && fromName.trim().isNotEmpty) {
-      return fromName;
-    }
-
-    final scientificName = medicineData['scientificName']?.toString() ?? '';
-    return MedicineNormalizer.extractStrength(scientificName);
-  }
-
-  static String? _extractMedicineDosageForm(
-    Map<String, dynamic> medicineData,
-    String fallbackName,
-  ) {
-    final unit = medicineData['unit']?.toString();
-    if (unit != null && unit.trim().isNotEmpty) {
-      final normalizedUnit = MedicineNormalizer.extractDosageForm(unit);
-      if (normalizedUnit != null) return normalizedUnit;
-    }
-
-    final fromName = MedicineNormalizer.extractDosageForm(fallbackName);
-    if (fromName != null) return fromName;
-
-    final scientificName = medicineData['scientificName']?.toString() ?? '';
-    return MedicineNormalizer.extractDosageForm(scientificName);
   }
 }

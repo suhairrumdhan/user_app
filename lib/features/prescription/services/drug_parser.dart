@@ -2,32 +2,63 @@ import '../../search/models/medicine_search_request.dart';
 import '../models/medicine_model.dart';
 
 class DrugParser {
-  static List<MedicineModel> parseUnmatchedMedicineModels(List<dynamic> items) {
-    return items
-        .whereType<Map>()
-        .map(
-          (item) => MedicineModel(
-            name: (item['name'] ?? '').toString().trim(),
-            dosage: _nullableString(item['strength']),
-            route: _nullableString(item['dosageForm']),
-          ),
-        )
-        .where((medicine) => medicine.name.isNotEmpty)
-        .toList();
+  /// New responses carry source ordering; old responses remain readable.
+  static List<MedicineModel> parseReviewResponse(
+    Map<String, dynamic> response,
+  ) {
+    final ordered = response['items'];
+    if (ordered is List) return _parse(ordered);
+    return [
+      ...parseMedicineModels(response['medicines'] as List? ?? const []),
+      ...parseUnmatchedMedicineModels(
+        response['unmatchedLines'] as List? ?? const [],
+      ),
+    ];
   }
 
-  static List<MedicineModel> parseMedicineModels(List<dynamic> items) {
+  static List<MedicineModel> parseUnmatchedMedicineModels(
+    List<dynamic> items,
+  ) => _parse(items, forceReview: true);
+
+  static List<MedicineModel> parseMedicineModels(List<dynamic> items) =>
+      _parse(items);
+
+  static List<MedicineModel> _parse(
+    List<dynamic> items, {
+    bool forceReview = false,
+  }) {
     return items
         .whereType<Map>()
-        .map(
-          (item) => MedicineModel(
-        name: (item['matchedDisplayName'] ?? item['parsedBrandName'] ?? '')
-            .toString()
-            .trim(),
-        dosage: item['strength']?.toString().trim(),
-        route: item['dosageForm']?.toString().trim(),
-      ),
-    )
+        .map((item) {
+          final review = forceReview || item['needsReview'] == true;
+          final sourceName =
+              _nullableString(item['sourceName']) ??
+              _nullableString(item['name']);
+          // Discard catalog-derived details in an uncertain legacy response.
+          final legacyUncertain = sourceName == null && item['rawText'] != null;
+          final name =
+              sourceName ??
+              (legacyUncertain ? _nullableString(item['rawText']) : null) ??
+              _nullableString(item['parsedBrandName']) ??
+              _nullableString(item['matchedDisplayName']) ??
+              '';
+          final suggestions = item['suggestions'] ?? item['alternatives'];
+          return MedicineModel(
+            name: name,
+            dosage: legacyUncertain ? null : _nullableString(item['strength']),
+            route: legacyUncertain ? null : _nullableString(item['dosageForm']),
+            originalText: _nullableString(item['rawText']),
+            sourceText: _nullableString(item['sourceText']),
+            needsReview: review || legacyUncertain,
+            suggestions: suggestions is List
+                ? suggestions
+                      .whereType<Map>()
+                      .map((s) => (s['name'] ?? '').toString())
+                      .where((s) => s.isNotEmpty)
+                      .toList()
+                : const [],
+          );
+        })
         .where((medicine) => medicine.name.isNotEmpty)
         .toList();
   }
@@ -35,30 +66,26 @@ class DrugParser {
   static List<MedicineSearchRequest> parseSearchRequests(List<dynamic> items) {
     return items
         .whereType<Map>()
+        .where((item) => item['needsReview'] != true)
         .map(
           (item) => MedicineSearchRequest(
-        rawText: (item['rawText'] ?? '').toString().trim(),
-        normalizedText: (item['normalizedText'] ?? '').toString().trim(),
-        parsedBrandName: _nullableString(item['parsedBrandName']),
-        parsedScientificName: _nullableString(item['parsedScientificName']),
-        strength: _nullableString(item['strength']),
-        dosageForm: _nullableString(item['dosageForm']),
-        quantity: _parseQuantity(item['quantity']),
-      ),
-    )
+            rawText: (item['sourceText'] ?? item['rawText'] ?? '')
+                .toString()
+                .trim(),
+            normalizedText: (item['normalizedText'] ?? '').toString().trim(),
+            parsedBrandName: _nullableString(item['parsedBrandName']),
+            parsedScientificName: _nullableString(item['parsedScientificName']),
+            strength: _nullableString(item['strength']),
+            dosageForm: _nullableString(item['dosageForm']),
+            quantity: int.tryParse(item['quantity']?.toString() ?? '') ?? 1,
+          ),
+        )
         .where((request) => request.rawText.isNotEmpty)
         .toList();
   }
 
   static String? _nullableString(dynamic value) {
     final text = value?.toString().trim();
-    if (text == null || text.isEmpty) return null;
-    return text;
-  }
-
-  static int _parseQuantity(dynamic value) {
-    if (value == null) return 1;
-    if (value is int) return value;
-    return int.tryParse(value.toString()) ?? 1;
+    return text == null || text.isEmpty ? null : text;
   }
 }

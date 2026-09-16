@@ -25,7 +25,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   final Set<String> _expandedPharmacyIds = <String>{};
 
-  bool _isExpanded(String pharmacyId) => _expandedPharmacyIds.contains(pharmacyId);
+  bool _isExpanded(String pharmacyId) =>
+      _expandedPharmacyIds.contains(pharmacyId);
 
   void _toggleExpanded(String pharmacyId) {
     setState(() {
@@ -50,7 +51,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   int _totalUnreadCount() {
     return controller.visibleThreads.fold<int>(
       0,
-          (sum, thread) => sum + thread.userUnreadCount,
+      (sum, thread) => sum + thread.userUnreadCount,
     );
   }
 
@@ -69,10 +70,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
             const SizedBox(height: 14),
             const Text(
               'لا توجد دردشات حالياً',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
             Text(
@@ -98,7 +96,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final latest = threads.first;
     final unreadCount = threads.fold<int>(
       0,
-          (sum, t) => sum + t.userUnreadCount,
+      (sum, t) => sum + t.userUnreadCount,
     );
 
     final isExpanded = _isExpanded(pharmacyId);
@@ -141,7 +139,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 borderRadius: BorderRadius.circular(20),
                 onTap: () => _toggleExpanded(pharmacyId),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 2,
+                    vertical: 2,
+                  ),
                   child: Row(
                     children: [
                       Stack(
@@ -149,10 +150,14 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           CircleAvatar(
                             radius: 24,
                             backgroundColor: const Color(0xFFF4F8FC),
-                            backgroundImage:
-                            hasImage ? NetworkImage(pharmacyImageUrl) : null,
+                            backgroundImage: hasImage
+                                ? NetworkImage(pharmacyImageUrl)
+                                : null,
                             child: !hasImage
-                                ? Icon(Icons.local_pharmacy, color: _primaryColor)
+                                ? Icon(
+                                    Icons.local_pharmacy,
+                                    color: _primaryColor,
+                                  )
                                 : null,
                           ),
                           if (pharmacyIsOnline)
@@ -312,7 +317,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
       final groups = grouped.entries.toList()
         ..sort(
-              (a, b) => b.value.first.lastMessageTime.compareTo(
+          (a, b) => b.value.first.lastMessageTime.compareTo(
             a.value.first.lastMessageTime,
           ),
         );
@@ -334,59 +339,65 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _primaryColor,
-      body: Column(
-        children: [
-          Obx(() {
-            final totalCount = controller.visibleThreads.length;
-            final unreadCount = _totalUnreadCount();
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: _primaryColor,
+        body: Column(
+          children: [
+            Obx(() {
+              final totalCount = controller.visibleThreads.length;
+              final unreadCount = _totalUnreadCount();
 
-            return ChatsHeader(
-              totalCount: totalCount,
-              unreadCount: unreadCount,
-              onSearchTap: _openSearch,
-            );
-          }),
-          Expanded(
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFFF7FAFD),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(34)),
-              ),
-              child: Column(
-                children: [
-                  Obx(
-                        () => ParticipatingPharmaciesStrip(
-                      pharmacies: controller.pharmacies,
-                      selectedPharmacyId: controller.selectedPharmacyId.value,
-                      onSelected: (pharmacyId) {
-                        controller.selectPharmacy(pharmacyId);
+              return ChatsHeader(
+                totalCount: totalCount,
+                unreadCount: unreadCount,
+                onSearchTap: _openSearch,
+              );
+            }),
+            Expanded(
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7FAFD),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(34)),
+                ),
+                child: Column(
+                  children: [
+                    Obx(
+                      () => ParticipatingPharmaciesStrip(
+                        pharmacies: controller.pharmacies,
+                        selectedPharmacyId: controller.selectedPharmacyId.value,
+                        onSelected: (pharmacyId) {
+                          controller.selectPharmacy(pharmacyId);
 
-                        if (pharmacyId != null && pharmacyId.trim().isNotEmpty) {
-                          setState(() {
-                            _expandedPharmacyIds.add(pharmacyId);
-                          });
-                        }
-                      },
-                      primaryColor: _primaryColor,
+                          if (pharmacyId != null &&
+                              pharmacyId.trim().isNotEmpty) {
+                            setState(() {
+                              _expandedPharmacyIds.add(pharmacyId);
+                            });
+                          }
+                        },
+                        primaryColor: _primaryColor,
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: Obx(() {
-                      if (controller.isLoading.value) {
-                        return Center(
-                          child: CircularProgressIndicator(color: _primaryColor),
-                        );
-                      }
-                      return _buildGroupedList(context);
-                    }),
-                  ),
-                ],
+                    Expanded(
+                      child: Obx(() {
+                        if (controller.isLoading.value) {
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: _primaryColor,
+                            ),
+                          );
+                        }
+                        return _buildGroupedList(context);
+                      }),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

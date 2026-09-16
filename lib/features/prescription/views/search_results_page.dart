@@ -144,74 +144,74 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
     if (_searchInFlight) return;
     _searchInFlight = true;
     try {
-    final selectedMinimum = double.tryParse(minPriceText.trim());
-    final selectedMaximum = double.tryParse(maxPriceText.trim());
-    final minPrice = priceFilterEnabled && priceRangeMode != 'maximumOnly'
-        ? selectedMinimum
-        : null;
-    final maxPrice = priceFilterEnabled && priceRangeMode != 'minimumOnly'
-        ? selectedMaximum
-        : null;
-    if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('الحد الأدنى للسعر يجب ألا يتجاوز الحد الأعلى'),
-        ),
-      );
-      return;
-    }
-    controller.updateFilters(
-      controller.filters.value.copyWith(
-        maxDistanceKm: selectedDistance,
-        insuranceOnly: useInsurance,
-        availableNowOnly: availableNowOnly,
-        fullMatchOnly: fullMatchOnly,
-        alternativesAllowed: similarProductsAllowed,
-        sortBy: selectedSort,
-        minPrice: minPrice,
-        maxPrice: maxPrice,
-        clearMinPrice: minPrice == null,
-        clearMaxPrice: maxPrice == null,
-      ),
-    );
-
-    List<String> insuranceCodes = [];
-    if (useInsurance) {
-      insuranceCodes = _resolveInsuranceCodes();
-    }
-
-    final position = await LocationUtils.getCurrentPosition(context);
-
-    if (!mounted) return;
-    setState(() {
-      _currentPosition = position;
-      _focusedMapPharmacy = null;
-    });
-
-    if (position == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'تعذر تحديد موقعك؛ ستظهر النتائج دون تطبيق فلتر المسافة.',
+      final selectedMinimum = double.tryParse(minPriceText.trim());
+      final selectedMaximum = double.tryParse(maxPriceText.trim());
+      final minPrice = priceFilterEnabled && priceRangeMode != 'maximumOnly'
+          ? selectedMinimum
+          : null;
+      final maxPrice = priceFilterEnabled && priceRangeMode != 'minimumOnly'
+          ? selectedMaximum
+          : null;
+      if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('الحد الأدنى للسعر يجب ألا يتجاوز الحد الأعلى'),
           ),
+        );
+        return;
+      }
+      controller.updateFilters(
+        controller.filters.value.copyWith(
+          maxDistanceKm: selectedDistance,
+          insuranceOnly: useInsurance,
+          availableNowOnly: availableNowOnly,
+          fullMatchOnly: fullMatchOnly,
+          alternativesAllowed: similarProductsAllowed,
+          sortBy: selectedSort,
+          minPrice: minPrice,
+          maxPrice: maxPrice,
+          clearMinPrice: minPrice == null,
+          clearMaxPrice: maxPrice == null,
         ),
       );
-    }
 
-    await controller.runSearch(
-      userInsuranceCodes: insuranceCodes,
-      userLat: position?.latitude,
-      userLng: position?.longitude,
-    );
+      List<String> insuranceCodes = [];
+      if (useInsurance) {
+        insuranceCodes = _resolveInsuranceCodes();
+      }
 
-    if (!mounted) return;
+      final position = await LocationUtils.getCurrentPosition(context);
 
-    if (controller.results.isEmpty &&
-        controller.errorMessage.value.isNotEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(controller.errorMessage.value)));
-    }
+      if (!mounted) return;
+      setState(() {
+        _currentPosition = position;
+        _focusedMapPharmacy = null;
+      });
+
+      if (position == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'تعذر تحديد موقعك؛ ستظهر النتائج دون تطبيق فلتر المسافة.',
+            ),
+          ),
+        );
+      }
+
+      await controller.runSearch(
+        userInsuranceCodes: insuranceCodes,
+        userLat: position?.latitude,
+        userLng: position?.longitude,
+      );
+
+      if (!mounted) return;
+
+      if (controller.results.isEmpty &&
+          controller.errorMessage.value.isNotEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(controller.errorMessage.value)));
+      }
     } finally {
       _searchInFlight = false;
     }
@@ -267,10 +267,7 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
     return beneficiaries;
   }
 
-  Future<BeneficiaryModel?> _selectBeneficiary({
-    required String title,
-    required String subtitle,
-  }) async {
+  Future<BeneficiaryModel?> _selectBeneficiary({required String title}) async {
     final result = await showModalBottomSheet<BeneficiarySelectionResult>(
       context: context,
       isScrollControlled: true,
@@ -279,7 +276,6 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
         beneficiaries: _buildBeneficiaries(),
         showSaveOption: false,
         title: title,
-        subtitle: subtitle,
       ),
     );
 
@@ -294,10 +290,7 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
 
     final beneficiary =
         _selectedBeneficiary ??
-        await _selectBeneficiary(
-          title: 'تطبيق التأمين',
-          subtitle: 'اختر المستفيد للتحقق من التغطية التأمينية',
-        );
+        await _selectBeneficiary(title: 'مستفيد التأمين');
 
     if (!mounted || beneficiary == null) return;
 
@@ -458,11 +451,7 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
       'matches=${pharmacy.matchedMedicines.length}',
     );
     final beneficiary =
-        _selectedBeneficiary ??
-        await _selectBeneficiary(
-          title: 'اختيار مستفيد الطلب',
-          subtitle: 'اختر الشخص الذي سيُنشأ الطلب لصالحه',
-        );
+        _selectedBeneficiary ?? await _selectBeneficiary(title: 'مستفيد الطلب');
 
     if (!mounted || beneficiary == null) return;
 
@@ -499,48 +488,51 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: SearchUiColors.light,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: SearchUiColors.primary),
-        title: const Text(
-          'نتائج البحث',
-          style: TextStyle(
-            color: SearchUiColors.primary,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: SearchUiColors.light,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: true,
+          iconTheme: const IconThemeData(color: SearchUiColors.primary),
+          title: const Text(
+            'نتائج البحث',
+            style: TextStyle(
+              color: SearchUiColors.primary,
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
           ),
         ),
-      ),
-      body: SafeArea(
-        child: Obx(
-          () => Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildTopSummaryCard(),
-                      const SizedBox(height: 14),
-                      _buildMedicinesExpandableCard(),
-                      const SizedBox(height: 14),
-                      _buildFiltersSection(),
-                      const SizedBox(height: 14),
-                      _buildEstimateNotice(),
-                      const SizedBox(height: 14),
-                      _buildSearchResultsSection(),
-                      const SizedBox(height: 12),
-                    ],
+        body: SafeArea(
+          child: Obx(
+            () => Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildTopSummaryCard(),
+                        const SizedBox(height: 14),
+                        _buildMedicinesExpandableCard(),
+                        const SizedBox(height: 14),
+                        _buildFiltersSection(),
+                        const SizedBox(height: 14),
+                        _buildEstimateNotice(),
+                        const SizedBox(height: 14),
+                        _buildSearchResultsSection(),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              _buildBottomActionBar(),
-            ],
+                _buildBottomActionBar(),
+              ],
+            ),
           ),
         ),
       ),

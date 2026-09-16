@@ -1,4 +1,7 @@
 import csv
+import hashlib
+import json
+from pathlib import Path
 from typing import List, Dict
 
 from services.normalization import (
@@ -46,9 +49,8 @@ def _is_header_like(value: str) -> bool:
 def build_dictionary_from_csvs(csv_paths: List[str]) -> List[Dict]:
     all_records = []
     global_seen = set()
-    current_id = 1
 
-    for source_index, csv_path in enumerate(csv_paths, start=1):
+    for csv_path in csv_paths:
         lines = _read_csv_lines(csv_path)
 
         for raw_value in lines:
@@ -73,17 +75,44 @@ def build_dictionary_from_csvs(csv_paths: List[str]) -> List[Dict]:
             global_seen.add(unique_key)
 
             all_records.append({
-                "id": f"med_{current_id}",
+                "id": hashlib.sha256((Path(csv_path).name + ':' + normalized_full).encode()).hexdigest()[:20],
                 "raw_name": raw_name,
                 "normalized_full": normalized_full,
                 "brand_name": brand_name,
                 "strength": strength,
                 "dosage_form": dosage_form,
-                "source": f"csv_{source_index}",
+                "source": Path(csv_path).stem,
+                "source_quality": "local_unverified",
+                "market": "local_catalog",
             })
-            current_id += 1
 
     return all_records
+
+
+def load_catalog(data_dir: str) -> List[Dict]:
+    """Only explicitly enabled sources are loaded. Unknown sources fail closed."""
+    root = Path(data_dir).resolve()
+    manifest = json.loads((root / 'catalog_sources.json').read_text(encoding='utf-8'))
+    records = []
+    for source in manifest['sources']:
+        if source['status'] not in {'active', 'reference_only'}:
+            continue
+        path = (root / source['file']).resolve()
+        if not path.is_relative_to(root):
+            raise ValueError('Catalog path outside data directory')
+        if source['format'] == 'legacy_csv':
+            entries = build_dictionary_from_csvs([str(path)])
+        elif source['format'] == 'jsonl':
+            entries = [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line.strip()]
+        else:
+            raise ValueError('Unsupported catalog format')
+        for entry in entries:
+            if not entry.get('id') or not entry.get('brand_name'):
+                continue
+            records.append({**entry, 'source': source['id'], 'market': source['market'],
+                            'source_quality': source['quality'],
+                            'review_only': source['status'] == 'reference_only'})
+    return records
 
 
 def build_search_index(dictionary: List[Dict]) -> Dict[str, Dict[str, List[Dict]]]:
@@ -108,6 +137,8 @@ def build_search_index(dictionary: List[Dict]) -> Dict[str, Dict[str, List[Dict]
         # exact indexes
         add(full_name_index, normalized_full, med)
         add(brand_index, brand_name, med)
+        for alias in med.get('name_aliases', []):
+            add(brand_index, alias, med)
         add(strength_index, strength, med)
         add(form_index, dosage_form, med)
 

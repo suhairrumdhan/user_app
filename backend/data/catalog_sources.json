@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "id": "local_legacy",
+      "file": "medItems1.csv",
+      "format": "legacy_csv",
+      "status": "active",
+      "quality": "local_unverified",
+      "market": "local_catalog",
+      "note": "Existing product names; lexical reference, not a regulatory or clinical database."
+    },
+    {
+      "id": "nlm_rxterms",
+      "file": "rxterms_reference.jsonl",
+      "format": "jsonl",
+      "status": "reference_only",
+      "quality": "official",
+      "market": "US",
+      "url": "https://lhncbc.nlm.nih.gov/MOR/RxTerms/",
+      "version": "202609",
+      "note": "Current single-strength ordinary oral forms only. Always requires review; not evidence of availability in Libya."
+    },
+    {
+      "id": "legacy_unverified_2",
+      "file": "medItems2.csv",
+      "format": "legacy_csv",
+      "status": "quarantined",
+      "quality": "unknown",
+      "market": "unknown",
+      "note": "Untraceable generated-looking names/strengths. Preserved for audit, never searched."
+    }
+  ]
+}

@@ -12,6 +12,7 @@ import '../../search/models/medicine_search_request.dart';
 import '../../search/models/medicine_suggestion.dart';
 import '../../search/controllers/search_controller.dart';
 import '../../search/services/medicine_normalizer.dart';
+import '../../search/services/medicine_identity.dart';
 import '../../search/services/medicine_suggestion_service.dart';
 import '../models/beneficiary_model.dart';
 import '../models/medicine_model.dart';
@@ -77,6 +78,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
   final Color pWarningColor = const Color(0xFFF59E0B);
 
   bool get _isPrescriptionMode => widget.searchSource == 'prescription';
+  int get _pendingReviewCount => _medicines.where((m) => m.needsReview).length;
 
   @override
   void initState() {
@@ -249,9 +251,9 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
       return MedicineSearchRequest(
         rawText: raw,
         normalizedText: MedicineNormalizer.normalize(raw),
-        strength: MedicineNormalizer.extractStrength(raw),
-        dosageForm: MedicineNormalizer.extractDosageForm(raw),
-        baseName: MedicineNormalizer.extractBaseName(raw),
+        strength: MedicineIdentity.strength(raw),
+        dosageForm: MedicineIdentity.form(raw),
+        baseName: MedicineIdentity.name(raw),
         searchTokens: MedicineNormalizer.buildSearchTokens(raw),
         resolvedDisplayName: raw,
       );
@@ -274,6 +276,17 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
     if (_medicines.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('أضيفي دواءً واحدًا على الأقل للمتابعة')),
+      );
+      return;
+    }
+
+    if (_medicines.any((medicine) => medicine.needsReview)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'راجع الأسماء المعلّمة: عدّل الاسم أو احتفظ بالأصل قبل المتابعة',
+          ),
+        ),
       );
       return;
     }
@@ -425,7 +438,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
         beneficiaries: beneficiaries,
         showSaveOption: false,
         title: 'حفظ الوصفة',
-        subtitle: 'اختر المستفيد الذي ستُحفظ الوصفة باسمه',
+        subtitle: '',
       ),
     );
 
@@ -435,22 +448,22 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
   Future<String?> _offerOptionalPrescriptionSave() async {
     final shouldSave = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('حفظ الوصفة'),
-        content: const Text(
-          'هل تريد حفظ الوصفة في الأرشيف؟ '
-          'يمكنك متابعة البحث دون حفظها.',
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('حفظ الوصفة؟'),
+          content: const Text('يمكنك الرجوع إليها لاحقًا من الأرشيف.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('تخطي'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('حفظ'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('متابعة دون حفظ'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('حفظ'),
-          ),
-        ],
       ),
     );
 
@@ -500,15 +513,6 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
     return 'البحث اليدوي عن دواء';
   }
 
-  String get _topTitle {
-    if (widget.returnEditedMedicines) return 'عدّل الأسماء ثم ارجع إلى النتائج';
-    if (widget.isReviewMode && _isPrescriptionMode) {
-      return 'راجع الأدوية قبل المتابعة';
-    }
-    if (_manualReviewStarted) return 'راجع كل اسم قبل البحث';
-    return 'أضف الأدوية المطلوبة';
-  }
-
   String get _bottomButtonText {
     if (widget.returnEditedMedicines) return 'حفظ التعديلات والعودة';
     if (widget.isReviewMode && _isPrescriptionMode) {
@@ -521,9 +525,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
   Widget build(BuildContext context) {
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Directionality(
-      textDirection: _isPrescriptionMode
-          ? Directionality.of(context)
-          : TextDirection.rtl,
+      textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: pLightColor,
         appBar: AppBar(
@@ -555,9 +557,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildTopCard(),
-                        if (widget.isReviewMode &&
-                            widget.unmatchedMedicineCount > 0) ...[
+                        if (widget.isReviewMode && _pendingReviewCount > 0) ...[
                           const SizedBox(height: 10),
                           _buildUnmatchedPrescriptionNotice(),
                         ],
@@ -588,60 +588,6 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
     );
   }
 
-  Widget _buildTopCard() {
-    final reviewMode = widget.isReviewMode || _manualReviewStarted;
-    final topColor = reviewMode ? pWarningColor : pPrimaryColor;
-    final secondColor = reviewMode ? const Color(0xFFFBBF24) : pSecondaryColor;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [topColor, secondColor],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: topColor.withOpacity(0.22),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.18),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Icon(
-              reviewMode ? Iconsax.document_text : Iconsax.search_normal_1,
-              color: Colors.white,
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              _topTitle,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildUnmatchedPrescriptionNotice() {
     return Container(
       width: double.infinity,
@@ -652,9 +598,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
         border: Border.all(color: pWarningColor.withValues(alpha: 0.35)),
       ),
       child: Text(
-        'لم تتعرف الخدمة على ${widget.unmatchedMedicineCount} من أسماء الوصفة. '
-        'أضفناها كما ظهرت للمراجعة؛ صحح الاسم أو التركيز قبل البحث. '
-        'لا يعني غياب المطابقة أن الصنف غير موجود لدى الصيدليات.',
+        'أسماء تحتاج إلى مراجعة: $_pendingReviewCount',
         style: const TextStyle(fontSize: 12.5, height: 1.5),
       ),
     );
@@ -691,13 +635,13 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
           ),
           const SizedBox(height: 5),
           const Text(
-            'الأسماء الأصلية محفوظة؛ إذا لم تختر الاقتراح فسيُستخدم الاسم اليدوي في البحث. يمكنك تصحيح أي اسم، والبحث به حتى إذا تعذرت الخدمة. الاقتراحات ليست بدائل علاجية معتمدة.',
+            'راجع الأسماء والاقتراحات قبل البحث.',
             style: TextStyle(fontSize: 12, height: 1.5),
           ),
           if (failed > 0) ...[
             const SizedBox(height: 6),
             const Text(
-              'يمكنك إعادة محاولة أي اسم تعذر تحليله من بطاقته.',
+              'يمكنك إعادة المحاولة من بطاقة الدواء.',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
           ],
@@ -916,7 +860,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
               const SizedBox(width: 7),
               Text(
                 (widget.isReviewMode || _manualReviewStarted)
-                    ? 'الأدوية بعد المراجعة'
+                    ? 'الأدوية للمراجعة'
                     : 'الأدوية المضافة',
                 style: TextStyle(
                   color: pPrimaryColor,
@@ -1081,6 +1025,29 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
                     ),
                   ],
                 ),
+                if (medicine.needsReview) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'الاسم غير مؤكد — راجعه من الوصفة',
+                    style: TextStyle(
+                      color: pWarningColor,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                  if (medicine.originalText != null)
+                    Text(
+                      'الأصل: ${medicine.originalText}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  TextButton.icon(
+                    onPressed: () => setState(() {
+                      _medicines[index] = medicine.copyWith(needsReview: false);
+                    }),
+                    icon: const Icon(Icons.check_circle_outline, size: 18),
+                    label: const Text('راجعت الاسم — احتفظ بالأصل'),
+                  ),
+                ],
                 if (analysis != null) ...[
                   const SizedBox(height: 4),
                   _buildAnalysisDetail(index, analysis),
@@ -1099,19 +1066,19 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
     final Color color;
     switch (status) {
       case ManualMedicineAnalysisStatus.matched:
-        label = 'اقتراح من Flask — يحتاج اعتمادك';
+        label = 'اقتراح يحتاج إلى اعتمادك';
         color = pAccentColor;
       case ManualMedicineAnalysisStatus.accepted:
-        label = 'اخترت اقتراح Flask';
+        label = 'تم اعتماد الاقتراح';
         color = pAccentColor;
       case ManualMedicineAnalysisStatus.noMatch:
-        label = 'لم يُعثر على تطابق — الاسم اليدوي محفوظ';
+        label = 'لا يوجد تطابق';
         color = pWarningColor;
       case ManualMedicineAnalysisStatus.failed:
-        label = result.failureMessage ?? 'تعذر التحليل — الاسم اليدوي محفوظ';
+        label = result.failureMessage ?? 'تعذر التحليل';
         color = Colors.deepOrange;
       case ManualMedicineAnalysisStatus.manual:
-        label = 'اسم يدوي لم يُحلَّل بعد';
+        label = 'لم يُحلل بعد';
         color = pPrimaryColor;
     }
     return Padding(
@@ -1146,7 +1113,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
             TextButton.icon(
               onPressed: () => _retryManualName(index),
               icon: const Icon(Icons.refresh, size: 17),
-              label: const Text('إعادة تحليل هذا الاسم'),
+              label: const Text('إعادة التحليل'),
             ),
         ],
       ),

@@ -52,12 +52,9 @@ class ChatMessageBubble extends StatelessWidget {
     }
 
     final bool isMe = message.isMe;
-    final Color bubbleColor =
-    isMe ? primaryColor : const Color(0xFFFFFFFF);
-    final Color textColor =
-    isMe ? Colors.white : const Color(0xFF1F2937);
-    final Color metaColor =
-    isMe ? Colors.white70 : Colors.grey.shade600;
+    final Color bubbleColor = isMe ? primaryColor : const Color(0xFFFFFFFF);
+    final Color textColor = isMe ? Colors.white : const Color(0xFF1F2937);
+    final Color metaColor = isMe ? Colors.white70 : Colors.grey.shade600;
     final BorderRadius bubbleRadius = BorderRadius.only(
       topLeft: const Radius.circular(18),
       topRight: const Radius.circular(18),
@@ -68,8 +65,10 @@ class ChatMessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2.5),
       child: Row(
-        mainAxisAlignment:
-        isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        textDirection: TextDirection.ltr,
+        mainAxisAlignment: isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Flexible(
@@ -82,10 +81,7 @@ class ChatMessageBubble extends StatelessWidget {
                 borderRadius: bubbleRadius,
                 border: isMe
                     ? null
-                    : Border.all(
-                  color: const Color(0xFFE8EEF5),
-                  width: 1,
-                ),
+                    : Border.all(color: const Color(0xFFE8EEF5), width: 1),
                 boxShadow: [
                   BoxShadow(
                     color: isMe
@@ -106,9 +102,7 @@ class ChatMessageBubble extends StatelessWidget {
                     8,
                   ),
                   child: Column(
-                    crossAxisAlignment: message.isImage || message.isFile
-                        ? CrossAxisAlignment.start
-                        : CrossAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (message.isImage && message.hasImage) ...[
                         GestureDetector(
@@ -172,9 +166,9 @@ class ChatMessageBubble extends StatelessWidget {
                               border: isMe
                                   ? null
                                   : Border.all(
-                                color: const Color(0xFFE7EDF5),
-                                width: 1,
-                              ),
+                                      color: const Color(0xFFE7EDF5),
+                                      width: 1,
+                                    ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -198,7 +192,7 @@ class ChatMessageBubble extends StatelessWidget {
                                 Flexible(
                                   child: Column(
                                     crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         message.displayFileName,
@@ -224,7 +218,8 @@ class ChatMessageBubble extends StatelessWidget {
                                                 fontWeight: FontWeight.w500,
                                               ),
                                             ),
-                                          if (message.fileSizeBytes != null) ...[
+                                          if (message.fileSizeBytes !=
+                                              null) ...[
                                             const SizedBox(width: 6),
                                             Text(
                                               _formatFileSize(

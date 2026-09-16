@@ -31,7 +31,7 @@ class NotificationCard extends StatelessWidget {
         return false;
       },
       background: Container(
-        alignment: Alignment.centerRight,
+        alignment: AlignmentDirectional.centerEnd,
         padding: const EdgeInsets.symmetric(horizontal: 22),
         decoration: BoxDecoration(
           color: Colors.red.shade500,

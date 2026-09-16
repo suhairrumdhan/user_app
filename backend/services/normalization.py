@@ -1,141 +1,117 @@
+"""Lexical normalization only. Never infer ingredients, strengths or substitutes."""
 import re
 from decimal import Decimal
 from typing import Optional
 
-DOSAGE_FORMS = [
-    'tab', 'tabs', 'tablet', 'tablets',
-    'cap', 'caps', 'capsule', 'capsules',
-    'syrup', 'syp', 'susp', 'suspension',
-    'drop', 'drops',
-    'cream', 'ointment', 'oint', 'gel', 'spray',
-    'vial', 'amp', 'ampoule', 'inj', 'injection',
-    'ear drop', 'eye drop',
-]
-
 FORM_ALIASES = {
-    'tabs': 'tab',
-    'tablet': 'tab',
-    'tablets': 'tab',
-    'caps': 'cap',
-    'capsule': 'cap',
-    'capsules': 'cap',
-    'syp': 'syrup',
-    'suspension': 'susp',
-    'drops': 'drop',
-    'oint': 'ointment',
-    'ampoule': 'amp',
-    'injection': 'inj',
+    'tabs': 'tab', 'tablet': 'tab', 'tablets': 'tab',
+    'caps': 'cap', 'capsule': 'cap', 'capsules': 'cap',
+    'syp': 'syrup', 'syrp': 'syrup', 'suspension': 'susp',
+    'drops': 'drop', 'oint': 'ointment', 'ampoule': 'amp',
+    'ampoules': 'amp', 'injection': 'inj', 'injectable': 'inj',
+    'sachet': 'sach', 'sachets': 'sach', 'suppository': 'supp',
+    'suppositories': 'supp', 'solution': 'sol', 'patches': 'patch',
 }
-
-NOISE_WORDS = {
-    'syria', 'turkey', 'uk', 'svitz', 'akmus', 'bp', 'free',
-    'sugar', 'paediatric', 'pediatric', 'exp', 'expectorant',
-}
-
-GENERIC_STOPWORDS = {
-    'and', 'or', 'with', 'for', 'the', 'of', 'to', 'in', 'by', 'a', 'an'
-}
+FORMS = {'tab', 'cap', 'syrup', 'susp', 'drop', 'cream', 'ointment',
+         'gel', 'spray', 'vial', 'amp', 'inj', 'sach', 'supp', 'sol',
+         'inhaler', 'patch', 'lotion', 'powder'}
+NUMBER = r'(?:\d+(?:\.\d+)?|\.\d+)'
+UNIT = r'(?:mcg|mg|g|iu|%)'
+# Compare every component, not only the first strength in a combination.
+DOSE_RE = re.compile(
+    rf'(?<![\w.,]){NUMBER}(?:\s*/\s*{NUMBER})*\s*{UNIT}'
+    rf'(?:\s*/\s*(?:{NUMBER}\s*)?(?:ml|mg|g))?(?!\w)', re.I)
 
 
 def normalize_text(text: str) -> str:
-    if not text:
-        return ''
-
-    text = str(text).strip().lower()
-    text = text.replace('×', 'x')
-    text = text.replace('_', ' ')
-    text = text.replace('-', ' ')
-    text = re.sub(r'(\d+(?:\.\d+)?)\s*gm\b', r'\1 g', text, flags=re.I)
+    text = str(text or '').strip().lower().replace('×', 'x').replace('µ', 'u').replace('μ', 'u')
+    # 50,000 could be a thousands separator or a decimal in another market.
+    # Retain ambiguous notation instead of guessing a clinically different dose.
+    text = re.sub(r'(\d+),(\d+)', lambda m: m.group() if len(m[2]) == 3 and m[1] != '0'
+                  else m[1] + '.' + m[2], text)
+    text = text.replace('_', ' ').replace('-', ' ')
+    text = re.sub(r'\b(?:micrograms?|ug)\b', 'mcg', text)
+    text = re.sub(r'\bmilligrams?\b', 'mg', text)
+    text = re.sub(r'\bmillilit(?:er|re)s?\b', 'ml', text)
+    text = re.sub(r'(?<=\d)(?=[a-z])', ' ', text)
+    text = re.sub(r'\bgm\b', 'g', text)
+    text = re.sub(r'[^\w\s/+.,%]', ' ', text)
     text = re.sub(r'\s*/\s*', '/', text)
-    text = re.sub(r'(\d+(?:\.\d+)?)(mg|ml|mcg|g|kg|iu)\b', r'\1 \2', text, flags=re.I)
-    text = re.sub(r'([a-zA-Z])(\d)', r'\1 \2', text)
-    text = re.sub(r'(\d)([a-zA-Z])', r'\1 \2', text)
-    text = re.sub(r'[^\w\s/+.%]', ' ', text)
-    text = re.sub(r'\s+', ' ', text).strip()
+    return ' '.join(FORM_ALIASES.get(token, token) for token in text.split())
 
-    tokens = []
-    for tok in text.split():
-        tokens.append(FORM_ALIASES.get(tok, tok))
 
-    return ' '.join(tokens).strip()
+def _number(value: Decimal) -> str:
+    return f'{value.normalize():f}'
+
+
+def _canonical_dose(value: str) -> str:
+    match = re.fullmatch(
+        rf'({NUMBER}(?:/{NUMBER})*)\s*({UNIT})'
+        rf'(?:/(?:({NUMBER})\s*)?(ml|mg|g))?', value)
+    if not match:
+        return value
+    amounts, unit, denominator, denominator_unit = match.groups()
+    factor = Decimal(1000) if unit == 'g' else Decimal(1)
+    if unit == 'g':
+        unit = 'mg'
+    values = [Decimal(n) * factor for n in amounts.split('/')]
+    if denominator_unit:
+        divisor = Decimal(denominator or '1')
+        if divisor == 0:
+            return value
+        if denominator_unit == 'g':
+            divisor *= 1000
+            denominator_unit = 'mg'
+        values = [n / divisor for n in values]
+    suffix = f'/{denominator_unit}' if denominator_unit else ''
+    return ' + '.join(f'{_number(n)} {unit}{suffix}' for n in values)
 
 
 def extract_strength(text: str) -> Optional[str]:
-    if not text:
-        return None
-
-    text = normalize_text(text)
-    patterns = [
-        r'\b\d+(?:\.\d+)?\s?(?:mg|ml|mcg|g|iu)\s*/\s*\d+(?:\.\d+)?\s?(?:ml|mg|g)\b',
-        r'\b\d+(?:\.\d+)?\s?(?:mg|ml|mcg|g|iu)\b',
-        r'\b\d+(?:\.\d+)?\s?%\b',
-    ]
-
-    for pattern in patterns:
-        match = re.search(pattern, text, flags=re.I)
-        if match:
-            value = re.sub(r'\s+', ' ', match.group(0)).strip()
-            value = value.replace(' / ', '/')
-            # 1 g and 1000 mg describe the same strength, unlike 500 mg.
-            simple_grams = re.fullmatch(r'(\d+(?:\.\d+)?)\s?g', value)
-            if simple_grams:
-                milligrams = Decimal(simple_grams.group(1)) * 1000
-                return f'{milligrams.normalize():f} mg'
-            return value
-
-    return None
+    values = [_canonical_dose(m.group()) for m in DOSE_RE.finditer(normalize_text(text))]
+    return ' + '.join(values) if values else None
 
 
 def extract_dosage_form(text: str) -> Optional[str]:
-    if not text:
-        return None
+    return next((t for t in normalize_text(text).split() if t in FORMS), None)
 
-    text = normalize_text(text)
 
-    for form in ['ear drop', 'eye drop']:
-        if form in text:
-            return form
-
-    for tok in text.split():
-        tok = FORM_ALIASES.get(tok, tok)
-        if tok in {
-            'tab', 'cap', 'syrup', 'susp', 'drop',
-            'cream', 'ointment', 'gel', 'spray',
-            'vial', 'amp', 'inj',
-        }:
-            return tok
-
-    return None
+def strip_posology(text: str) -> str:
+    """Drop instructions only at explicit boundaries; preserve the source name."""
+    text = re.sub(r'^\s*(?:\d+[.)]|[•*])\s*', '', str(text or '').strip())
+    patterns = [
+        r'\b\d+\s*[x×]\s*\d+(?:\s*[x×]\s*\d+)?',
+        r'\b\d+\s*/\s*(?:every|day|week)',
+        r'\b(?:every|once|twice|daily|nightly|after meals|before meals|for \d+|po|bid|tid|qid|od)\b',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.I)
+        if match and match.start() > 0:
+            text = text[:match.start()]
+    return text.strip(' :;,-')
 
 
 def clean_brand_name(text: str) -> str:
-    text = normalize_text(text)
+    text = normalize_text(strip_posology(text))
+    has_strength = extract_strength(text) is not None
+    text = DOSE_RE.sub(' ', text)
+    text = re.sub(r'/\s*(?=\d+\s*(?:tab|cap)\b)', ' ', text)
+    text = re.sub(rf'(?<!\w){NUMBER}\s*ml\b', ' ', text)
+    # Bare numbers can belong to a product name. Only remove explicit pack
+    # counts next to a form; preserve decimal numbers without stated units.
+    forms = '|'.join(sorted(FORMS, key=len, reverse=True))
+    if has_strength:
+        text = re.sub(rf'(?<![\w.])\d+\s+({forms})\b', r'\1', text)
+        text = re.sub(rf'\b({forms})\s+\d+(?:\s+\d+)*(?![\w.])', r'\1', text)
+    tokens = [t for t in text.split() if t not in FORMS]
+    return ' '.join(tokens).strip(' /.')
 
-    strength = extract_strength(text)
-    if strength:
-        text = text.replace(strength, ' ')
 
-    dosage_form = extract_dosage_form(text)
-    if dosage_form:
-        text = re.sub(rf'\b{re.escape(dosage_form)}\b', ' ', text)
-
-    text = re.sub(r'\b\d+\s?(tab|cap)\b', ' ', text, flags=re.I)
-
-    tokens = []
-    for tok in text.split():
-        if tok in NOISE_WORDS:
-            continue
-        if tok in GENERIC_STOPWORDS:
-            continue
-        if re.fullmatch(r'\d+', tok):
-            continue
-        tokens.append(tok)
-
-    cleaned = ' '.join(tokens)
-    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-    return cleaned if len(cleaned) >= 3 else ''
+def source_identity(text: str) -> dict:
+    cleaned = strip_posology(text)
+    return {'name': clean_brand_name(cleaned), 'strength': extract_strength(cleaned),
+            'dosageForm': extract_dosage_form(cleaned), 'text': cleaned}
 
 
 def tokenize_text(text: str) -> list[str]:
-    normalized = normalize_text(text)
-    return [tok for tok in normalized.split() if tok and tok not in GENERIC_STOPWORDS]
+    return normalize_text(text).split()
