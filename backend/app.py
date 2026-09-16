@@ -86,6 +86,7 @@ def health():
         "dictionaryCount": len(MEDICINE_DICTIONARY),
         "indexTokenCount": len(MEDICINE_INDEX['token_index']),
         "matchingPolicy": "source-preserving-v2",
+        "inputPolicy": "english-medication-lines-v1",
         "catalogSources": sorted({med['source'] for med in MEDICINE_DICTIONARY}),
     })
 
@@ -126,6 +127,7 @@ def analyze_manual():
         text=text,
         dictionary=MEDICINE_DICTIONARY,
         index=MEDICINE_INDEX,
+        manual_input=True,
     )
 
     return jsonify({
