@@ -83,6 +83,8 @@ def strip_posology(text: str) -> str:
         r'\b\d+\s*[x×]\s*\d+(?:\s*[x×]\s*\d+)?',
         r'\b\d+\s*/\s*(?:every|day|week)',
         r'\b(?:every|once|twice|daily|nightly|after meals|before meals|for \d+|po|bid|tid|qid|od)\b',
+        r'\b(?:then|at\s+(?:bed\s*time|night)|(?:with|after|before)\s+(?:food|meals?|breakfast|dinner))\b',
+        r'\bx\s*\d+\s*(?:days?|weeks?|months?)\b',
     ]
     for pattern in patterns:
         match = re.search(pattern, text, flags=re.I)

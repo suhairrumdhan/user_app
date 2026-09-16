@@ -86,7 +86,7 @@ def health():
         "dictionaryCount": len(MEDICINE_DICTIONARY),
         "indexTokenCount": len(MEDICINE_INDEX['token_index']),
         "matchingPolicy": "source-preserving-v2",
-        "inputPolicy": "english-medication-lines-v1",
+        "inputPolicy": "spatial-rows-evidence-v2",
         "catalogSources": sorted({med['source'] for med in MEDICINE_DICTIONARY}),
     })
 
@@ -95,6 +95,9 @@ def health():
 def analyze_prescription():
     data = request.get_json(silent=True) or {}
     text = str(data.get("text", "")).strip()
+    input_mode = data.get("inputMode", "auto")
+    if input_mode not in ("auto", "document", "manual"):
+        return jsonify({"error": "invalid inputMode"}), 400
 
     if not text:
         return jsonify({"error": "text is required"}), 400
@@ -103,6 +106,8 @@ def analyze_prescription():
         text=text,
         dictionary=MEDICINE_DICTIONARY,
         index=MEDICINE_INDEX,
+        document_input=input_mode == "document",
+        manual_input=input_mode == "manual",
     )
 
     return jsonify({
@@ -112,6 +117,7 @@ def analyze_prescription():
         "unmatchedLines": result["unmatchedLines"],
         "items": result["items"],
         "rejectedCandidates": result["rejectedCandidates"],
+        "uncertainText": result["uncertainText"],
     })
 
 

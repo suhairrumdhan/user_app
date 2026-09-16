@@ -2,13 +2,16 @@
 from typing import List, Dict
 from services.normalization import normalize_text, source_identity
 from services.matcher import generate_candidates, select_final_match
-from services.prescription_lines import medication_lines
+from services.prescription_lines import classify_prescription_lines
 
 
-def analyze_text(text: str, dictionary: List[Dict], index: Dict, *, manual_input: bool = False) -> Dict:
+def analyze_text(text: str, dictionary: List[Dict], index: Dict, *, manual_input: bool = False,
+                 document_input: bool = False) -> Dict:
     medicines, unmatched, items, rejected = [], [], [], []
     seen = set()
-    selected_lines = medication_lines(text, index, manual_input=manual_input)
+    classified = classify_prescription_lines(text, index, manual_input=manual_input,
+                                            document_input=document_input)
+    selected_lines = classified["medicationLines"]
     for line_number, raw in selected_lines:
         identity = source_identity(raw)
         candidate = generate_candidates(raw)
@@ -46,4 +49,5 @@ def analyze_text(text: str, dictionary: List[Dict], index: Dict, *, manual_input
         "cleanedText": "\n".join(normalize_text(line) for _, line in selected_lines),
         "medicines": medicines, "unmatchedLines": unmatched,
         "items": items, "rejectedCandidates": rejected,
+        "uncertainText": classified["uncertainText"],
     }

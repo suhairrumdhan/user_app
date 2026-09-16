@@ -84,14 +84,14 @@ class PrescriptionDocumentTests(unittest.TestCase):
 
     def test_unknown_name_inside_rx_section_is_retained_without_inventing_match(self):
         result = self.analyze("Name\nJohn Example\nRx:\nUncataloguedBrand\nDr. Example")
-        self.assertEqual(len(result["items"]), 1)
-        self.assertEqual(result["items"][0]["sourceText"], "UncataloguedBrand")
-        self.assertTrue(result["items"][0]["needsReview"])
+        self.assertEqual(result["items"], [])
+        self.assertEqual([r["text"] for r in result["uncertainText"]], ["UncataloguedBrand"])
 
     def test_unknown_name_between_medication_lines_is_preserved(self):
         result = self.analyze("Augmentin 1g tab\nUncataloguedBrand\nPanadol 500mg tab")
         self.assertEqual([m["sourceText"] for m in result["items"]],
-                         ["Augmentin 1g tab", "UncataloguedBrand", "Panadol 500mg tab"])
+                         ["Augmentin 1g tab", "Panadol 500mg tab"])
+        self.assertEqual([r["text"] for r in result["uncertainText"]], ["UncataloguedBrand"])
 
     def test_manual_product_list_keeps_unknown_names_without_document_context(self):
         result = self.analyze("UncataloguedBrand\nUnknown Cosmetic Serum", manual_input=True)
@@ -107,7 +107,63 @@ class PrescriptionDocumentTests(unittest.TestCase):
         result = app.test_client().post("/analyze-prescription", json={"text": FULL_DOCUMENT})
         self.assertEqual(result.status_code, 200)
         self.assert_five_medications(result.json)
-        self.assertEqual(app.test_client().get("/health").json["inputPolicy"], "english-medication-lines-v1")
+        self.assertEqual(app.test_client().get("/health").json["inputPolicy"], "spatial-rows-evidence-v2")
+
+    def test_second_document_and_legacy_scrambled_fragments_yield_two_medicines(self):
+        examples = [
+            'Test Hospital\nName: Test Patient Age 70 years old\nRx:\n'
+            'الاصليOmnic 0.4 mg cap 2x1x5 days then 1x1x30days at Bed time\n'
+            'الاصليCiprobay tab 500mg 1x2x10days\n'
+            'Assistant Prof. Dr. Test Doctor MD\nUrology Specialist\n19/12/2024',
+            'Rx:\nat Bed time\nx30days\n1x1\nthen\n'
+            'Omnic 0.4 mg cap 2x1x5 days\nCiprobay tab 500mg 1x2x10days\n.Assistant Prof',
+        ]
+        for text in examples:
+            result = self.analyze(text, document_input=True)
+            self.assertEqual([m['sourceName'] for m in result['items']], ['omnic', 'ciprobay'])
+            self.assertEqual([m['strength'] for m in result['items']], ['0.4 mg', '500 mg'])
+            self.assertEqual(result['uncertainText'], [])
+
+    def test_unknown_text_has_no_automatic_drug_status_even_inside_rx(self):
+        result = self.analyze('Rx:\nSome heading\nReturn next Tuesday\nUnknownBrand\nTrido tab', document_input=True)
+        self.assertEqual([m['sourceName'] for m in result['items']], ['trido'])
+        self.assertEqual([r['text'] for r in result['uncertainText']],
+                         ['Some heading', 'Return next Tuesday', 'UnknownBrand'])
+
+    def test_instruction_grammar_and_footer_titles_not_only_reported_words(self):
+        for text in ['after breakfast', 'with food', 'before sleep', 'once daily', 'x 14weeks',
+                     'then', '1 tab at night', 'as needed', 'Prof.', 'Associate Professor']:
+            with self.subTest(text=text):
+                result = self.analyze('Rx:\n' + text, document_input=True)
+                self.assertEqual(result['items'], [])
+                self.assertEqual(result['uncertainText'], [])
+        result = self.analyze('Rx:\nThenex 5 mg tab\nDailycare cream')
+        self.assertEqual(len(result['items']), 2)
+
+    def test_wrapped_strengths_and_numbered_list_without_rx(self):
+        result = self.analyze('1. Omnic\n0.4mg cap\n2. Ciprobay\n500mg tab', document_input=True)
+        self.assertEqual([m['sourceName'] for m in result['items']], ['omnic', 'ciprobay'])
+        self.assertEqual([m['strength'] for m in result['items']], ['0.4 mg', '500 mg'])
+        result = self.analyze('Omeprazole\n"Sandoz"\n40mg cap', document_input=True)
+        self.assertEqual(result['items'][0]['sourceName'], 'omeprazole')
+
+    def test_no_strength_join_across_region_or_page_or_patient_label(self):
+        for separator in ['\n\n', '\n\f\n', '\nName:\nTest Patient\n']:
+            result = self.analyze('UnknownBrand' + separator + '20mg', document_input=True)
+            self.assertEqual(result['items'], [])
+            self.assertEqual(result['uncertainText'][0]['text'], 'UnknownBrand')
+        result = self.analyze('Name:\nTest Patient\n20mg\nRx:\nTrido tab', document_input=True)
+        self.assertEqual([m['sourceName'] for m in result['items']], ['trido'])
+
+    def test_explicit_manual_and_document_modes_differ_only_in_candidate_selection(self):
+        from app import app
+        client = app.test_client()
+        doc = client.post('/analyze-prescription', json={'text': 'UnknownBrand', 'inputMode': 'document'}).json
+        manual = client.post('/analyze-prescription', json={'text': 'UnknownBrand', 'inputMode': 'manual'}).json
+        self.assertEqual(doc['items'], [])
+        self.assertEqual(doc['uncertainText'][0]['text'], 'UnknownBrand')
+        self.assertTrue(manual['items'][0]['needsReview'])
+        self.assertEqual(client.post('/analyze-prescription', json={'text': 'x', 'inputMode': 'bad'}).status_code, 400)
 
 
 if __name__ == "__main__":
