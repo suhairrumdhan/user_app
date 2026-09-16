@@ -111,6 +111,7 @@ def analyze_prescription():
         "status": "success",
         "cleanedText": result["cleanedText"],
         "medicines": result["medicines"],
+        "unmatchedLines": result["unmatchedLines"],
         "rejectedCandidates": result["rejectedCandidates"],
     })
 

@@ -1,7 +1,11 @@
 from typing import List, Dict
 from rapidfuzz import fuzz
 
-from services.normalization import normalize_text
+import re
+
+from services.normalization import (
+    normalize_text, extract_strength, extract_dosage_form,
+)
 from services.matcher import generate_candidates, select_final_match
 
 
@@ -81,8 +85,16 @@ def _post_process_matches(medicines: List[Dict], max_results: int = 15) -> List[
 
 
 def analyze_text(text: str, dictionary: List[Dict], index: Dict[str, Dict]) -> Dict:
-    cleaned = normalize_text(text)
-    candidates = generate_candidates(cleaned, max_n=3)
+    # Do not let an n-gram join the end of one OCR/PDF line to the next item.
+    source_lines = [(line.strip(), normalize_text(line)) for line in text.splitlines()]
+    source_lines = [(raw, cleaned) for raw, cleaned in source_lines if cleaned]
+    cleaned_lines = [cleaned for _, cleaned in source_lines]
+    cleaned = "\n".join(cleaned_lines)
+    candidate_lines = {}
+    for line_index, line in enumerate(cleaned_lines):
+        for candidate in generate_candidates(line, max_n=5):
+            candidate_lines.setdefault(candidate, line_index)
+    candidates = list(candidate_lines)
 
     medicines = []
     rejected = []
@@ -131,10 +143,46 @@ def analyze_text(text: str, dictionary: List[Dict], index: Dict[str, Dict]) -> D
             "alternatives": match["alternatives"],
         })
 
-    medicines = _post_process_matches(medicines, max_results=15)
+    # One OCR/PDF line represents one medicine item. Competing fuzzy matches
+    # for the same line are suggestions, not extra medicines to order.
+    best_per_line = {}
+    for med in medicines:
+        line_index = candidate_lines[med["rawText"]]
+        existing = best_per_line.get(line_index)
+        best_per_line[line_index] = (
+            med if existing is None else _pick_better_match(existing, med)
+        )
+    medicines = _post_process_matches(list(best_per_line.values()), max_results=15)
+
+    matched_lines = {
+        candidate_lines[med["rawText"]] for med in medicines
+        if med["rawText"] in candidate_lines
+    }
+    unmatched_lines = []
+    for line_index, (raw, line) in enumerate(source_lines):
+        if line_index in matched_lines:
+            continue
+        strength = extract_strength(line)
+        form = extract_dosage_form(line)
+        if not strength and not form:
+            continue
+        name = re.split(
+            r'\b(?:tab|tabs|tablet|cap|capsule|syrup|susp|drop|cream|gel|spray|vial|amp|inj)\b'
+            r'|\b\d+(?:[.,]\d+)?\s*(?:mg|gm|g|mcg|ml|iu)\b',
+            raw, maxsplit=1, flags=re.I,
+        )[0].strip(' :;,-\"')
+        if len(name) < 3 or name.lower() in {"name", "age", "rx", "doctor"}:
+            continue
+        unmatched_lines.append({
+            "rawText": raw,
+            "name": name,
+            "strength": strength,
+            "dosageForm": form,
+        })
 
     return {
         "cleanedText": cleaned,
         "medicines": medicines,
+        "unmatchedLines": unmatched_lines[:15],
         "rejectedCandidates": rejected[:20],
     }

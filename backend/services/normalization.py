@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 from typing import Optional
 
 DOSAGE_FORMS = [
@@ -44,6 +45,7 @@ def normalize_text(text: str) -> str:
     text = text.replace('×', 'x')
     text = text.replace('_', ' ')
     text = text.replace('-', ' ')
+    text = re.sub(r'(\d+(?:\.\d+)?)\s*gm\b', r'\1 g', text, flags=re.I)
     text = re.sub(r'\s*/\s*', '/', text)
     text = re.sub(r'(\d+(?:\.\d+)?)(mg|ml|mcg|g|kg|iu)\b', r'\1 \2', text, flags=re.I)
     text = re.sub(r'([a-zA-Z])(\d)', r'\1 \2', text)
@@ -73,7 +75,13 @@ def extract_strength(text: str) -> Optional[str]:
         match = re.search(pattern, text, flags=re.I)
         if match:
             value = re.sub(r'\s+', ' ', match.group(0)).strip()
-            return value.replace(' / ', '/')
+            value = value.replace(' / ', '/')
+            # 1 g and 1000 mg describe the same strength, unlike 500 mg.
+            simple_grams = re.fullmatch(r'(\d+(?:\.\d+)?)\s?g', value)
+            if simple_grams:
+                milligrams = Decimal(simple_grams.group(1)) * 1000
+                return f'{milligrams.normalize():f} mg'
+            return value
 
     return None
 

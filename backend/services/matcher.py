@@ -67,9 +67,11 @@ def has_suspicious_connector(candidate: str) -> bool:
     return any(tok in connectors for tok in tokens)
 
 
-def generate_candidates(text: str, max_n: int = 3) -> List[str]:
+def generate_candidates(text: str, max_n: int = 5) -> List[str]:
     text = normalize_text(text)
     tokens = text.split()
+    line_strength = extract_strength(text)
+    line_form = extract_dosage_form(text)
 
     candidates = []
     seen = set()
@@ -81,9 +83,14 @@ def generate_candidates(text: str, max_n: int = 3) -> List[str]:
 
             phrase = " ".join(tokens[i:i + n]).strip()
             phrase = clean_candidate(phrase)
-            phrase = trim_candidate_tail(phrase)
-
             if not phrase:
+                continue
+
+            # The strength/form present in this medicine line cannot be omitted
+            # just to obtain a higher fuzzy score for a different product.
+            if line_strength and extract_strength(phrase) != line_strength:
+                continue
+            if line_form and extract_dosage_form(phrase) != line_form:
                 continue
 
             if has_suspicious_connector(phrase):
@@ -130,15 +137,10 @@ def _add_items(results: List[Dict], seen_ids: set, items: List[Dict]) -> bool:
 def get_relevant_meds(candidate: str, search_index: Dict[str, Dict[str, List[Dict]]]) -> List[Dict]:
     candidate_norm = normalize_text(candidate)
     candidate_brand = clean_brand_name(candidate)
-    candidate_strength = extract_strength(candidate) or ""
-    candidate_form = extract_dosage_form(candidate) or ""
-
     full_name_index = search_index["full_name_index"]
     brand_index = search_index["brand_index"]
     token_index = search_index["token_index"]
     prefix_index = search_index["prefix_index"]
-    strength_index = search_index["strength_index"]
-    form_index = search_index["form_index"]
 
     results: List[Dict] = []
     seen_ids = set()
@@ -155,6 +157,8 @@ def get_relevant_meds(candidate: str, search_index: Dict[str, Dict[str, List[Dic
     # 3) token matches from full normalized text
     for tok in candidate_norm.split():
         tok = tok.strip()
+        if tok.isdigit() or tok in {"mg", "ml", "mcg", "g", "tab", "cap"}:
+            continue
         if len(tok) >= 2:
             if _add_items(results, seen_ids, token_index.get(tok, [])):
                 return results
@@ -172,15 +176,7 @@ def get_relevant_meds(candidate: str, search_index: Dict[str, Dict[str, List[Dic
             if _add_items(results, seen_ids, prefix_index.get(tok[:3], [])):
                 return results
 
-    # 5) strength / form support
-    if candidate_strength:
-        if _add_items(results, seen_ids, strength_index.get(candidate_strength, [])):
-            return results
-
-    if candidate_form:
-        if _add_items(results, seen_ids, form_index.get(candidate_form, [])):
-            return results
-
+    # A common strength or dosage form alone is not evidence of a medicine name.
     return results
 
 
@@ -257,6 +253,20 @@ def select_final_match(
 ) -> Optional[Dict]:
     relevant = get_relevant_meds(candidate, index)
 
+    candidate_strength = extract_strength(candidate)
+    candidate_form = extract_dosage_form(candidate)
+    if candidate_strength:
+        # A different listed strength is not a safe automatic match.
+        relevant = [
+            med for med in relevant
+            if not med.get("strength") or med["strength"] == candidate_strength
+        ]
+    if candidate_form:
+        relevant = [
+            med for med in relevant
+            if not med.get("dosage_form") or med["dosage_form"] == candidate_form
+        ]
+
     if not relevant:
         return None
 
@@ -273,6 +283,14 @@ def select_final_match(
     ambiguous = second is not None and (best["score"] - second["score"] < 3)
 
     med = best["medicine"]
+    missing_catalog_detail = bool(
+        (candidate_strength and not med.get("strength")) or
+        (candidate_form and not med.get("dosage_form")) or
+        (not candidate_strength and med.get("strength"))
+    )
+    confidence = round(best["score"] / 100.0, 2)
+    if missing_catalog_detail:
+        confidence = min(confidence, 0.89)
 
     return {
         "candidate": candidate,
@@ -282,9 +300,9 @@ def select_final_match(
         "strength": med.get("strength"),
         "dosageForm": med.get("dosage_form"),
         "normalizedText": normalize_text(candidate),
-        "confidence": round(best["score"] / 100.0, 2),
+        "confidence": confidence,
         "matchType": best["match_type"],
-        "needsReview": best["score"] < HIGH_CONFIDENCE or ambiguous,
+        "needsReview": best["score"] < HIGH_CONFIDENCE or ambiguous or missing_catalog_detail,
         "alternatives": [
             {
                 "name": item["medicine"]["raw_name"],
