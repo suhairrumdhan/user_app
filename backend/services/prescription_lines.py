@@ -15,13 +15,13 @@ FIELD = re.compile(
     r"sex|gender|address|phone|tel|telephone|mobile|email|diagnosis|"
     r"allergies|weight|height|blood\s+pressure|page)\b", re.I)
 FOOTER = re.compile(
-    r"^(?:(?:assistant|associate)\s+)?(?:prof(?:essor)?\.?\b|dr[.\s:]|doctor\b|"
+    r"^(?:(?:assistant|associate|assisst|assit)\.?\s+)?(?:prof(?:essor)?\.?\b|dr[.\s:]|doctor\b|"
     r"prescriber\b|signature\b|signed\b|consultant\b)|"
     r"\b(?:specialist|urologist|physician|surgeon|m\.?\s*d\.?)\s*[.,]?$", re.I)
 AGE = re.compile(r"^(?:\d+\s*)?(?:years?\s*old|yrs?(?:\s*old)?|y\s*/?\s*o)\s*[.,]?$", re.I)
 INSTITUTION = re.compile(r"\b(?:hospital|clinic|medical\s+cent(?:er|re)|health\s+cent(?:er|re))\b", re.I)
 INSTRUCTION_START = re.compile(
-    r"^(?:take|use|apply|swallow|repeat|avoid|increase|reduce|continue|stop|"
+    r"^(?:take|use|apply|swallow|repeat|avoid|increase|reduce|continue|stop|then|"
     r"follow\s*up|next\s+visit)\b", re.I)
 # Full-word grammar vocabulary: Thenex and Dailycare are NOT stopwords.
 INSTRUCTION_WORDS = set("""
@@ -37,6 +37,8 @@ DOSE_INSTRUCTION = re.compile(
     r"^\s*(?:\d+\s*[x×]\s*\d+|"
     r"(?:take|use|apply)\s+\d+\s*(?:tab|tablet|cap|capsule|drop|ml)\b|"
     r"\d+\s*(?:tab|tablet|cap|capsule|drop|ml)\b)", re.I)
+ATTACHED_NEXT_MEDICINE = re.compile(
+    r"(\d+\s*(?:[dD]ays?|[wW]eeks?|[mM]onths?))(?=[A-Z][a-z]{2,})")
 QUOTED_MAKER = re.compile(r'^[“"][A-Za-z][^"”]*["”]$')
 
 
@@ -79,6 +81,9 @@ def _reviewable_bare_name(identity: dict, *, evidence: bool) -> bool:
 def classify_prescription_lines(text: str, index: dict, *, manual_input=False,
                                 document_input=False) -> dict:
     # Empty rows/pages prevent attaching a dose from another region to a name.
+    # Some PDF text layers join the end of one schedule to the next brand.
+    text = ATTACHED_NEXT_MEDICINE.sub(r"\1\n", text)
+    text = re.sub(r"\bthen(?=[A-Z][a-z]{2,})", "then\n", text)
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     prepared = []
     in_footer = False
@@ -116,8 +121,8 @@ def classify_prescription_lines(text: str, index: dict, *, manual_input=False,
             has_metadata = True
             continue
         identity = source_identity(raw)
-        # Keep standalone strengths for adjacency checks, not as medicines.
-        details_only = bool(identity["strength"]) and not _has_name(identity)
+        # Keep standalone strengths/forms for adjacency checks, not as medicines.
+        details_only = bool(identity["strength"] or identity["dosageForm"]) and not _has_name(identity)
         if (instruction_only(raw) or not LATIN_NAME.search(raw)) and not details_only:
             continue
         if field_value_pending and not _strong(identity, index):
@@ -140,7 +145,7 @@ def classify_prescription_lines(text: str, index: dict, *, manual_input=False,
         original_cursor = cursor
         number, raw = prepared[cursor]
         identity = source_identity(raw)
-        # Wrapped name / optional quoted maker / strength: adjacent rows only.
+        # Wrapped name / optional quoted maker / strength or form: adjacent rows only.
         if _has_name(identity) and not identity["strength"] and len(identity["name"].split()) <= 6:
             next_cursor = cursor + 1
             if next_cursor < len(prepared):
@@ -151,7 +156,8 @@ def classify_prescription_lines(text: str, index: dict, *, manual_input=False,
                     next_number, next_raw = prepared[next_cursor]
                     details = source_identity(next_raw)
                     if (next_number == number + next_cursor - cursor and
-                            details["strength"] and not _has_name(details)):
+                            (details["strength"] or details["dosageForm"]) and
+                            not _has_name(details)):
                         raw = raw + " " + next_raw
                         identity = source_identity(raw)
                         cursor = next_cursor

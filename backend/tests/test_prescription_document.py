@@ -108,7 +108,7 @@ class PrescriptionDocumentTests(unittest.TestCase):
         result = app.test_client().post("/analyze-prescription", json={"text": FULL_DOCUMENT})
         self.assertEqual(result.status_code, 200)
         self.assert_five_medications(result.json)
-        self.assertEqual(app.test_client().get("/health").json["inputPolicy"], "spatial-rows-evidence-v3")
+        self.assertEqual(app.test_client().get("/health").json["inputPolicy"], "spatial-rows-evidence-v5")
 
     def test_second_document_and_legacy_scrambled_fragments_yield_two_medicines(self):
         examples = [
@@ -196,6 +196,30 @@ class PrescriptionDocumentTests(unittest.TestCase):
         result = self.analyze('Rx:\nHeading\nTake daily', document_input=True)
         self.assertEqual(result['items'], [])
         self.assertEqual([r['text'] for r in result['uncertainText']], ['Heading'])
+
+    def test_pdf_glued_schedule_and_wrapped_details_restore_four_rows(self):
+        # Synthetic transcription of the failure visible in the user screenshots.
+        # It does not contain the patient's or doctor's identifying details.
+        text = ('Rx:\nCiprobay\ntab 500mg1x2x5daysTreto\n'
+                'Cap 1X2X15days\nFybogyl Sachets 1x2x5days\n'
+                'Panadol Tab 500mg 2x3x3days')
+        result = self.analyze(text, document_input=True)
+        self.assertEqual([item['sourceName'] for item in result['items']],
+                         ['ciprobay', 'treto', 'fybogyl', 'panadol'])
+        self.assertEqual(result['items'][0]['strength'], '500 mg')
+        self.assertEqual(result['items'][0]['dosageForm'], 'tab')
+        self.assertEqual(result['items'][1]['dosageForm'], 'cap')
+        self.assertTrue(result['items'][1]['needsReview'])
+        self.assertTrue(result['items'][2]['needsReview'])
+        self.assertEqual(result['uncertainText'], [])
+
+    def test_glued_then_before_a_brand_keeps_both_medicines(self):
+        text = ('Rx:\nat Bed time x30days 1x1 thenOmnic 0.4 mg cap 2x1x5 days\n'
+                'Ciprobay tab 500mg 1x2x10days')
+        result = self.analyze(text, document_input=True)
+        self.assertEqual([item['sourceName'] for item in result['items']],
+                         ['omnic', 'ciprobay'])
+        self.assertEqual(result['uncertainText'], [])
 
 
 if __name__ == "__main__":

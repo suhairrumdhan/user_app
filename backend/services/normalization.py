@@ -15,12 +15,15 @@ FORM_ALIASES = {
 FORMS = {'tab', 'cap', 'syrup', 'susp', 'drop', 'cream', 'ointment',
          'gel', 'spray', 'vial', 'amp', 'inj', 'sach', 'supp', 'sol',
          'inhaler', 'patch', 'lotion', 'powder'}
+ROUTES = {'iv', 'im'}
 NUMBER = r'(?:\d+(?:\.\d+)?|\.\d+)'
 UNIT = r'(?:mcg|mg|g|iu|%)'
 # Compare every component, not only the first strength in a combination.
 DOSE_RE = re.compile(
     rf'(?<![\w.,]){NUMBER}(?:\s*/\s*{NUMBER})*\s*{UNIT}'
     rf'(?:\s*/\s*(?:{NUMBER}\s*)?(?:ml|mg|g))?(?!\w)', re.I)
+GLUED_UNIT_SCHEDULE_RE = re.compile(
+    r'(?<=\d)(mcg|mg|ml|iu|g)(?=\d+\s*[x×]\s*\d+)', re.I)
 
 
 def normalize_text(text: str) -> str:
@@ -30,6 +33,9 @@ def normalize_text(text: str) -> str:
     text = re.sub(r'(\d+),(\d+)', lambda m: m.group() if len(m[2]) == 3 and m[1] != '0'
                   else m[1] + '.' + m[2], text)
     text = text.replace('_', ' ').replace('-', ' ')
+    # PDF extraction can glue a dosage unit to the following schedule.
+    # Split only a known unit followed by a numeric x-schedule, not brand digits.
+    text = GLUED_UNIT_SCHEDULE_RE.sub(r'\1 ', text)
     text = re.sub(r'\b(?:micrograms?|ug)\b', 'mcg', text)
     text = re.sub(r'\bmilligrams?\b', 'mg', text)
     text = re.sub(r'\bmillilit(?:er|re)s?\b', 'ml', text)
@@ -73,13 +79,17 @@ def extract_strength(text: str) -> Optional[str]:
 
 
 def extract_dosage_form(text: str) -> Optional[str]:
-    return next((t for t in normalize_text(text).split() if t in FORMS), None)
+    return next((form for token in normalize_text(text).split()
+                 if (form := token.strip('.,')) in FORMS), None)
 
 
 def strip_posology(text: str) -> str:
     """Drop instructions only at explicit boundaries; preserve the source name."""
     text = re.sub(r'^\s*(?:\d+[.)]|[•*])\s*', '', str(text or '').strip())
+    text = GLUED_UNIT_SCHEDULE_RE.sub(r'\1 ', text)
     patterns = [
+        r'\b\d+(?:\.\d+)?\s*(?:cc|ml)\s*[x×]\s*\d+',
+        r'\b\d+\s*[x×]\s*(?:wk|week)(?=[x×\s]|$)',
         r'\b\d+\s*[x×]\s*\d+(?:\s*[x×]\s*\d+)?',
         r'\b\d+\s*/\s*(?:every|day|week)',
         r'\b(?:every|once|twice|daily|nightly|after meals|before meals|for \d+|po|bid|tid|qid|od)\b',
@@ -105,7 +115,7 @@ def clean_brand_name(text: str) -> str:
     if has_strength:
         text = re.sub(rf'(?<![\w.])\d+\s+({forms})\b', r'\1', text)
         text = re.sub(rf'\b({forms})\s+\d+(?:\s+\d+)*(?![\w.])', r'\1', text)
-    tokens = [t for t in text.split() if t not in FORMS]
+    tokens = [t for t in text.split() if t.strip('.,') not in FORMS | ROUTES]
     return ' '.join(tokens).strip(' /.')
 
 

@@ -8,6 +8,7 @@ from services.dictionary_builder import load_catalog, build_search_index
 from services.matcher import select_final_match
 from services.normalization import (
     normalize_text, clean_brand_name, extract_strength, extract_dosage_form,
+    source_identity,
 )
 from tools.import_rxterms import convert_rows
 
@@ -100,6 +101,20 @@ class MatchingSafetyTests(unittest.TestCase):
         self.assertEqual(extract_strength("Example 0,500mg"), "0.5 mg")
         self.assertIsNone(extract_strength("Example 50,000 IU"))
         self.assertFalse(analyze("Example 50,000 IU tab", ["Example 50 IU tab"])["medicines"])
+
+    def test_attached_schedules_and_routes_do_not_pollute_source_names(self):
+        cases = [
+            ('Suprax 100mg syrup 5ccX1X5days', 'suprax', '100 mg', 'syrup'),
+            ('Dostinex 0.5mg tab 1XwkX6wks', 'dostinex', '0.5 mg', 'tab'),
+            ('Augmentin 1g tab. 1X2X5 days', 'augmentin', '1000 mg', 'tab'),
+            ('Rociphen 1g IV 1x2x4days', 'rociphen', '1000 mg', None),
+        ]
+        for source, name, strength, form in cases:
+            with self.subTest(source=source):
+                identity = source_identity(source)
+                self.assertEqual(identity['name'], name)
+                self.assertEqual(identity['strength'], strength)
+                self.assertEqual(identity['dosageForm'], form)
 
     def test_distinct_strengths_are_not_deduplicated_and_order_is_preserved(self):
         result = analyze("Example 40mg tab\nExample 20mg tab\nExample 40mg tab",
