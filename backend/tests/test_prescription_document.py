@@ -90,8 +90,9 @@ class PrescriptionDocumentTests(unittest.TestCase):
     def test_unknown_name_between_medication_lines_is_preserved(self):
         result = self.analyze("Augmentin 1g tab\nUncataloguedBrand\nPanadol 500mg tab")
         self.assertEqual([m["sourceText"] for m in result["items"]],
-                         ["Augmentin 1g tab", "Panadol 500mg tab"])
-        self.assertEqual([r["text"] for r in result["uncertainText"]], ["UncataloguedBrand"])
+                         ["Augmentin 1g tab", "UncataloguedBrand", "Panadol 500mg tab"])
+        self.assertTrue(result["items"][1]["needsReview"])
+        self.assertEqual(result["uncertainText"], [])
 
     def test_manual_product_list_keeps_unknown_names_without_document_context(self):
         result = self.analyze("UncataloguedBrand\nUnknown Cosmetic Serum", manual_input=True)
@@ -107,7 +108,7 @@ class PrescriptionDocumentTests(unittest.TestCase):
         result = app.test_client().post("/analyze-prescription", json={"text": FULL_DOCUMENT})
         self.assertEqual(result.status_code, 200)
         self.assert_five_medications(result.json)
-        self.assertEqual(app.test_client().get("/health").json["inputPolicy"], "spatial-rows-evidence-v2")
+        self.assertEqual(app.test_client().get("/health").json["inputPolicy"], "spatial-rows-evidence-v3")
 
     def test_second_document_and_legacy_scrambled_fragments_yield_two_medicines(self):
         examples = [
@@ -127,6 +128,7 @@ class PrescriptionDocumentTests(unittest.TestCase):
     def test_unknown_text_has_no_automatic_drug_status_even_inside_rx(self):
         result = self.analyze('Rx:\nSome heading\nReturn next Tuesday\nUnknownBrand\nTrido tab', document_input=True)
         self.assertEqual([m['sourceName'] for m in result['items']], ['trido'])
+        self.assertEqual(result['medicines'], [])
         self.assertEqual([r['text'] for r in result['uncertainText']],
                          ['Some heading', 'Return next Tuesday', 'UnknownBrand'])
 
@@ -164,6 +166,36 @@ class PrescriptionDocumentTests(unittest.TestCase):
         self.assertEqual(doc['uncertainText'][0]['text'], 'UnknownBrand')
         self.assertTrue(manual['items'][0]['needsReview'])
         self.assertEqual(client.post('/analyze-prescription', json={'text': 'x', 'inputMode': 'bad'}).status_code, 400)
+
+    def test_bare_unknown_name_with_directions_keeps_api_shape(self):
+        from app import app
+        response = app.test_client().post('/analyze-prescription', json={
+            'inputMode': 'document',
+            'text': 'Name:\nJane Example\nRx:\nSome heading\nNewbrand\n1x2x5days\nDr. Example',
+        }).json
+        self.assertEqual([m['sourceName'] for m in response['items']], ['newbrand'])
+        self.assertEqual(response['medicines'], [])
+        self.assertEqual([m['sourceName'] for m in response['unmatchedLines']], ['newbrand'])
+        self.assertEqual(response['items'][0]['reviewReasons'], ['no_match'])
+        self.assertEqual([r['text'] for r in response['uncertainText']], ['Some heading'])
+
+    def test_bare_words_without_independent_evidence_stay_uncertain(self):
+        result = self.analyze('Rx:\nHeading\nAdvice\nUnknownBrand\nDr. Example',
+                              document_input=True)
+        self.assertEqual(result['items'], [])
+        self.assertEqual([r['text'] for r in result['uncertainText']],
+                         ['Heading', 'Advice', 'UnknownBrand'])
+
+    def test_inline_rx_bare_name_is_review_only(self):
+        result = self.analyze('Rx: Newbrand\nTake 1 tab daily', document_input=True)
+        self.assertEqual([m['sourceName'] for m in result['items']], ['newbrand'])
+        self.assertEqual(result['medicines'], [])
+        self.assertTrue(result['items'][0]['needsReview'])
+
+    def test_heading_before_generic_instruction_is_not_promoted(self):
+        result = self.analyze('Rx:\nHeading\nTake daily', document_input=True)
+        self.assertEqual(result['items'], [])
+        self.assertEqual([r['text'] for r in result['uncertainText']], ['Heading'])
 
 
 if __name__ == "__main__":

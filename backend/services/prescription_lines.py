@@ -32,6 +32,11 @@ bid tid qid od bd tds qhs hs prn per day days week weeks month months hour hours
 min mins minute minutes x one two three half tablet tablets capsule capsules
 """.split()) | FORMS | {"mg", "mcg", "g", "ml", "iu"}
 NON_NAMES = INSTRUCTION_WORDS | {"rx", "years", "old"}
+BARE_PRODUCT_NAME = re.compile(r"[A-Za-z][A-Za-z0-9'.+-]{3,}")
+DOSE_INSTRUCTION = re.compile(
+    r"^\s*(?:\d+\s*[x×]\s*\d+|"
+    r"(?:take|use|apply)\s+\d+\s*(?:tab|tablet|cap|capsule|drop|ml)\b|"
+    r"\d+\s*(?:tab|tablet|cap|capsule|drop|ml)\b)", re.I)
 QUOTED_MAKER = re.compile(r'^[“"][A-Za-z][^"”]*["”]$')
 
 
@@ -61,28 +66,43 @@ def _strong(identity: dict, index: dict) -> bool:
     )
 
 
+def _reviewable_bare_name(identity: dict, *, evidence: bool) -> bool:
+    """Keep a bare brand visible only with independent prescription evidence.
+
+    A single unfamiliar word alone is not enough to identify a medicine.
+    This only creates a review candidate, never an accepted catalog match.
+    """
+    name = identity["name"]
+    return evidence and bool(BARE_PRODUCT_NAME.fullmatch(name)) and name not in NON_NAMES
+
+
 def classify_prescription_lines(text: str, index: dict, *, manual_input=False,
                                 document_input=False) -> dict:
     # Empty rows/pages prevent attaching a dose from another region to a name.
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     prepared = []
     in_footer = False
+    in_rx_section = False
+    rx_line_numbers = set()
     field_value_pending = False
     has_metadata = False
     for number, original in enumerate(lines):
         if "\f" in original:
             in_footer, field_value_pending = False, False
+            in_rx_section = False
             continue
         raw = english_part(original)
         if not raw:
             continue
         if RX_ONLY.fullmatch(raw):
             in_footer, field_value_pending, has_metadata = False, False, True
+            in_rx_section = True
             continue
         inline_rx = RX_PREFIX.match(raw)
         if inline_rx:
             raw = raw[inline_rx.end():].strip()
             in_footer, field_value_pending, has_metadata = False, False, True
+            in_rx_section = True
         field = FIELD.match(raw)
         if field:
             field_value_pending = not raw[field.end():].strip(" :.-")
@@ -90,6 +110,7 @@ def classify_prescription_lines(text: str, index: dict, *, manual_input=False,
             continue
         if FOOTER.search(raw.lstrip(" .,-")):
             in_footer, field_value_pending, has_metadata = True, False, True
+            in_rx_section = False
             continue
         if AGE.fullmatch(raw) or INSTITUTION.search(raw):
             has_metadata = True
@@ -108,12 +129,15 @@ def classify_prescription_lines(text: str, index: dict, *, manual_input=False,
                 continue
             in_footer = False
         prepared.append((number, raw))
+        if in_rx_section:
+            rx_line_numbers.add(number)
 
     selected, uncertain = [], []
     single_legacy_name = (not document_input and not has_metadata and
                           sum(bool(line.strip()) for line in lines) == 1)
     cursor = 0
     while cursor < len(prepared):
+        original_cursor = cursor
         number, raw = prepared[cursor]
         identity = source_identity(raw)
         # Wrapped name / optional quoted maker / strength: adjacent rows only.
@@ -134,7 +158,16 @@ def classify_prescription_lines(text: str, index: dict, *, manual_input=False,
         cursor += 1
         if not _has_name(identity) or instruction_only(raw):
             continue
-        if _strong(identity, index) or manual_input or single_legacy_name:
+        between_medicines = (original_cursor > 0 and original_cursor + 1 < len(prepared) and
+                             prepared[original_cursor - 1][0] == number - 1 and
+                             prepared[original_cursor + 1][0] == number + 1 and
+                             _strong(source_identity(prepared[original_cursor - 1][1]), index) and
+                             _strong(source_identity(prepared[original_cursor + 1][1]), index))
+        followed_by_directions = (number in rx_line_numbers and number + 1 < len(lines) and
+                                  bool(DOSE_INSTRUCTION.match(english_part(lines[number + 1]))))
+        bare_name_evidence = between_medicines or followed_by_directions
+        if (_strong(identity, index) or manual_input or single_legacy_name or
+                _reviewable_bare_name(identity, evidence=bare_name_evidence)):
             selected.append((number, raw))
         else:
             uncertain.append({"text": raw, "sourceLine": number,

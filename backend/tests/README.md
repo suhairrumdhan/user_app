@@ -4,11 +4,15 @@ The mobile path reads PDF words with bounds and reconstructs visual rows. Image
 OCR keeps ML Kit line geometry. No hospital-specific crop or drug-name allowlist
 is used. Flask separates document metadata/instructions from medication evidence
 before catalog matching. The policy identifier in `/health` is
-`spatial-rows-evidence-v2`.
+`spatial-rows-evidence-v3`.
 
 - `inputMode: document`: exact catalog names or stated strength/form produce
-  medicine candidates. Other English text is retained in `uncertainText`, outside
-  the medicine count and search payload, for explicit review/addition.
+  medicine candidates. A bare English name absent from the catalog appears in
+  `items` and `unmatchedLines` only when an independent prescription cue is
+  present: an immediately following numeric dose instruction within `Rx`,
+  or placement between two adjacent established medicine rows. It has
+  `needsReview: true` and is never an accepted match. Other uncertain words,
+  headings, and prose remain in `uncertainText`.
 - `inputMode: manual` (or `/analyze-manual`): preserves unknown names entered by
   the user. Both modes use the same conservative matching/strength rules.
 - Missing `inputMode` keeps legacy single-name compatibility. Deploy the backend

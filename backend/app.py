@@ -86,7 +86,7 @@ def health():
         "dictionaryCount": len(MEDICINE_DICTIONARY),
         "indexTokenCount": len(MEDICINE_INDEX['token_index']),
         "matchingPolicy": "source-preserving-v2",
-        "inputPolicy": "spatial-rows-evidence-v2",
+        "inputPolicy": "spatial-rows-evidence-v3",
         "catalogSources": sorted({med['source'] for med in MEDICINE_DICTIONARY}),
     })
 
