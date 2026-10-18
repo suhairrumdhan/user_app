@@ -53,3 +53,4 @@ app.*.map.json
 /releases/
 /functions/node_modules/
 
+/firebase.finance-test.json
