@@ -1,3 +1,4 @@
+import '../../../shared/libya_phone.dart';
 // widgets/health_record/basic_info_card.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -9,7 +10,16 @@ class BasicInfoCard extends StatelessWidget {
 
   BasicInfoCard({super.key, required this.user, required this.controller});
 
-  final List<String> bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+  final List<String> bloodTypes = [
+    'A+',
+    'A-',
+    'B+',
+    'B-',
+    'AB+',
+    'AB-',
+    'O+',
+    'O-',
+  ];
   final List<String> genders = ['ذكر', 'أنثى'];
 
   @override
@@ -77,10 +87,10 @@ class BasicInfoCard extends StatelessWidget {
         _buildInfoRow('الجنس', user.gender ?? 'غير محدد'),
         const SizedBox(height: 12),
         _buildInfoRow(
-            'تاريخ الميلاد',
-            user.dateOfBirth != null
-                ? '${user.dateOfBirth!.year}-${user.dateOfBirth!.month}-${user.dateOfBirth!.day}'
-                : 'غير محدد'
+          'تاريخ الميلاد',
+          user.dateOfBirth != null
+              ? '${user.dateOfBirth!.year}-${user.dateOfBirth!.month}-${user.dateOfBirth!.day}'
+              : 'غير محدد',
         ),
         const SizedBox(height: 12),
         _buildInfoRow('رقم الهاتف', user.phone ?? 'غير محدد'),
@@ -122,16 +132,11 @@ class BasicInfoCard extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           foregroundColor: const Color(0xFF1877F2),
           side: const BorderSide(color: Color(0xFF1877F2)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
         child: const Text(
           'تعديل المعلومات الأساسية',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -151,9 +156,9 @@ class BasicInfoCard extends StatelessWidget {
 
     final phoneController = TextEditingController(text: user.phone ?? '');
     final dateController = TextEditingController(
-        text: user.dateOfBirth != null
-            ? "${user.dateOfBirth!.year}-${user.dateOfBirth!.month}-${user.dateOfBirth!.day}"
-            : ''
+      text: user.dateOfBirth != null
+          ? "${user.dateOfBirth!.year}-${user.dateOfBirth!.month}-${user.dateOfBirth!.day}"
+          : '',
     );
 
     DateTime? selectedDate = user.dateOfBirth;
@@ -178,7 +183,10 @@ class BasicInfoCard extends StatelessWidget {
                   decoration: const InputDecoration(
                     labelText: 'فصيلة الدم (اختياري)',
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                   ),
                   items: [
                     const DropdownMenuItem<String>(
@@ -204,7 +212,10 @@ class BasicInfoCard extends StatelessWidget {
                   decoration: const InputDecoration(
                     labelText: 'الجنس (اختياري)',
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                   ),
                   items: [
                     const DropdownMenuItem<String>(
@@ -227,6 +238,8 @@ class BasicInfoCard extends StatelessWidget {
                 // 3. رقم الهاتف - اختياري
                 TextFormField(
                   controller: phoneController,
+                  validator: (value) =>
+                      LibyaPhone.validate(value, required: false),
                   decoration: const InputDecoration(
                     labelText: 'رقم الهاتف (اختياري)',
                     border: OutlineInputBorder(),
@@ -246,7 +259,8 @@ class BasicInfoCard extends StatelessWidget {
                     );
                     if (pickedDate != null) {
                       selectedDate = pickedDate;
-                      dateController.text = "${pickedDate.year}-${pickedDate.month}-${pickedDate.day}";
+                      dateController.text =
+                          "${pickedDate.year}-${pickedDate.month}-${pickedDate.day}";
                     } else {
                       // إذا المستخدم ما اختار تاريخ، نحطه null
                       selectedDate = null;
@@ -269,10 +283,7 @@ class BasicInfoCard extends StatelessWidget {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Get.back(),
-              child: const Text('إلغاء'),
-            ),
+            TextButton(onPressed: () => Get.back(), child: const Text('إلغاء')),
             ElevatedButton(
               onPressed: () async {
                 try {
@@ -280,7 +291,9 @@ class BasicInfoCard extends StatelessWidget {
 
                   final bloodType = selectedBloodType;
                   final gender = selectedGender;
-                  final phone = phoneController.text.isEmpty ? null : phoneController.text;
+                  final phone = phoneController.text.isEmpty
+                      ? null
+                      : LibyaPhone.normalize(phoneController.text);
                   final dateOfBirth = selectedDate;
 
                   // حفظ البيانات
@@ -295,7 +308,9 @@ class BasicInfoCard extends StatelessWidget {
 
                   // إغلاق أي ديالوج مفتوح (مهما كان نوعه)
                   if (Navigator.canPop(Get.context!)) {
-                    Navigator.of(Get.context!).pop(); // يسكر الديالوج حتى لو فتح بـ showDialog
+                    Navigator.of(
+                      Get.context!,
+                    ).pop(); // يسكر الديالوج حتى لو فتح بـ showDialog
                   }
 
                   // تحديث الواجهة
@@ -304,16 +319,15 @@ class BasicInfoCard extends StatelessWidget {
                   // إظهار إشعار النجاح
                   Get.snackbar(
                     'تم الحفظ',
-                    'تم حفظ المعلومات بنجاح ✅',
+                    'تم حفظ البيانات.',
                     backgroundColor: Colors.green,
                     colorText: Colors.white,
                   );
-
                 } catch (e) {
                   print('❌ خطأ في الحفظ: $e');
                   Get.snackbar(
                     'خطأ',
-                    'فشل في حفظ البيانات: $e',
+                    'فشل في حفظ البيانات',
                     backgroundColor: Colors.red,
                     colorText: Colors.white,
                   );
@@ -323,7 +337,7 @@ class BasicInfoCard extends StatelessWidget {
                 backgroundColor: const Color(0xFF1877F2),
               ),
               child: const Text('حفظ', style: TextStyle(color: Colors.white)),
-            )
+            ),
           ],
         ),
       ),

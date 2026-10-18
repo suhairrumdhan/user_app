@@ -87,7 +87,7 @@ class PushNotificationService {
       debugPrint('🔔 Initializing local notifications...');
 
       const androidSettings = AndroidInitializationSettings(
-        '@mipmap/ic_launcher',
+        'ic_notification',
       );
 
       const initSettings = InitializationSettings(android: androidSettings);
@@ -252,11 +252,17 @@ class PushNotificationService {
     _pushDisabledWhileSignedOut = true;
     _pendingChatId = null;
 
-    final token = _currentToken ?? await _messaging.getToken();
-    if (token != null) {
-      await _unregisterTokenSafely(token);
+    try {
+      final token = _currentToken ?? await _messaging.getToken();
+      if (token != null) await _unregisterTokenSafely(token);
+    } catch (error) {
+      debugPrint('Device token cleanup deferred: $error');
     }
-    await _localNotifications.cancelAll();
+    try {
+      await _localNotifications.cancelAll();
+    } catch (error) {
+      debugPrint('Local notification cleanup deferred: $error');
+    }
     await _deleteLocalToken();
   }
 
@@ -309,6 +315,7 @@ class PushNotificationService {
             'high_importance_channel',
             'High Importance Notifications',
             channelDescription: 'Used for important notifications.',
+            icon: 'ic_notification',
             importance: Importance.max,
             priority: Priority.high,
           ),

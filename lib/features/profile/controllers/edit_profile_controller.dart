@@ -1,3 +1,4 @@
+import '../../../shared/libya_phone.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -69,7 +70,11 @@ class EditProfileController extends GetxController {
 
       final newName = nameController.text.trim();
       final newEmail = emailController.text.trim();
-      final newPhone = phoneController.text.trim();
+      final newPhone = LibyaPhone.normalize(phoneController.text);
+      if (LibyaPhone.validate(newPhone, required: false) != null) {
+        Get.snackbar('رقم الهاتف', LibyaPhone.validate(newPhone)!);
+        return;
+      }
 
       final currentPassword = currentPasswordController.text.trim();
       final newPassword = passwordController.text.trim();
@@ -116,7 +121,7 @@ class EditProfileController extends GetxController {
       Get.snackbar('نجاح', 'تم حفظ التغييرات ✅');
       Get.back();
     } catch (e) {
-      Get.snackbar('خطأ', e.toString());
+      Get.snackbar('خطأ', 'تعذر إتمام العملية. حاول مرة أخرى.');
     } finally {
       isLoading.value = false;
     }

@@ -16,6 +16,8 @@ class HttpsError extends Error {
 
 function setup() {
   const db = new FakeFirestore({
+    "pharmacies/pharmacy-one": {status: "approved", isActive: true},
+    "pharmacies/pharmacy": {status: "approved", isActive: true},
     "orders/order": {orderId: "order", schemaVersion: 3, status: "completed", invoiceId: "invoice",
       reservationId: "reservation", reservationState: "consumed",
       pharmacy: {pharmacyId: "pharmacy"}, user: {userId: "user"}},
@@ -33,7 +35,8 @@ function setup() {
     },
     "pharmacies/pharmacy/insurance_companies/company": {name: "Company", totalClaims: 70, currentReceivable: 70},
     "pharmacies/pharmacy/medicines/medicine": {quantity: 8},
-    "pharmacies/pharmacy/shifts/shift-c": {status: "open"},
+    "pharmacies/pharmacy/shift_states/owner:pharmacy": {activeShiftId: "shift-c"},
+    "pharmacies/pharmacy/shifts/shift-c": {status: "open", pharmacyId: "pharmacy", openedByKey: "owner:pharmacy"},
   });
   const handler = buildOrderCommandHandler({db, onCall: (fn) => fn, HttpsError});
   const call = (command, payload, operationId, uid = "pharmacy") => handler({
@@ -124,7 +127,7 @@ test("partial refunds and intervening insurer collection never over-refund eithe
 test("mixed customer refund updates the drawer contract once without touching the creation shift", async () => {
   const {db, call} = setup();
   db.write("pharmacies/pharmacy/shifts/shift-c", {
-    status: "open", openingCash: 100, cashTotal: 50,
+    status: "open", pharmacyId: "pharmacy", openedByKey: "owner:pharmacy", openingCash: 100, cashTotal: 50,
     cashRefunds: 5, cardRefunds: 2, insuranceRefunds: 3, refundsCount: 4,
   });
   const payload = {...refund(), cashOut: 10, cardOut: 20};

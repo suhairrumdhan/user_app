@@ -4,7 +4,7 @@ The mobile path reads PDF words with bounds and reconstructs visual rows. Image
 OCR keeps ML Kit line geometry. No hospital-specific crop or drug-name allowlist
 is used. Flask separates document metadata/instructions from medication evidence
 before catalog matching. The policy identifier in `/health` is
-`spatial-rows-evidence-v3`.
+`spatial-rows-evidence-v5`.
 
 - `inputMode: document`: exact catalog names or stated strength/form produce
   medicine candidates. A bare English name absent from the catalog appears in
@@ -34,6 +34,22 @@ Then, in the same shell/environment, run backend tests. The optional
 `test_supplied_pdf_pipeline.py` reads that actual mobile extraction and sends it
 to Flask's local test client. It checks two source-preserved medicine identities
 and zero stray instruction entries. Remove the temporary text after verification.
+
+The optional 31-PDF corpus test exercises `FileUtils.extractTextFromPDF` and
+`TextPreprocessor.normalize` in Flutter, then sends each resulting document to
+the local Flask endpoint. It checks the 103 visually reviewed medicine names
+and verifies that no unrelated text is presented as a medicine. Original PDFs,
+filenames, patient details, and extracted text remain outside the repository.
+Set `PRESCRIPTION_PDF_DIRECTORY` to the folder of the 31 supplied PDFs and
+`PRESCRIPTION_CORPUS_OUTPUT` to a temporary JSON path, then run:
+
+    flutter test --no-pub test/prescription_supplied_corpus_test.dart
+    cd backend
+    python -X utf8 -B -m unittest discover -s tests -v
+
+Delete the temporary JSON after the test. This proves the supplied digital
+PDFs in a local test; Android builds, scanned pages, and new layouts require
+separate device checks.
 
 Pure layout tests cover shuffled stream order, split words, scaled font/page
 sizes, baseline variation, separate rows/columns and duplicate layers. Document

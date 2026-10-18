@@ -21,7 +21,7 @@ class SavedPrescriptionController extends GetxController {
     try {
       await _service.recordPrescriptionSearch(prescriptionId);
     } catch (e) {
-      errorMessage.value = e.toString();
+      errorMessage.value = 'تعذر إتمام العملية. حاول مرة أخرى.';
       rethrow;
     }
   }
@@ -32,7 +32,7 @@ class SavedPrescriptionController extends GetxController {
 
     prescriptions.bindStream(
       _service.getSavedPrescriptions().handleError((error) {
-        errorMessage.value = error.toString();
+        errorMessage.value = 'تعذر إتمام العملية. حاول مرة أخرى.';
         isLoading.value = false;
       }),
     );
@@ -48,7 +48,7 @@ class SavedPrescriptionController extends GetxController {
       errorMessage.value = '';
       await _service.deletePrescription(prescription);
     } catch (e) {
-      errorMessage.value = e.toString();
+      errorMessage.value = 'تعذر إتمام العملية. حاول مرة أخرى.';
       rethrow;
     } finally {
       isLoading.value = false;
@@ -65,7 +65,7 @@ class SavedPrescriptionController extends GetxController {
         note: note,
       );
     } catch (e) {
-      errorMessage.value = e.toString();
+      errorMessage.value = 'تعذر إتمام العملية. حاول مرة أخرى.';
       rethrow;
     }
   }

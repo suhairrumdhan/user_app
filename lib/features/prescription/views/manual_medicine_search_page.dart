@@ -24,7 +24,6 @@ class ManualMedicineSearchPage extends StatefulWidget {
   final List<MedicineModel>? initialMedicines;
   final String searchSource; // manual | prescription
   final bool isReviewMode;
-  final int unmatchedMedicineCount;
 
   // ملف الوصفة عند بدء البحث من صورة أو PDF.
   final File? prescriptionFile;
@@ -36,7 +35,6 @@ class ManualMedicineSearchPage extends StatefulWidget {
     this.initialMedicines,
     this.searchSource = 'manual',
     this.isReviewMode = false,
-    this.unmatchedMedicineCount = 0,
     this.prescriptionFile,
     this.prescriptionFileType,
     this.returnEditedMedicines = false,
@@ -60,9 +58,9 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
   Timer? _suggestionDebounce;
   List<MedicineSuggestion> _suggestions = const [];
   bool _isLoadingSuggestions = false;
-  bool _hasCompletedSuggestionSearch = false;
   int _suggestionRequestId = 0;
   int? _editingMedicineIndex;
+  int? _expandedSuggestionIndex;
 
   final UserController _userController = Get.find<UserController>();
   final FamilyController _familyController = Get.find<FamilyController>();
@@ -75,10 +73,8 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
   final Color pSecondaryColor = const Color(0xFF7BC4EA);
   final Color pLightColor = const Color(0xFFF5FBFF);
   final Color pAccentColor = const Color(0xFF4CAF50);
-  final Color pWarningColor = const Color(0xFFF59E0B);
-
+  final Color pSuggestionColor = const Color(0xFFF59E0B);
   bool get _isPrescriptionMode => widget.searchSource == 'prescription';
-  int get _pendingReviewCount => _medicines.where((m) => m.needsReview).length;
 
   @override
   void initState() {
@@ -134,10 +130,10 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
         }
       }
       _editingMedicineIndex = null;
+      _expandedSuggestionIndex = null;
       _medicineController.clear();
       _suggestions = const [];
       _isLoadingSuggestions = false;
-      _hasCompletedSuggestionSearch = false;
     });
 
     _medicineFocusNode.requestFocus();
@@ -151,8 +147,8 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
     );
     setState(() {
       _editingMedicineIndex = index;
+      _expandedSuggestionIndex = null;
       _suggestions = const [];
-      _hasCompletedSuggestionSearch = false;
     });
     _medicineFocusNode.requestFocus();
     _onMedicineQueryChanged(name);
@@ -163,10 +159,10 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
     _suggestionRequestId++;
     setState(() {
       _editingMedicineIndex = null;
+      _expandedSuggestionIndex = null;
       _medicineController.clear();
       _suggestions = const [];
       _isLoadingSuggestions = false;
-      _hasCompletedSuggestionSearch = false;
     });
     _medicineFocusNode.requestFocus();
   }
@@ -179,14 +175,12 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
       setState(() {
         _suggestions = const [];
         _isLoadingSuggestions = false;
-        _hasCompletedSuggestionSearch = false;
       });
       return;
     }
 
     setState(() {
       _isLoadingSuggestions = true;
-      _hasCompletedSuggestionSearch = false;
     });
     _suggestionDebounce = Timer(
       const Duration(milliseconds: 350),
@@ -201,14 +195,12 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
       setState(() {
         _suggestions = suggestions;
         _isLoadingSuggestions = false;
-        _hasCompletedSuggestionSearch = true;
       });
     } catch (_) {
       if (!mounted || requestId != _suggestionRequestId) return;
       setState(() {
         _suggestions = const [];
         _isLoadingSuggestions = false;
-        _hasCompletedSuggestionSearch = true;
       });
     }
   }
@@ -233,6 +225,12 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
     setState(() {
       _medicines.removeAt(index);
       if (_manualReviewStarted) _manualAnalysis.removeAt(index);
+      final expandedIndex = _expandedSuggestionIndex;
+      if (expandedIndex == index) {
+        _expandedSuggestionIndex = null;
+      } else if (expandedIndex != null && expandedIndex > index) {
+        _expandedSuggestionIndex = expandedIndex - 1;
+      }
       final editingIndex = _editingMedicineIndex;
       if (editingIndex == index) {
         _editingMedicineIndex = null;
@@ -280,17 +278,6 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
       return;
     }
 
-    if (_medicines.any((medicine) => medicine.needsReview)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'راجع الأسماء المعلّمة: عدّل الاسم أو احتفظ بالأصل قبل المتابعة',
-          ),
-        ),
-      );
-      return;
-    }
-
     // عند الدخول من صفحة النتائج نعيد القائمة المعدلة فقط.
     if (widget.returnEditedMedicines) {
       Navigator.pop(context, List<MedicineModel>.from(_medicines));
@@ -298,7 +285,8 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
     }
 
     if (!_isPrescriptionMode && !_manualReviewStarted) {
-      await _analyzeManualNames();
+      final hasSuggestions = await _analyzeManualNames();
+      if (!hasSuggestions && mounted) await _continue();
       return;
     }
 
@@ -334,43 +322,40 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
     );
   }
 
-  Future<void> _analyzeManualNames() async {
-    if (_isAnalyzingManual) return;
+  Future<bool> _analyzeManualNames() async {
+    if (_isAnalyzingManual) return false;
     FocusManager.instance.primaryFocus?.unfocus();
     final names = _medicines.map((medicine) => medicine.displayName).toList();
     setState(() => _isAnalyzingManual = true);
     try {
       final results = await _manualAnalysisService.analyzeAll(names);
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         _manualAnalysis
           ..clear()
           ..addAll(results);
         _manualReviewStarted = true;
+        _expandedSuggestionIndex = null;
       });
-    } finally {
-      if (mounted) setState(() => _isAnalyzingManual = false);
-    }
-  }
-
-  Future<void> _retryManualName(int index) async {
-    if (_isAnalyzingManual || index >= _medicines.length) return;
-    setState(() => _isAnalyzingManual = true);
-    try {
-      final result = await _manualAnalysisService.analyzeOne(
-        _medicines[index].displayName,
+      return results.any(
+        (result) => result.status == ManualMedicineAnalysisStatus.matched,
       );
-      if (!mounted) return;
-      setState(() => _manualAnalysis[index] = result);
     } finally {
       if (mounted) setState(() => _isAnalyzingManual = false);
     }
   }
 
-  void _acceptManualSuggestion(int index) {
+  void _toggleManualSuggestions(int index) {
+    setState(() {
+      _expandedSuggestionIndex = _expandedSuggestionIndex == index
+          ? null
+          : index;
+    });
+  }
+
+  void _acceptManualSuggestion(int index, String suggestion) {
     final result = _manualAnalysis[index];
-    final suggestion = result.suggestedName;
-    if (suggestion == null || suggestion.trim().isEmpty) return;
+    if (suggestion.trim().isEmpty) return;
     final normalized = MedicineNormalizer.normalize(suggestion);
     final alreadyUsed = _medicines.asMap().entries.any(
       (entry) =>
@@ -385,7 +370,8 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
     }
     setState(() {
       _medicines[index] = MedicineModel(name: suggestion);
-      _manualAnalysis[index] = result.acceptSuggestion();
+      _manualAnalysis[index] = result.acceptSuggestion(suggestion);
+      _expandedSuggestionIndex = null;
     });
   }
 
@@ -428,6 +414,8 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
   }
 
   Future<BeneficiaryModel?> _selectBeneficiaryForSaving() async {
+    await _familyController.refreshMembers();
+    if (!mounted) return null;
     final beneficiaries = _buildBeneficiaries();
 
     final result = await showModalBottomSheet<BeneficiarySelectionResult>(
@@ -485,7 +473,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تم حفظ الوصفة بنجاح'),
+            content: Text('تم حفظ الوصفة.'),
             backgroundColor: Color(0xFF4CAF50),
           ),
         );
@@ -495,7 +483,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('تعذر حفظ الوصفة: $e'),
+            content: Text('تعذر حفظ الوصفة'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -506,19 +494,14 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
 
   String get _pageTitle {
     if (widget.returnEditedMedicines) return 'تعديل قائمة الأدوية';
-    if (widget.isReviewMode && _isPrescriptionMode) {
-      return 'مراجعة الأدوية المستخرجة';
-    }
-    if (_manualReviewStarted) return 'مراجعة الأدوية المطلوبة';
+    if (_isPrescriptionMode) return 'الأدوية المستخرجة';
     return 'البحث اليدوي عن دواء';
   }
 
   String get _bottomButtonText {
     if (widget.returnEditedMedicines) return 'حفظ التعديلات والعودة';
-    if (widget.isReviewMode && _isPrescriptionMode) {
-      return 'اعتماد الأدوية والمتابعة';
-    }
-    return _manualReviewStarted ? 'اعتماد القائمة والبحث' : 'تحليل الأسماء';
+    if (_isPrescriptionMode) return 'البحث عن الأدوية';
+    return _manualReviewStarted ? 'متابعة البحث' : 'البحث عن الدواء';
   }
 
   @override
@@ -557,14 +540,6 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (widget.isReviewMode && _pendingReviewCount > 0) ...[
-                          const SizedBox(height: 10),
-                          _buildUnmatchedPrescriptionNotice(),
-                        ],
-                        if (_manualReviewStarted) ...[
-                          const SizedBox(height: 10),
-                          _buildManualReviewSummary(),
-                        ],
                         const SizedBox(height: 10),
                         AbsorbPointer(
                           absorbing: _isAnalyzingManual,
@@ -584,68 +559,6 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildUnmatchedPrescriptionNotice() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E8),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: pWarningColor.withValues(alpha: 0.35)),
-      ),
-      child: Text(
-        'أسماء تحتاج إلى مراجعة: $_pendingReviewCount',
-        style: const TextStyle(fontSize: 12.5, height: 1.5),
-      ),
-    );
-  }
-
-  Widget _buildManualReviewSummary() {
-    final matched = _manualAnalysis
-        .where(
-          (item) =>
-              item.status == ManualMedicineAnalysisStatus.matched ||
-              item.status == ManualMedicineAnalysisStatus.accepted,
-        )
-        .length;
-    final failed = _manualAnalysis
-        .where((item) => item.status == ManualMedicineAnalysisStatus.failed)
-        .length;
-    final noMatch = _manualAnalysis
-        .where((item) => item.status == ManualMedicineAnalysisStatus.noMatch)
-        .length;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E8),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: pWarningColor.withValues(alpha: 0.35)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'اقتراحات الخدمة: $matched • بلا تطابق: $noMatch • تعذر تحليلها: $failed',
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 5),
-          const Text(
-            'راجع الأسماء والاقتراحات قبل البحث.',
-            style: TextStyle(fontSize: 12, height: 1.5),
-          ),
-          if (failed > 0) ...[
-            const SizedBox(height: 6),
-            const Text(
-              'يمكنك إعادة المحاولة من بطاقة الدواء.',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-          ],
-        ],
       ),
     );
   }
@@ -743,9 +656,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
               ),
             ),
           ),
-          if (_isLoadingSuggestions ||
-              _suggestions.isNotEmpty ||
-              _hasCompletedSuggestionSearch)
+          if (_isLoadingSuggestions || _suggestions.isNotEmpty)
             _buildSuggestionPanel(),
         ],
       ),
@@ -777,22 +688,6 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
                   height: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-              ),
-            )
-          : _suggestions.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.all(10),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline_rounded, size: 19),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'لا توجد اقتراحات مطابقة، ويمكنك إضافة الاسم يدويًا.',
-                      style: TextStyle(fontSize: 11.5),
-                    ),
-                  ),
-                ],
               ),
             )
           : ListView.separated(
@@ -859,9 +754,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
               Icon(Iconsax.box, color: pPrimaryColor, size: 18),
               const SizedBox(width: 7),
               Text(
-                (widget.isReviewMode || _manualReviewStarted)
-                    ? 'الأدوية للمراجعة'
-                    : 'الأدوية المضافة',
+                'الأدوية المضافة',
                 style: TextStyle(
                   color: pPrimaryColor,
                   fontSize: 14,
@@ -939,23 +832,37 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
 
   Widget _buildMedicineCard(int index, MedicineModel medicine) {
     final isEditing = _editingMedicineIndex == index;
+    final isUnmatchedPrescriptionItem =
+        _isPrescriptionMode && medicine.needsReview;
     final analysis = _manualReviewStarted ? _manualAnalysis[index] : null;
+    final hasSuggestions =
+        analysis?.status == ManualMedicineAnalysisStatus.matched &&
+        analysis!.suggestionOptions.isNotEmpty;
+    final suggestionsExpanded = _expandedSuggestionIndex == index;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       decoration: BoxDecoration(
-        color: isEditing ? pWarningColor.withOpacity(0.08) : pLightColor,
+        color: isEditing
+            ? pPrimaryColor.withValues(alpha: 0.08)
+            : isUnmatchedPrescriptionItem
+            ? pSuggestionColor.withValues(alpha: 0.10)
+            : pLightColor,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isEditing
-              ? pWarningColor.withOpacity(0.65)
+              ? pPrimaryColor.withValues(alpha: 0.65)
+              : isUnmatchedPrescriptionItem
+              ? pSuggestionColor.withValues(alpha: 0.70)
               : pPrimaryColor.withOpacity(0.10),
-          width: isEditing ? 1.4 : 1,
+          width: isEditing || isUnmatchedPrescriptionItem ? 1.4 : 1,
         ),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => _startEditingMedicine(index),
+          onTap: hasSuggestions
+              ? () => _toggleManualSuggestions(index)
+              : () => _startEditingMedicine(index),
           borderRadius: BorderRadius.circular(14),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
@@ -986,13 +893,30 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
                     ),
                     const SizedBox(width: 9),
                     Expanded(
-                      child: Text(
-                        medicine.displayName,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          height: 1.4,
-                        ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              medicine.displayName,
+                              style: TextStyle(
+                                color: hasSuggestions ? pSuggestionColor : null,
+                                fontSize: 13,
+                                fontWeight: hasSuggestions
+                                    ? FontWeight.w800
+                                    : FontWeight.w600,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                          if (hasSuggestions)
+                            Icon(
+                              suggestionsExpanded
+                                  ? Icons.keyboard_arrow_up_rounded
+                                  : Icons.keyboard_arrow_down_rounded,
+                              size: 18,
+                              color: pSuggestionColor,
+                            ),
+                        ],
                       ),
                     ),
                     IconButton(
@@ -1002,11 +926,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
                         minWidth: 34,
                         minHeight: 34,
                       ),
-                      icon: Icon(
-                        Iconsax.edit,
-                        size: 18,
-                        color: isEditing ? pWarningColor : pPrimaryColor,
-                      ),
+                      icon: Icon(Iconsax.edit, size: 18, color: pPrimaryColor),
                       tooltip: 'تعديل',
                     ),
                     IconButton(
@@ -1025,33 +945,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
                     ),
                   ],
                 ),
-                if (medicine.needsReview) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'الاسم غير مؤكد — راجعه من الوصفة',
-                    style: TextStyle(
-                      color: pWarningColor,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
-                  if (medicine.originalText != null)
-                    Text(
-                      'الأصل: ${medicine.originalText}',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  TextButton.icon(
-                    onPressed: () => setState(() {
-                      _medicines[index] = medicine.copyWith(needsReview: false);
-                    }),
-                    icon: const Icon(Icons.check_circle_outline, size: 18),
-                    label: const Text('راجعت الاسم — احتفظ بالأصل'),
-                  ),
-                ],
-                if (analysis != null) ...[
-                  const SizedBox(height: 4),
-                  _buildAnalysisDetail(index, analysis),
-                ],
+                if (analysis != null) _buildAnalysisDetail(index, analysis),
               ],
             ),
           ),
@@ -1061,60 +955,58 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
   }
 
   Widget _buildAnalysisDetail(int index, ManualMedicineAnalysis result) {
-    final status = result.status;
-    final String label;
-    final Color color;
-    switch (status) {
-      case ManualMedicineAnalysisStatus.matched:
-        label = 'اقتراح يحتاج إلى اعتمادك';
-        color = pAccentColor;
-      case ManualMedicineAnalysisStatus.accepted:
-        label = 'تم اعتماد الاقتراح';
-        color = pAccentColor;
-      case ManualMedicineAnalysisStatus.noMatch:
-        label = 'لا يوجد تطابق';
-        color = pWarningColor;
-      case ManualMedicineAnalysisStatus.failed:
-        label = result.failureMessage ?? 'تعذر التحليل';
-        color = Colors.deepOrange;
-      case ManualMedicineAnalysisStatus.manual:
-        label = 'لم يُحلل بعد';
-        color = pPrimaryColor;
+    if (result.status != ManualMedicineAnalysisStatus.matched ||
+        _expandedSuggestionIndex != index ||
+        result.suggestionOptions.isEmpty) {
+      return const SizedBox.shrink();
     }
-    return Padding(
-      padding: const EdgeInsetsDirectional.only(start: 41),
+    final options = result.suggestionOptions.take(3).toList();
+    return Container(
+      margin: const EdgeInsetsDirectional.only(start: 41, top: 5, bottom: 2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: pSuggestionColor.withValues(alpha: 0.35)),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
+          for (
+            var optionIndex = 0;
+            optionIndex < options.length;
+            optionIndex++
+          ) ...[
+            InkWell(
+              borderRadius: BorderRadius.circular(9),
+              onTap: () => _acceptManualSuggestion(index, options[optionIndex]),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 9,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        options[optionIndex],
+                        textDirection: TextDirection.ltr,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.swap_horiz_rounded,
+                      size: 16,
+                      color: pSuggestionColor,
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-          if (result.suggestedName != null) ...[
-            const SizedBox(height: 3),
-            Text(
-              'الأصل: ${result.originalName} • الاقتراح: ${result.suggestedName}',
-              style: const TextStyle(fontSize: 11.5, height: 1.4),
-            ),
+            if (optionIndex < options.length - 1)
+              const Divider(height: 1, indent: 8, endIndent: 8),
           ],
-          if (status == ManualMedicineAnalysisStatus.matched)
-            TextButton.icon(
-              onPressed: () => _acceptManualSuggestion(index),
-              icon: const Icon(Icons.check_circle_outline, size: 17),
-              label: const Text('استخدام الاقتراح'),
-            ),
-          if (status == ManualMedicineAnalysisStatus.failed ||
-              status == ManualMedicineAnalysisStatus.noMatch ||
-              status == ManualMedicineAnalysisStatus.manual)
-            TextButton.icon(
-              onPressed: () => _retryManualName(index),
-              icon: const Icon(Icons.refresh, size: 17),
-              label: const Text('إعادة التحليل'),
-            ),
         ],
       ),
     );
@@ -1144,9 +1036,7 @@ class _ManualMedicineSearchPageState extends State<ManualMedicineSearchPage> {
           child: ElevatedButton(
             onPressed: _isAnalyzingManual ? null : _continue,
             style: ElevatedButton.styleFrom(
-              backgroundColor: (widget.isReviewMode || _manualReviewStarted)
-                  ? pWarningColor
-                  : pPrimaryColor,
+              backgroundColor: pPrimaryColor,
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 16),

@@ -164,42 +164,56 @@ class MedicationReminderCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _MiniAction(
-                  title: 'تم الأخذ',
-                  icon: Iconsax.tick_circle,
-                  color: rSuccessColor,
-                  onTap: () => controller.markMedicationTaken(reminder),
+          Obx(() {
+            final busy = controller.isMedicationOperationInProgress(
+              reminder.id,
+            );
+            return Row(
+              children: [
+                Expanded(
+                  child: _MiniAction(
+                    title: 'تم الأخذ',
+                    icon: Iconsax.tick_circle,
+                    color: rSuccessColor,
+                    onTap: busy
+                        ? null
+                        : () => controller.markMedicationTaken(reminder),
+                    busy: busy,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _MiniAction(
-                  title: 'تأجيل',
-                  icon: Iconsax.timer_pause,
-                  color: rWarningColor,
-                  onTap: () => controller.snoozeMedication(reminder),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _MiniAction(
+                    title: 'تأجيل',
+                    icon: Iconsax.timer_pause,
+                    color: rWarningColor,
+                    onTap: busy
+                        ? null
+                        : () => controller.snoozeMedication(reminder),
+                    busy: busy,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _MiniAction(
-                  title: isActive ? 'إيقاف' : 'استئناف',
-                  icon: isActive ? Iconsax.pause_circle : Iconsax.play_circle,
-                  color: isActive ? Colors.black54 : rPrimaryColor,
-                  onTap: () async {
-                    if (isActive) {
-                      await controller.pauseMedication(reminder);
-                    } else {
-                      await controller.resumeMedication(reminder);
-                    }
-                  },
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _MiniAction(
+                    title: isActive ? 'إيقاف' : 'استئناف',
+                    icon: isActive ? Iconsax.pause_circle : Iconsax.play_circle,
+                    color: isActive ? Colors.black54 : rPrimaryColor,
+                    onTap: busy
+                        ? null
+                        : () async {
+                            if (isActive) {
+                              await controller.pauseMedication(reminder);
+                            } else {
+                              await controller.resumeMedication(reminder);
+                            }
+                          },
+                    busy: busy,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            );
+          }),
         ],
       ),
     );
@@ -210,39 +224,54 @@ class _MiniAction extends StatelessWidget {
   final String title;
   final IconData icon;
   final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool busy;
 
   const _MiniAction({
     required this.title,
     required this.icon,
     required this.color,
     required this.onTap,
+    this.busy = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: color.withOpacity(0.08),
-      borderRadius: BorderRadius.circular(11),
-      child: InkWell(
+    return Opacity(
+      opacity: onTap == null ? 0.55 : 1,
+      child: Material(
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(11),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 7),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 15, color: color),
-              const SizedBox(width: 4),
-              Text(
-                title,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 10.5,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(11),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (busy)
+                  SizedBox(
+                    width: 15,
+                    height: 15,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.8,
+                      color: color,
+                    ),
+                  )
+                else
+                  Icon(icon, size: 15, color: color),
+                const SizedBox(width: 4),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10.5,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

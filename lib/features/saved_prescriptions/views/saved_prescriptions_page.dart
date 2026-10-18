@@ -44,8 +44,9 @@ class SavedPrescriptionsPage extends StatelessWidget {
                       controller.prescriptions.isEmpty) {
                     return const Center(
                       child: CircularProgressIndicator(
-                        valueColor:
-                        AlwaysStoppedAnimation<Color>(pPrimaryColor),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          pPrimaryColor,
+                        ),
                       ),
                     );
                   }
@@ -124,11 +125,7 @@ class SavedPrescriptionsPage extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Iconsax.archive_book,
-              size: 82,
-              color: Colors.grey[300],
-            ),
+            Icon(Iconsax.archive_book, size: 82, color: Colors.grey[300]),
             const SizedBox(height: 16),
             Text(
               'لا توجد وصفات محفوظة',
@@ -140,7 +137,7 @@ class SavedPrescriptionsPage extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'عند البحث عن وصفة يمكنك تفعيل خيار الحفظ، وستظهر هنا مع المستفيد والملف الأصلي إن وجد.',
+              'احفظ الوصفات أثناء البحث لتجدها هنا.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
@@ -161,11 +158,7 @@ class SavedPrescriptionsPage extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Iconsax.warning_2,
-              size: 70,
-              color: Colors.orange,
-            ),
+            const Icon(Iconsax.warning_2, size: 70, color: Colors.orange),
             const SizedBox(height: 14),
             const Text(
               'تعذر تحميل الوصفات',
@@ -179,10 +172,7 @@ class SavedPrescriptionsPage extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 12,
-              ),
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
             ),
           ],
         ),
@@ -208,10 +198,7 @@ class SavedPrescriptionsPage extends StatelessWidget {
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(
-          color: Colors.grey.shade100,
-          width: 1,
-        ),
+        border: Border.all(color: Colors.grey.shade100, width: 1),
       ),
       child: Column(
         children: [
@@ -219,9 +206,7 @@ class SavedPrescriptionsPage extends StatelessWidget {
             children: [
               _buildIcon(prescription),
               const SizedBox(width: 14),
-              Expanded(
-                child: _buildMainInfo(prescription),
-              ),
+              Expanded(child: _buildMainInfo(prescription)),
               _buildDeleteButton(
                 context: context,
                 controller: controller,
@@ -244,7 +229,8 @@ class SavedPrescriptionsPage extends StatelessWidget {
                   onTap: () => _reusePrescription(
                     controller: controller,
                     prescription: prescription,
-                  ),                ),
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
               if (prescription.hasOriginalFile &&
@@ -292,11 +278,7 @@ class SavedPrescriptionsPage extends StatelessWidget {
         color: pPrimaryColor.withOpacity(0.10),
         borderRadius: BorderRadius.circular(18),
       ),
-      child: Icon(
-        icon,
-        color: pPrimaryColor,
-        size: 26,
-      ),
+      child: Icon(icon, color: pPrimaryColor, size: 26),
     );
   }
 
@@ -330,10 +312,7 @@ class SavedPrescriptionsPage extends StatelessWidget {
                 '${prescription.beneficiaryName} • ${prescription.beneficiaryRelation}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             ),
           ],
@@ -341,18 +320,11 @@ class SavedPrescriptionsPage extends StatelessWidget {
         const SizedBox(height: 5),
         Row(
           children: [
-            Icon(
-              Iconsax.calendar,
-              size: 14,
-              color: Colors.grey[400],
-            ),
+            Icon(Iconsax.calendar, size: 14, color: Colors.grey[400]),
             const SizedBox(width: 5),
             Text(
               _formatDate(prescription.createdAt),
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
           ],
         ),
@@ -371,11 +343,7 @@ class SavedPrescriptionsPage extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: IconButton(
-        icon: const Icon(
-          Iconsax.trash,
-          color: Colors.red,
-          size: 20,
-        ),
+        icon: const Icon(Iconsax.trash, color: Colors.red, size: 20),
         onPressed: () => _showDeleteDialog(
           context: context,
           controller: controller,
@@ -394,17 +362,13 @@ class SavedPrescriptionsPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: pLightColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: pPrimaryColor.withOpacity(0.08),
-        ),
+        border: Border.all(color: pPrimaryColor.withOpacity(0.08)),
       ),
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
-          ...preview.map(
-                (m) => _buildMedicineTag(m.name),
-          ),
+          ...preview.map((m) => _buildMedicineTag(m.name)),
           if (prescription.medicines.length > 3)
             _buildMedicineTag('+${prescription.medicines.length - 3}'),
         ],
@@ -425,20 +389,14 @@ class SavedPrescriptionsPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF8FBFF),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: pPrimaryColor.withOpacity(0.08),
-        ),
+        border: Border.all(color: pPrimaryColor.withOpacity(0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                Iconsax.clock,
-                size: 16,
-                color: pPrimaryColor,
-              ),
+              Icon(Iconsax.clock, size: 16, color: pPrimaryColor),
               const SizedBox(width: 6),
               Text(
                 'مرات البحث',
@@ -461,15 +419,11 @@ class SavedPrescriptionsPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           ...history.map(
-                (date) => Padding(
+            (date) => Padding(
               padding: const EdgeInsets.only(bottom: 5),
               child: Row(
                 children: [
-                  Icon(
-                    Iconsax.calendar_1,
-                    size: 13,
-                    color: Colors.grey[500],
-                  ),
+                  Icon(Iconsax.calendar_1, size: 13, color: Colors.grey[500]),
                   const SizedBox(width: 6),
                   Text(
                     _formatDateTime(date),
@@ -499,15 +453,14 @@ class SavedPrescriptionsPage extends StatelessWidget {
 
     return '$d/$m/$y - $h:$min';
   }
+
   Widget _buildMedicineTag(String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: pPrimaryColor.withOpacity(0.10),
-        ),
+        border: Border.all(color: pPrimaryColor.withOpacity(0.10)),
       ),
       child: Text(
         text,
@@ -541,11 +494,7 @@ class SavedPrescriptionsPage extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              color: color,
-              size: 18,
-            ),
+            Icon(icon, color: color, size: 18),
             const SizedBox(width: 6),
             Text(
               label,
@@ -611,16 +560,8 @@ class SavedPrescriptionsPage extends StatelessWidget {
     );
   }
 
-  void _openOriginalFile({
-    required String url,
-    required String type,
-  }) {
-    Get.to(
-          () => SavedPrescriptionFileViewerPage(
-        fileUrl: url,
-        fileType: type,
-      ),
-    );
+  void _openOriginalFile({required String url, required String type}) {
+    Get.to(() => SavedPrescriptionFileViewerPage(fileUrl: url, fileType: type));
   }
 
   void _showDeleteDialog({
@@ -631,9 +572,7 @@ class SavedPrescriptionsPage extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('حذف الوصفة'),
         content: Text('هل أنت متأكد من حذف "${prescription.title}"؟'),
         actions: [
@@ -664,10 +603,7 @@ class SavedPrescriptionsPage extends StatelessWidget {
                 );
               }
             },
-            child: const Text(
-              'حذف',
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text('حذف', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -707,9 +643,7 @@ class SavedPrescriptionFileViewerPage extends StatelessWidget {
         backgroundColor: _isPdf ? Colors.white : Colors.black,
         elevation: 0,
         centerTitle: true,
-        iconTheme: IconThemeData(
-          color: _isPdf ? primary : Colors.white,
-        ),
+        iconTheme: IconThemeData(color: _isPdf ? primary : Colors.white),
         title: Text(
           _isPdf ? 'عرض ملف الوصفة' : 'عرض صورة الوصفة',
           style: TextStyle(

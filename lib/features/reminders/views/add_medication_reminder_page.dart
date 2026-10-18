@@ -353,7 +353,7 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
       Navigator.of(context).pop(true);
       if (!wasEditing) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('تم إنشاء تذكير الدواء بنجاح')),
+          const SnackBar(content: Text('تم حفظ تذكير الدواء.')),
         );
       }
     } finally {
@@ -450,7 +450,7 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
                             SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                'أدخل بيانات الدواء وحدد الأوقات المناسبة ليذكرك التطبيق تلقائيًا.',
+                                'أدخل الدواء وحدد أوقات التذكير.',
                                 style: TextStyle(
                                   color: Colors.white,
                                   height: 1.6,
@@ -605,7 +605,7 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
                             ),
                           ),
                           subtitle: const Text(
-                            'عند الحفظ سيتم إضافة اسم الدواء إلى الأدوية الحالية لهذا المستفيد',
+                            'يُضاف الدواء إلى الأدوية الحالية عند الحفظ.',
                           ),
                         );
                       }),

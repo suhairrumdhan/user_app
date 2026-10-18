@@ -1,15 +1,6 @@
 class PickupTimeRemaining {
   const PickupTimeRemaining._();
 
-  static const Duration pickupWindow = Duration(hours: 24);
-
-  static DateTime? resolveDeadline({
-    required DateTime? explicitDeadline,
-    required DateTime? readyAt,
-  }) {
-    return explicitDeadline ?? readyAt?.add(pickupWindow);
-  }
-
   static bool isOverdue({
     required bool isReady,
     required bool serverMarkedOverdue,

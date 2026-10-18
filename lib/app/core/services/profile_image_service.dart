@@ -4,9 +4,11 @@ import 'package:get/get.dart';
 import '../../../features/profile/controllers/user_controller.dart';
 
 class ProfileImageService {
-
   // عرض قائمة خيارات الصورة
-  static void showImagePickerBottomSheet(BuildContext context, UserController userController) {
+  static void showImagePickerBottomSheet(
+    BuildContext context,
+    UserController userController,
+  ) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -49,16 +51,20 @@ class ProfileImageService {
 
             // خيار الحذف (إذا كانت هناك صورة حالية)
             Obx(() {
-              final hasImage = userController.user.value?.profileImageUrl != null;
+              final hasImage =
+                  userController.user.value?.profileImageUrl != null;
               return hasImage
                   ? ListTile(
-                leading: Icon(Icons.delete, color: Colors.red.shade600),
-                title: const Text('حذف الصورة', style: TextStyle(color: Colors.red)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _removeProfileImage(userController);
-                },
-              )
+                      leading: Icon(Icons.delete, color: Colors.red.shade600),
+                      title: const Text(
+                        'حذف الصورة',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _removeProfileImage(userController);
+                      },
+                    )
                   : const SizedBox.shrink();
             }),
 
@@ -89,22 +95,24 @@ class ProfileImageService {
     try {
       final success = await userController.updateUserProfileImage();
       if (success) {
-        _showSuccessSnackbar('تم تحديث صورة الملف الشخصي بنجاح');
+        _showSuccessSnackbar('تم تحديث الصورة.');
       }
     } catch (e) {
-      _showErrorSnackbar('فشل في تحديث الصورة: $e');
+      _showErrorSnackbar('فشل في تحديث الصورة');
     }
   }
 
   // التقاط صورة بالكاميرا
-  static Future<void> _captureProfileImage(UserController userController) async {
+  static Future<void> _captureProfileImage(
+    UserController userController,
+  ) async {
     try {
       final success = await userController.captureProfileImage();
       if (success) {
-        _showSuccessSnackbar('تم تحديث الصورة بنجاح');
+        _showSuccessSnackbar('تم تحديث الصورة.');
       }
     } catch (e) {
-      _showErrorSnackbar('فشل في التقاط الصورة: $e');
+      _showErrorSnackbar('فشل في التقاط الصورة');
     }
   }
 
@@ -113,10 +121,10 @@ class ProfileImageService {
     try {
       final success = await userController.removeUserProfileImage();
       if (success) {
-        _showSuccessSnackbar('تم حذف الصورة بنجاح');
+        _showSuccessSnackbar('تم حذف الصورة.');
       }
     } catch (e) {
-      _showErrorSnackbar('فشل في حذف الصورة: $e');
+      _showErrorSnackbar('فشل في حذف الصورة');
     }
   }
 

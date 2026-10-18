@@ -13,8 +13,7 @@ class PreviousMedicationsEmptyState extends StatelessWidget {
   const PreviousMedicationsEmptyState({
     super.key,
     this.title = 'لا توجد أدوية سابقة',
-    this.subtitle =
-    'عند استلام طلب جديد يمكنكِ إضافة الأدوية إلى هذا السجل وربطها بالتذكيرات.',
+    this.subtitle = 'أضف الأدوية المستلمة إلى السجل واربطها بالتذكيرات.',
     this.showAction = false,
     this.actionLabel = 'تحديث',
     this.onAction,
@@ -95,9 +94,7 @@ class PreviousMedicationsEmptyState extends StatelessWidget {
                   icon: const Icon(Iconsax.refresh),
                   label: Text(
                     actionLabel,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
               ],

@@ -101,7 +101,7 @@ class PreviousMedicationsPage extends StatelessWidget {
                                     : () {
                                   Get.snackbar(
                                     'التذكير',
-                                    'جهزي شاشة إنشاء التذكير من هذا السجل في الخطوة القادمة',
+                                    'يمكنك إضافة تذكير من صفحة التذكيرات.',
                                     snackPosition: SnackPosition.BOTTOM,
                                   );
                                 },

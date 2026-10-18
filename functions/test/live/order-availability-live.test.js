@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {setTimeout: delay} = require("node:timers/promises");
 const {initializeLiveSuite, readDocument, testOrder, writeEvidence} = require("./helpers/live-firebase");
+const {INDEX_VERSION} = require("../../src/domain/medicine-search-index");
 
 // This suite calls deployed functions. Admin writes only prepare its unique fixtures;
 // it never invokes the local projection as a substitute for a deployed trigger.
@@ -41,7 +42,8 @@ test("F03 live search projection and new versus existing order eligibility", {
         pieceQuantity: 0, reservedPieceQuantity: 0, unitsPerPackage: 10,
         sellByPiece: true, sellingPrice: 20, expiryDate: future, isActive: true});
       const index = await waitForIndex(context, medicineId,
-        (data) => data.indexVersion === 7 && data.available === true && data.availableQuantity === 2,
+        (data) => data.indexVersion === INDEX_VERSION && data.available === true &&
+          data.availableQuantity === 2,
         "missing index created from stock");
       assert.equal(index.availablePieceQuantity, 20);
       assert.equal(index.piecePrice, 2);
@@ -65,8 +67,13 @@ test("F03 live search projection and new versus existing order eligibility", {
         await stockRef.set({name: "Live order availability", quantity: 3,
           reservedQuantity: 0, pieceQuantity: 0, reservedPieceQuantity: 0,
           unitsPerPackage: 10, sellingPrice: 10, isActive: true, expiryDate: future});
+        const ownerKey = `owner:${context.pharmacyUid}`;
         await context.db.doc(`${root}/shifts/${shiftId}`).set({status: "open",
+          pharmacyId: context.pharmacyUid, openedByKey: ownerKey,
           cashTotal: 0, cardTotal: 0, salesCount: 0});
+        await context.db.doc(`${root}/shift_states/${ownerKey}`).set({
+          activeShiftId: shiftId,
+        });
         const order = testOrder(context, "new", [
           {matchedMedicineId: medicineId, quantity: 1, soldByPiece: false},
           {matchedMedicineId: medicineId, quantity: 1, soldByPiece: false},
@@ -81,7 +88,7 @@ test("F03 live search projection and new versus existing order eligibility", {
         await pharmacyRef.update(mode === "hidden" ? {isBlocked: true} : {isOnline: false});
         const visible = mode === "stopped";
         await waitForIndex(context, medicineId,
-          (data) => data.indexVersion === 7 && data.pharmacyVisible === visible &&
+          (data) => data.indexVersion === INDEX_VERSION && data.pharmacyVisible === visible &&
             data.pharmacyAcceptingOrders === false && data.available === visible,
           `${mode} pharmacy projection`);
         await assert.rejects(context.call("user", "createOrder", null, {

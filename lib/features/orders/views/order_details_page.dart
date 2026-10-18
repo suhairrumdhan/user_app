@@ -8,13 +8,15 @@ import '../../chat/services/chat_service.dart';
 import '../../chat/views/chat_detail_screen.dart';
 import '../../search/views/search_ui_colors.dart';
 import '../models/order_status.dart';
+import '../widgets/offer_medicine_image.dart';
 import '../models/pickup_time_remaining.dart';
 import '../services/order_service.dart';
 
 class OrderDetailsPage extends StatefulWidget {
   final OrderModel order;
+  final Stream<OrderModel?>? orderUpdates;
 
-  const OrderDetailsPage({super.key, required this.order});
+  const OrderDetailsPage({super.key, required this.order, this.orderUpdates});
 
   @override
   State<OrderDetailsPage> createState() => _OrderDetailsPageState();
@@ -40,38 +42,40 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     _pickupTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted ||
           _order.status != OrderStatus.ready ||
-          PickupTimeRemaining.resolveDeadline(
-                explicitDeadline: _order.pickupDeadline,
-                readyAt: _order.readyAt,
-              ) ==
-              null) {
+          _order.pickupDeadline == null) {
         return;
       }
       setState(() => _now = DateTime.now());
     });
-    _orderSubscription = OrderService.instance
-        .watchOrderById(widget.order.id)
-        .listen(
-          (updatedOrder) {
-            if (!mounted || updatedOrder == null) return;
-            setState(() {
-              if (updatedOrder.offerVersion != _order.offerVersion) {
-                _unavailableOfferVersion = null;
-              }
-              _order = updatedOrder;
-              _now = DateTime.now();
-            });
-          },
-          onError: (Object error) {
-            debugPrint('Order details stream failed: $error');
-            if (!mounted) return;
-            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-              const SnackBar(
-                content: Text('تعذر تحديث الطلب. تحقق من الاتصال.'),
-              ),
+    _orderSubscription =
+        (widget.orderUpdates ??
+                OrderService.instance.watchOrderById(widget.order.id))
+            .listen(
+              (updatedOrder) {
+                if (!mounted || updatedOrder == null) return;
+                if (_order.updatedAt != null &&
+                    updatedOrder.updatedAt != null &&
+                    updatedOrder.updatedAt!.isBefore(_order.updatedAt!)) {
+                  return;
+                }
+                setState(() {
+                  if (updatedOrder.offerVersion != _order.offerVersion) {
+                    _unavailableOfferVersion = null;
+                  }
+                  _order = updatedOrder;
+                  _now = DateTime.now();
+                });
+              },
+              onError: (Object error) {
+                debugPrint('Order details stream failed: $error');
+                if (!mounted) return;
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                  const SnackBar(
+                    content: Text('تعذر تحديث الطلب. تحقق من الاتصال.'),
+                  ),
+                );
+              },
             );
-          },
-        );
   }
 
   @override
@@ -83,9 +87,17 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final estimatedTotal =
-        order.estimatedTotalPrice ??
-        order.medicines.fold<double>(0, (sum, item) => sum + item.lineTotal);
+    final displayedTotal =
+        order.currentCustomerTotalPrice ??
+        (order.isAwaitingInsuranceRemoval
+            ? null
+            : order.medicines.fold<double>(
+                0,
+                (sum, item) => sum + item.lineTotal,
+              ));
+    final acceptedOffer =
+        order.offerVersion > 0 &&
+        order.acceptedOfferVersion == order.offerVersion;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -150,12 +162,31 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                         _row('الاسم', order.beneficiary.name),
                         _row(
                           'التأمين',
-                          order.containsInsurance ? 'مستخدم' : 'غير مستخدم',
+                          order.containsInsurance
+                              ? (order.status == OrderStatus.received
+                                    ? 'بانتظار التحقق من التغطية'
+                                    : 'شراء عن طريق التأمين')
+                              : 'غير مستخدم',
                         ),
+                        if (order.containsInsurance &&
+                            order.insurance.companyName?.trim().isNotEmpty ==
+                                true)
+                          _row('شركة التأمين', order.insurance.companyName!),
+                        if (order.containsInsurance &&
+                            order.insurance.policyNumber?.trim().isNotEmpty ==
+                                true)
+                          _row(
+                            'رقم وثيقة المستفيد',
+                            order.insurance.policyNumber!,
+                          ),
                       ],
                     ),
                     _section(
-                      title: 'الأدوية',
+                      title:
+                          acceptedOffer ||
+                              order.status == OrderStatus.partialOfferPending
+                          ? 'الأصناف الأصلية'
+                          : 'الأدوية',
                       icon: Iconsax.box,
                       children: order.medicines
                           .map((e) => _medicineRow(e))
@@ -166,13 +197,30 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                       icon: Iconsax.timer_1,
                       children: [
                         _row('رقم الطلب', _orderReference),
-                        _row('عدد العناصر', '${order.totalItemsCount}'),
+                        _row('عدد الأصناف', '${order.totalItemsCount}'),
                         _row(
-                          'السعر',
-                          estimatedTotal > 0
-                              ? '${estimatedTotal.toStringAsFixed(2)} د.ل'
+                          order.isAwaitingInsuranceRemoval
+                              ? 'السعر الحالي'
+                              : order.status == OrderStatus.partialOfferPending
+                              ? 'السعر الإجمالي'
+                              : order.finalCustomerTotalPrice != null
+                              ? 'السعر النهائي'
+                              : acceptedOffer
+                              ? 'سعر العرض المقبول'
+                              : order.containsInsurance
+                              ? 'المتبقي التقديري بعد التأمين'
+                              : 'السعر التقديري',
+                          displayedTotal != null
+                              ? '${displayedTotal.toStringAsFixed(2)} د.ل'
                               : 'غير محدد',
                         ),
+                        if (!order.isAwaitingInsuranceRemoval &&
+                            order.finalInsuranceShare != null &&
+                            order.finalInsuranceShare! > 0)
+                          _row(
+                            'حصة التأمين النهائية',
+                            '${order.finalInsuranceShare!.toStringAsFixed(2)} د.ل',
+                          ),
                         if (order.userNote?.trim().isNotEmpty == true)
                           _row('ملاحظاتك', order.userNote!.trim()),
                       ],
@@ -261,20 +309,20 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   }
 
   Widget _orderStatusCard() {
-    final deadline = PickupTimeRemaining.resolveDeadline(
-      explicitDeadline: order.pickupDeadline,
-      readyAt: order.status == OrderStatus.ready ? order.readyAt : null,
-    );
+    final waitingForCoverage = order.insuranceRemoval['status'] == 'pending';
+    final deadline = waitingForCoverage ? null : order.pickupDeadline;
     final isOverdue = PickupTimeRemaining.isOverdue(
-      isReady: order.status == OrderStatus.ready,
-      serverMarkedOverdue: order.pickupOverdue,
+      isReady: !waitingForCoverage && order.status == OrderStatus.ready,
+      serverMarkedOverdue: !waitingForCoverage && order.pickupOverdue,
       deadline: deadline,
       now: _now,
     );
     final accentColor = isOverdue ? Colors.deepOrange : SearchUiColors.primary;
-    final displayedStatus = isOverdue
+    final displayedStatus = waitingForCoverage
+        ? 'بانتظار قرار الدفع بدون تأمين'
+        : isOverdue
         ? 'متأخر عن الاستلام'
-        : order.status.label;
+        : order.displayStatusLabel;
 
     return Container(
       width: double.infinity,
@@ -316,7 +364,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               ),
             ],
           ),
-          if (deadline != null || order.status == OrderStatus.ready) ...[
+          if (deadline != null) ...[
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 9),
               child: Divider(height: 1),
@@ -341,9 +389,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        deadline == null
-                            ? 'بانتظار تحديد الموعد'
-                            : _formatDateTime(deadline),
+                        _formatDateTime(deadline),
                         textAlign: TextAlign.right,
                         style: const TextStyle(
                           fontSize: 14,
@@ -568,7 +614,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
           _row('الدواء', hasMatched ? matchedName : item.requestedName),
           _row('الكمية', '${item.quantity}'),
           _row(
-            'السعر',
+            'سعر الوحدة عند الطلب',
             item.estimatedPrice != null && item.estimatedPrice! > 0
                 ? '${item.estimatedPrice!.toStringAsFixed(2)} د.ل'
                 : 'غير محدد',
@@ -680,7 +726,8 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       actorType: 'user',
     );
 
-    if (!canCancel) return const SizedBox();
+    if (!canCancel || (order.invoiceId?.isNotEmpty ?? false))
+      return const SizedBox();
 
     return Container(
       width: double.infinity,
@@ -708,12 +755,27 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   }
 
   Widget _buildPartialOfferCard() {
-    if (order.status != OrderStatus.partialOfferPending) {
+    final pending = order.status == OrderStatus.partialOfferPending;
+    final accepted =
+        order.offerVersion > 0 &&
+        order.acceptedOfferVersion == order.offerVersion;
+    if (!pending && !accepted) {
       return const SizedBox.shrink();
     }
     final rawItems = order.partialOffer['items'];
     final items = rawItems is List
         ? rawItems
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList()
+        : <Map<String, dynamic>>[];
+    final rawQuote = order.isAwaitingInsuranceRemoval
+        ? order.insuranceRemoval['quote']
+        : order.partialOffer['quote'];
+    final quote = rawQuote is Map ? Map<String, dynamic>.from(rawQuote) : null;
+    final rawQuotedItems = quote?['items'];
+    final quotedItems = rawQuotedItems is List
+        ? rawQuotedItems
               .whereType<Map>()
               .map((item) => Map<String, dynamic>.from(item))
               .toList()
@@ -724,9 +786,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4E8),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFFF8A3D), width: 1.3),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: SearchUiColors.primary.withValues(alpha: .2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -734,7 +796,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
           Row(
             children: [
               const CircleAvatar(
-                backgroundColor: Color(0xFFFF8A3D),
+                backgroundColor: SearchUiColors.primary,
                 foregroundColor: Colors.white,
                 child: Icon(Iconsax.receipt_item),
               ),
@@ -743,16 +805,26 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'عرض من الصيدلية',
-                      style: TextStyle(
+                    Text(
+                      order.isAwaitingInsuranceRemoval
+                          ? 'الأصناف — المبلغ الجديد بانتظار موافقتك'
+                          : pending
+                          ? (order.partialOffer['kind'] == 'replacement'
+                                ? 'عرض تبديل الأصناف'
+                                : order.partialOffer['kind'] == 'full'
+                                ? 'عرض سعر الطلب'
+                                : 'عرض من الصيدلية')
+                          : 'العرض الذي وافقت عليه',
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const Text(
-                      'بعض الأدوية فقط متوفرة',
-                      style: TextStyle(color: Color(0xFF9A4B17)),
+                    Text(
+                      pending
+                          ? 'راجع الأصناف والسعر قبل القبول'
+                          : 'الأصناف والكميات المعتمدة',
+                      style: const TextStyle(color: SearchUiColors.softText),
                     ),
                   ],
                 ),
@@ -761,21 +833,45 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
           ),
           const SizedBox(height: 12),
           const SizedBox(height: 4),
+          if (order.partialOffer['kind'] == 'replacement')
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text('${order.partialOffer['reason'] ?? ''}'),
+            ),
           if (items.isEmpty)
             const Text('تعذر عرض تفاصيل الأصناف. حدّث الصفحة وحاول مجددًا.')
           else
-            ...items.map(_partialOfferItem),
-          if (order.userDecisionDeadline != null) ...[
+            ...items.map((item) => _partialOfferItem(item, quotedItems)),
+          if (quote != null) ...[
+            const Divider(),
+            if (pending && order.estimatedTotalPrice != null)
+              _row(
+                'السعر السابق',
+                '${order.estimatedTotalPrice!.toStringAsFixed(2)} د.ل',
+              ),
+            if ((_offerPrice(quote['insuranceShare']) ?? 0) > 0) ...[
+              _row('إجمالي الأصناف', _offerMoney(quote['grossTotal'])),
+              _row('حصة التأمين', _offerMoney(quote['insuranceShare'])),
+            ],
+            _row(
+              (_offerPrice(quote['insuranceShare']) ?? 0) > 0
+                  ? 'الإجمالي بعد التأمين'
+                  : 'السعر الإجمالي',
+              _offerMoney(quote['customerTotal']),
+            ),
+          ] else if (pending)
+            const Text('السعر غير متوفر. اطلب عرضًا جديدًا من الصيدلية.'),
+          if (pending && order.userDecisionDeadline != null) ...[
             const SizedBox(height: 6),
             Text(
               'الرد قبل: ${_formatDateTime(order.userDecisionDeadline!)}',
               style: const TextStyle(
-                color: Color(0xFF9A4B17),
+                color: SearchUiColors.softText,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ],
-          if (unavailable) ...[
+          if (pending && unavailable) ...[
             const SizedBox(height: 10),
             Container(
               width: double.infinity,
@@ -793,55 +889,89 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               ),
             ),
           ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed:
-                      _isDecidingOffer ||
-                          items.isEmpty ||
-                          order.offerVersion < 1
-                      ? null
-                      : () => _decideOffer(true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                  ),
-                  icon: const Icon(Iconsax.tick_circle),
-                  label: Text(
-                    _isDecidingOffer
-                        ? 'جاري التنفيذ...'
-                        : unavailable
-                        ? 'إعادة محاولة القبول'
-                        : 'قبول العرض',
+          if (pending) const SizedBox(height: 12),
+          if (pending)
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed:
+                        _isDecidingOffer ||
+                            items.isEmpty ||
+                            quote == null ||
+                            order.insuranceRemoval['status'] == 'pending' ||
+                            order.offerVersion < 1
+                        ? null
+                        : () => _decideOffer(true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: SearchUiColors.primary,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 14,
+                        horizontal: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      foregroundColor: Colors.white,
+                    ),
+                    icon: const Icon(Iconsax.tick_circle),
+                    label: Text(
+                      _isDecidingOffer
+                          ? 'جاري التنفيذ...'
+                          : unavailable
+                          ? 'إعادة محاولة القبول'
+                          : 'قبول العرض',
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isDecidingOffer
-                      ? null
-                      : () => _decideOffer(false),
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                  icon: const Icon(Iconsax.close_circle),
-                  label: const Text('رفض العرض'),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        _isDecidingOffer ||
+                            ((order.invoiceId?.isNotEmpty ?? false) &&
+                                order.isAwaitingInsuranceRemoval)
+                        ? null
+                        : () => _decideOffer(false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: SearchUiColors.danger,
+                      side: BorderSide(
+                        color: SearchUiColors.danger.withValues(alpha: .35),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 14,
+                        horizontal: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: const Icon(Iconsax.close_circle),
+                    label: Text(
+                      (order.invoiceId?.isNotEmpty ?? false)
+                          ? 'رفض التبديل'
+                          : 'رفض العرض وإلغاء الطلب',
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          const Text(
-            'يتم الحجز بعد قبول العرض.',
-            style: TextStyle(fontSize: 12, color: Colors.black54),
-          ),
+              ],
+            ),
+          if (pending) const SizedBox(height: 7),
+          if (pending)
+            const Text(
+              'يتم الحجز بعد قبول العرض.',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            ),
         ],
       ),
     );
   }
 
-  Widget _partialOfferItem(Map<String, dynamic> item) {
+  Widget _partialOfferItem(
+    Map<String, dynamic> item,
+    List<Map<String, dynamic>> quotedItems,
+  ) {
     final medicineId = (item['medicineId'] ?? item['matchedMedicineId'] ?? '')
         .toString();
     final matchingOrderItem = order.medicines
@@ -861,30 +991,82 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     final quantity = int.tryParse('${item['quantity']}') ?? 0;
     final soldByPiece =
         item['soldByPiece'] == true || item['sellAsPiece'] == true;
+    final quoted = quotedItems
+        .where(
+          (line) =>
+              '${line['medicineId']}' == medicineId &&
+              (line['soldByPiece'] == true) == soldByPiece,
+        )
+        .firstOrNull;
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: SearchUiColors.light,
+        border: Border.all(
+          color: SearchUiColors.primary.withValues(alpha: .12),
+        ),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
         children: [
-          const Icon(Iconsax.box_tick, color: Colors.green, size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              name,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+          Row(
+            children: [
+              OfferMedicineImage(
+                url:
+                    item['imageUrl']?.toString() ?? matchingOrderItem?.imageUrl,
+                name: name,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  name,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Text(
+                '$quantity ${soldByPiece ? 'قطعة' : 'علبة'}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          if (item['isReplacement'] == true) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                OfferMedicineImage(
+                  url: item['originalImageUrl']?.toString(),
+                  name: '${item['originalMedicineName'] ?? ''}',
+                  size: 40,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'بدلاً من ${item['originalMedicineName'] ?? ''} • ${item['originalQuantity']} ${item['replacesSoldByPiece'] == true ? 'قطعة' : 'علبة'}',
+                    style: const TextStyle(color: SearchUiColors.softText),
+                  ),
+                ),
+              ],
             ),
-          ),
-          Text(
-            '$quantity ${soldByPiece ? 'قطعة' : 'علبة'}',
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
+          ],
+          if (quoted != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'سعر الوحدة ${_offerMoney(quoted['unitPrice'])} • الإجمالي ${_offerMoney((_offerPrice(quoted['unitPrice']) ?? 0) * quantity)}',
+              ),
+            ),
         ],
       ),
     );
+  }
+
+  double? _offerPrice(dynamic value) =>
+      value is num ? value.toDouble() : double.tryParse('$value');
+
+  String _offerMoney(dynamic value) {
+    final price = _offerPrice(value);
+    return price == null ? 'غير محدد' : '${price.toStringAsFixed(2)} د.ل';
   }
 
   String _formatDateTime(DateTime value) {
@@ -895,10 +1077,64 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   }
 
   Widget _buildInsuranceDecisionAction() {
-    if (order.status != OrderStatus.received || !order.containsInsurance) {
+    if (!order.insurance.enabled ||
+        ![
+          OrderStatus.received,
+          OrderStatus.underReview,
+          OrderStatus.partialOfferPending,
+          OrderStatus.confirmedReserved,
+          OrderStatus.preparing,
+          OrderStatus.ready,
+        ].contains(order.status)) {
       return const SizedBox.shrink();
     }
-    return Padding(
+    final reasons = (order.insuranceResolution['reasons'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => '${item['message'] ?? ''}'.trim())
+        .where((message) => message.isNotEmpty)
+        .toList();
+    final removal = order.insuranceRemoval;
+    if (removal['status'] == 'pending') {
+      final quote = Map<String, dynamic>.from(removal['quote'] as Map);
+      final version = (removal['version'] as num).toInt();
+      return _section(
+        title: 'الدفع بدون تأمين',
+        icon: Iconsax.shield_cross,
+        children: [
+          const Text('هل ترغب بالمتابعة؟'),
+          if (order.status == OrderStatus.received)
+            ...reasons.map((message) => Text(message)),
+          if ('${removal['reason'] ?? ''}'.trim().isNotEmpty)
+            Text('السبب: ${removal['reason']}'),
+          _row('السعر السابق', _offerMoney(quote['previousCustomerTotal'])),
+          _row('السعر الحالي', _offerMoney(quote['customerTotal'])),
+          Wrap(
+            spacing: 12,
+            children: [
+              ElevatedButton(
+                onPressed: _isResolvingInsurance
+                    ? null
+                    : () => _insuranceRemovalDecision(version, true),
+                child: const Text('متابعة'),
+              ),
+              TextButton(
+                onPressed: _isResolvingInsurance
+                    ? null
+                    : () => _insuranceRemovalDecision(version, false),
+                child: const Text('إلغاء الطلب'),
+              ),
+            ],
+          ),
+          TextButton(
+            onPressed: _isResolvingInsurance
+                ? null
+                : () => _refreshInsuranceAmount(version),
+            child: const Text('تحديث السعر'),
+          ),
+        ],
+      );
+    }
+    final quoteButton = Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: ElevatedButton.icon(
         onPressed: _isResolvingInsurance
@@ -906,12 +1142,13 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
             : () async {
                 setState(() => _isResolvingInsurance = true);
                 try {
-                  await OrderService.instance.continueWithoutInsurance(
+                  await OrderService.instance.requestInsuranceRemoval(
                     orderId: order.id,
                   );
+                  await _syncOrderFromServer();
                   if (!mounted) return;
                   ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                    const SnackBar(content: Text('تمت متابعة الطلب دون تأمين')),
+                    const SnackBar(content: Text('راجع السعر الحالي')),
                   );
                 } catch (error) {
                   if (!mounted) return;
@@ -928,10 +1165,109 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               },
         icon: const Icon(Iconsax.shield_cross),
         label: Text(
-          _isResolvingInsurance ? 'جاري المتابعة...' : 'متابعة الطلب دون تأمين',
+          _isResolvingInsurance
+              ? 'جاري حساب المبلغ...'
+              : 'عرض السعر بدون تأمين',
         ),
       ),
     );
+    if (order.status != OrderStatus.received) return quoteButton;
+    return _section(
+      title: 'تعذر اعتماد التأمين',
+      icon: Iconsax.shield_cross,
+      children: [
+        if (reasons.isEmpty)
+          const Text('تعذر التحقق من التغطية التأمينية لهذا الطلب.')
+        else
+          ...reasons.map((message) => Text(message)),
+        const Text('يمكنك المتابعة بدون تأمين أو الإلغاء.'),
+        quoteButton,
+        TextButton(
+          onPressed: _isCancelling ? null : () => _cancelOrder(context),
+          child: const Text('إلغاء الطلب'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _insuranceRemovalDecision(int version, bool accept) async {
+    if (_isResolvingInsurance) return;
+    setState(() => _isResolvingInsurance = true);
+    try {
+      await OrderService.instance.decideInsuranceRemoval(
+        orderId: order.id,
+        version: version,
+        accept: accept,
+      );
+      await _syncOrderFromServer();
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            accept ? 'تم اعتماد الدفع بدون تأمين' : 'تم إلغاء الطلب',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString().contains('stale-offer-price')
+                ? 'تغيّر السعر. حدّثه قبل المتابعة.'
+                : 'تعذر حفظ اختيارك. حدّث الطلب وأعد المحاولة.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isResolvingInsurance = false);
+    }
+  }
+
+  Future<void> _refreshInsuranceAmount(int version) async {
+    if (_isResolvingInsurance) return;
+    setState(() => _isResolvingInsurance = true);
+    try {
+      await OrderService.instance.requestInsuranceRemoval(
+        orderId: order.id,
+        version: version,
+      );
+      await _syncOrderFromServer();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text('تعذر تحديث السعر. حدّث الطلب ثم حاول مجدداً.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isResolvingInsurance = false);
+    }
+  }
+
+  Future<void> _syncOrderFromServer() async {
+    try {
+      final latest = await OrderService.instance.getOrderById(
+        order.id,
+        fromServer: true,
+      );
+      if (!mounted || latest == null) return;
+      setState(() {
+        _order = latest;
+        _now = DateTime.now();
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'تم إرسال القرار، لكن تعذر جلب أحدث حالة. تحقق من الاتصال.',
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _decideOffer(bool accept) async {
@@ -951,12 +1287,17 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
           offerVersion: submittedVersion,
         );
       }
+      await _syncOrderFromServer();
       if (!mounted) return;
       final messenger = ScaffoldMessenger.maybeOf(context);
       messenger?.showSnackBar(
         SnackBar(
           content: Text(
-            accept ? 'تم قبول العرض وحجز الكمية المتاحة' : 'تم رفض العرض',
+            accept
+                ? 'تم قبول العرض وحجز الكمية المتاحة'
+                : order.status == OrderStatus.cancelled
+                ? 'تم رفض العرض وإلغاء الطلب'
+                : 'تم رفض التبديل؛ الطلب الأصلي مستمر',
           ),
           backgroundColor: accept ? Colors.green : Colors.orange,
         ),
@@ -993,9 +1334,12 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     if (_isUnavailableOfferError(error)) {
       return 'الكمية لم تعد متاحة. حاول لاحقًا أو تواصل مع الصيدلية.';
     }
+    if (value.contains('stale-offer-price')) {
+      return 'تغير السعر. اطلب عرضًا جديدًا من الصيدلية.';
+    }
     if (value.contains('stale-offer-version') ||
         value.contains('partial offer changed')) {
-      return 'تم تحديث العرض. راجعه قبل القبول.';
+      return 'تغير العرض. راجع أحدث عرض من الصيدلية قبل القبول.';
     }
     if (value.contains('unauthenticated') ||
         value.contains('permission-denied')) {

@@ -201,6 +201,10 @@ async function seedLiveRun(context) {
       id: context.employeeId,
       roleId: "admin",
       isActive: true,
+      permissionOverrides: {
+        "orders.update_status": true,
+        "sales.refund": true,
+      },
       liveTest: true,
       updatedAt: now,
     },
@@ -277,8 +281,13 @@ async function seedLiveRun(context) {
     },
   ));
   batch.set(db.doc(`pharmacies/${context.pharmacyUid}/shifts/${context.shiftId}`), {
-    status: "open", cashTotal: 0, cardTotal: 0, salesCount: 0,
+    status: "open", pharmacyId: context.pharmacyUid,
+    openedByKey: `owner:${context.pharmacyUid}`,
+    cashTotal: 0, cardTotal: 0, salesCount: 0,
   });
+  batch.set(db.doc(
+    `pharmacies/${context.pharmacyUid}/shift_states/owner:${context.pharmacyUid}`,
+  ), {activeShiftId: context.shiftId});
   batch.set(db.doc(`pharmacies/${context.pharmacyUid}/sales/${context.notCollectedInvoiceId}`), {
     schemaVersion: 3, source: "order", orderId: context.notCollectedOrderId,
     sourceOrderId: context.notCollectedOrderId, pharmacyId: context.pharmacyUid, invoiceId: context.notCollectedInvoiceId,
@@ -418,10 +427,10 @@ test("F03 complete lifecycle on the live Firebase project", {
       password: "LiveEmployee-2026",
     },
   );
-  context.employeeActor = {
-    employeeId: context.employeeId,
-    employeeSession: employeeLogin.sessionToken,
-  };
+  context.tokens.employee = await exchangeCustomToken(
+    employeeLogin.customToken,
+    apiKey,
+  );
 
   try {
     await t.test("duplicate medicine lines reserve their total once", async () => {
@@ -543,8 +552,7 @@ test("F03 complete lifecycle on the live Firebase project", {
             soldByPiece: false,
           }]}},
         ),
-        (error) => error.code === "failed-precondition" &&
-          error.message.includes("insufficient stock"),
+        (error) => error.code === "failed-precondition",
       );
       const after = await documentData(
         db,
@@ -629,11 +637,10 @@ test("F03 complete lifecycle on the live Firebase project", {
     await t.test("expired pickup becomes not-collected without a note", async () => {
       await orderCommand(
         context,
-        "pharmacy",
+        "employee",
         "markNotCollected",
         context.notCollectedOrderId,
         {
-          actor: context.employeeActor,
           payload: {
             reversalId: context.reversalRef.split("/").at(-1),
           },

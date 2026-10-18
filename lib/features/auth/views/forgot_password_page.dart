@@ -156,7 +156,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           Text(
             widget.fromProfile
                 ? 'سنرسل رابطاً آمناً إلى بريد حسابك لإنشاء كلمة مرور جديدة.'
-                : 'أدخل بريدك الإلكتروني وسنرسل لك رابطاً آمناً لإنشاء كلمة مرور جديدة.',
+                : 'أدخل بريدك لإرسال رابط تغيير كلمة المرور.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 15,
@@ -250,8 +250,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         const SizedBox(height: 12),
         Text(
           widget.fromProfile
-              ? 'أرسلنا رابط تغيير كلمة المرور إلى بريد حسابك. تحقق أيضاً من مجلد الرسائل غير المرغوب فيها.'
-              : 'إذا كان البريد مسجلاً لدينا فستصلك رسالة تحتوي على رابط تغيير كلمة المرور. تحقق أيضاً من مجلد الرسائل غير المرغوب فيها.',
+              ? 'أرسلنا رابط تغيير كلمة المرور. تحقق من بريدك والرسائل غير المرغوب فيها.'
+              : 'إذا كان البريد مسجلًا، فسيصلك رابط تغيير كلمة المرور. تحقق من الرسائل غير المرغوب فيها.',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 15, height: 1.7, color: Color(0xFF607080)),
         ),

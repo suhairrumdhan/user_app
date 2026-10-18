@@ -176,7 +176,7 @@ function runFirebase(command) {
       "emulators:exec",
       "--only",
       "auth,firestore,storage,functions",
-      "node --test test/emulator/*.test.js",
+      "node --test --test-concurrency=1 test/emulator/*.test.js",
     ];
   const startedAt = new Date().toISOString();
   const result = spawnSync(process.execPath, args, {

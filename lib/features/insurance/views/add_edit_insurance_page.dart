@@ -35,9 +35,10 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
 
   bool loading = false;
   bool initialLoading = true;
+  bool beneficiaryLocked = false;
 
-  /// self + family members
-  List<String> selectedCoveredMemberIds = ['self'];
+  /// لكل مستفيد وثيقة واحدة ورقم وثيقة مستقل.
+  String selectedBeneficiaryId = 'self';
 
   @override
   void initState() {
@@ -69,11 +70,10 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
       cardNumberController.text = insurance.cardNumber;
       startDate = insurance.startDate;
       endDate = insurance.endDate;
-      selectedCoveredMemberIds = List<String>.from(insurance.coveredMemberIds);
-
-      if (selectedCoveredMemberIds.isEmpty) {
-        selectedCoveredMemberIds = ['self'];
-      }
+      selectedBeneficiaryId = insurance.beneficiaryId.isNotEmpty
+          ? insurance.beneficiaryId
+          : 'self';
+      beneficiaryLocked = insurance.beneficiaryId.isNotEmpty;
     }
 
     initialLoading = false;
@@ -89,8 +89,7 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
   }
 
   Future<void> pickDate({required bool isStart}) async {
-    final initialDate =
-        (isStart ? startDate : endDate) ?? DateTime.now();
+    final initialDate = (isStart ? startDate : endDate) ?? DateTime.now();
 
     final picked = await showDatePicker(
       context: context,
@@ -144,22 +143,25 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
       return;
     }
 
-    if (selectedCoveredMemberIds.isEmpty) {
-      _showError('يرجى اختيار شخص واحد على الأقل مشمول بالتأمين');
-      return;
-    }
-
     setState(() => loading = true);
 
     try {
+      final selectedMember = familyController.members.firstWhereOrNull(
+        (member) => member.id == selectedBeneficiaryId,
+      );
       final insurance = InsuranceModel(
         id: widget.insuranceId ?? '',
         companyCode: companyCodeController.text.trim().toUpperCase(),
         companyName: companyNameController.text.trim(),
         cardNumber: cardNumberController.text.trim(),
+        beneficiaryId: selectedBeneficiaryId,
+        beneficiaryType: selectedBeneficiaryId == 'self' ? 'self' : 'family',
+        beneficiaryName: selectedBeneficiaryId == 'self'
+            ? 'صاحب الحساب'
+            : (selectedMember?.name ?? ''),
         startDate: startDate,
         endDate: endDate,
-        coveredMemberIds: selectedCoveredMemberIds,
+        coveredMemberIds: <String>[selectedBeneficiaryId],
       );
 
       if (widget.insuranceId == null) {
@@ -174,20 +176,14 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
       }
     } catch (e) {
       if (mounted) {
-        _showError('حدث خطأ أثناء الحفظ: ${e.toString()}');
+        _showError('حدث خطأ أثناء الحفظ');
         setState(() => loading = false);
       }
     }
   }
 
-  void _toggleCoveredMember(String id) {
-    setState(() {
-      if (selectedCoveredMemberIds.contains(id)) {
-        selectedCoveredMemberIds.remove(id);
-      } else {
-        selectedCoveredMemberIds.add(id);
-      }
-    });
+  void _selectBeneficiary(String id) {
+    setState(() => selectedBeneficiaryId = id);
   }
 
   void _showError(String message) {
@@ -225,8 +221,10 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
         child: Column(
           children: [
             Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12,
+              ),
               child: Row(
                 children: [
                   IconButton(
@@ -284,25 +282,28 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
                               controller: companyNameController,
                               label: "اسم شركة التأمين",
                               icon: Iconsax.building_4,
-                              validator: (v) =>
-                              v == null || v.trim().isEmpty ? "مطلوب" : null,
+                              validator: (v) => v == null || v.trim().isEmpty
+                                  ? "مطلوب"
+                                  : null,
                             ),
                             const SizedBox(height: 16),
                             _buildTextField(
                               controller: companyCodeController,
                               label: "كود شركة التأمين",
                               icon: Iconsax.code,
-                              validator: (v) =>
-                              v == null || v.trim().isEmpty ? "مطلوب" : null,
+                              validator: (v) => v == null || v.trim().isEmpty
+                                  ? "مطلوب"
+                                  : null,
                             ),
                             const SizedBox(height: 16),
 
                             _buildTextField(
                               controller: cardNumberController,
-                              label: "رقم بطاقة التأمين",
+                              label: "رقم وثيقة التأمين للمستفيد",
                               icon: Iconsax.card,
-                              validator: (v) =>
-                              v == null || v.trim().isEmpty ? "مطلوب" : null,
+                              validator: (v) => v == null || v.trim().isEmpty
+                                  ? "مطلوب"
+                                  : null,
                             ),
                             const SizedBox(height: 16),
 
@@ -360,7 +361,7 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
               Icon(Iconsax.profile_2user, color: pPrimaryColor, size: 20),
               const SizedBox(width: 8),
               const Text(
-                "المشمولون بالتأمين",
+                "صاحب وثيقة التأمين",
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
@@ -374,7 +375,7 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
           _buildMemberChip(
             id: 'self',
             label: 'أنا',
-            isSelected: selectedCoveredMemberIds.contains('self'),
+            isSelected: selectedBeneficiaryId == 'self',
           ),
 
           if (familyMembers.isNotEmpty) ...[
@@ -384,7 +385,7 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
               runSpacing: 10,
               children: familyMembers.map((FamilyMemberModel member) {
                 final id = member.id;
-                final selected = selectedCoveredMemberIds.contains(id);
+                final selected = selectedBeneficiaryId == id;
                 return _buildMemberChip(
                   id: id,
                   label: member.name,
@@ -407,7 +408,7 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
   }) {
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: () => _toggleCoveredMember(id),
+      onTap: beneficiaryLocked ? null : () => _selectBeneficiary(id),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -415,9 +416,7 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
           color: isSelected ? pPrimaryColor : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected
-                ? pPrimaryColor
-                : pPrimaryColor.withOpacity(0.16),
+            color: isSelected ? pPrimaryColor : pPrimaryColor.withOpacity(0.16),
           ),
         ),
         child: Row(
@@ -444,9 +443,7 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
                   Text(
                     subLabel,
                     style: TextStyle(
-                      color: isSelected
-                          ? Colors.white70
-                          : Colors.grey[600],
+                      color: isSelected ? Colors.white70 : Colors.grey[600],
                       fontSize: 11,
                     ),
                   ),
@@ -470,8 +467,7 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
       style: const TextStyle(fontSize: 15, color: Color(0xFF2C3E50)),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle:
-        const TextStyle(color: Color(0xFF7F8C8D), fontSize: 13),
+        labelStyle: const TextStyle(color: Color(0xFF7F8C8D), fontSize: 13),
         prefixIcon: Icon(icon, color: pPrimaryColor, size: 20),
         filled: true,
         fillColor: pLightColor,
@@ -487,8 +483,10 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: pPrimaryColor, width: 2),
         ),
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
     );
   }
@@ -569,20 +567,17 @@ class _AddEditInsurancePageState extends State<AddEditInsurancePage> {
         ),
         child: loading
             ? const SizedBox(
-          height: 22,
-          width: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: Colors.white,
-          ),
-        )
+                height: 22,
+                width: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
             : const Text(
-          "حفظ",
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+                "حفظ",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
       ),
     );
   }

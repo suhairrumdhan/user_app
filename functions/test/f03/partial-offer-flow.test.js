@@ -34,6 +34,9 @@ function buildDatabase({
       {
         id,
         isActive: true,
+        sellingPrice: 10,
+        piecePrice: 1,
+        unitsPerPackage: 10,
         expiryDate: validExpiry,
         reservedQuantity: 0,
         ...data,
@@ -41,6 +44,8 @@ function buildDatabase({
     ]),
   );
   return new FakeFirestore({
+    "pharmacies/pharmacy-one": {status: "approved", isActive: true},
+    "pharmacies/pharmacy": {status: "approved", isActive: true},
     "orders/order-one": {
       schemaVersion: 3,
       orderId: "order-one",
@@ -106,6 +111,12 @@ test("partial offer creates no reservation until the user accepts", async () => 
   });
 
   assert.equal(offered.result.status, "partialOfferPending");
+  assert.deepEqual(database.read("orders/order-one").partialOffer.quote, {
+    currency: "LYD",
+    items: [{medicineId: "medicine-a", soldByPiece: false,
+      quantity: 2, unitPrice: 10, lineTotal: 20}],
+    grossTotal: 20, insuranceShare: 0, customerTotal: 20,
+  });
   assert.equal(database.read("orders/order-one").offerVersion, 1);
   assert.equal(
     database.read("pharmacies/pharmacy-one/medicines/medicine-a")
@@ -123,6 +134,8 @@ test("partial offer creates no reservation until the user accepts", async () => 
   const order = database.read("orders/order-one");
   assert.equal(accepted.result.status, "confirmedReserved");
   assert.equal(order.acceptedOfferVersion, 1);
+  assert.equal(order.estimatedTotalPrice, 20);
+  assert.equal(order.totalItemsCount, 2);
   assert.equal(order.reservationState, "active");
   assert.equal(
     database.read("pharmacies/pharmacy-one/medicines/medicine-a")
@@ -134,6 +147,39 @@ test("partial offer creates no reservation until the user accepts", async () => 
   );
   assert.equal(reservation.state, "active");
   assert.deepEqual(reservation.items, items);
+});
+
+test("a changed stock price requires a new offer before the user accepts", async () => {
+  const database = buildDatabase();
+  const handler = buildHandler(database);
+  await invoke(handler, {uid: "pharmacy-one", command: "createPartialOffer",
+    payload: {items: [{medicineId: "medicine-a", quantity: 2, soldByPiece: false}]}});
+  const stockPath = "pharmacies/pharmacy-one/medicines/medicine-a";
+  database.write(stockPath, {...database.read(stockPath), sellingPrice: 12});
+  await assert.rejects(invoke(handler, {uid: "user-one", command: "acceptPartialOffer",
+    payload: {offerVersion: 1}}), {code: "aborted", message: /stale-offer-price/});
+  assert.equal(database.read("orders/order-one").status, "partialOfferPending");
+  assert.equal(database.paths("orders/order-one/reservations/").length, 0);
+});
+
+test("insured offer quotes the current unit price and customer share", async () => {
+  const database = buildDatabase();
+  database.write("orders/order-one", {...database.read("orders/order-one"),
+    insurance: {enabled: true}, insuranceSelection: {coveragePercentage: 25}});
+  await invoke(buildHandler(database), {uid: "pharmacy-one", command: "createPartialOffer",
+    payload: {items: [{medicineId: "medicine-a", quantity: 2, soldByPiece: false}]}});
+  const quote = database.read("orders/order-one").partialOffer.quote;
+  assert.equal(quote.grossTotal, 20);
+  assert.equal(quote.insuranceShare, 5);
+  assert.equal(quote.customerTotal, 15);
+});
+
+test("unpriced inventory cannot be offered as a priced medicine", async () => {
+  const database = buildDatabase({medicines: {"medicine-a": {sellingPrice: null, piecePrice: null}}});
+  await assert.rejects(invoke(buildHandler(database), {uid: "pharmacy-one", command: "createPartialOffer",
+    payload: {items: [{medicineId: "medicine-a", quantity: 1, soldByPiece: false}]}}),
+  {code: "failed-precondition"});
+  assert.equal(database.read("orders/order-one").status, "underReview");
 });
 
 test("pharmacy cannot publish a partial offer that is already unavailable", async () => {

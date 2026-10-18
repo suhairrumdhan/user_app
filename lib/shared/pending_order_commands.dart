@@ -3,6 +3,13 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+class PendingOrderConflict implements Exception {
+  const PendingOrderConflict(this.request);
+  final Map<String, dynamic> request;
+  @override
+  String toString() => 'توجد محاولة إرسال سابقة تحتاج تأكيد نتيجتها.';
+}
+
 /// A lost reply must not turn the next tap (or app restart) into a new order.
 class PendingOrderCommands {
   static final Map<String, Future<Map<String, dynamic>>> _inFlight = {};
@@ -55,9 +62,7 @@ class PendingOrderCommands {
       final oldBody = Map<String, dynamic>.from(actual)..remove('operationId');
       final newBody = Map<String, dynamic>.from(request)..remove('operationId');
       if (jsonEncode(oldBody) != jsonEncode(newBody)) {
-        throw StateError(
-          'يوجد طلب سابق لم يتأكد إرساله. أعد المحاولة بنفس البيانات أولًا.',
-        );
+        throw PendingOrderConflict(actual);
       }
     } else {
       final temporary = File('${file.path}.tmp');

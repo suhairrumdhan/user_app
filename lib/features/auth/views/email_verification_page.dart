@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/user_repository.dart';
+import '../../profile/controllers/user_controller.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -84,7 +85,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
       if (!isVerified) {
         if (showPendingMessage) {
           _showMessage(
-            'لم يتم تأكيد البريد بعد. افتح الرابط الموجود في بريدك ثم حاول مرة أخرى.',
+            'افتح رابط التأكيد في بريدك، ثم أعد المحاولة.',
             isError: true,
           );
         }
@@ -94,14 +95,10 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
+      final profile = await UserRepository.instance.ensureUserProfile(user);
+      await Get.find<UserController>().loadUser(user.uid);
       if (!mounted) return;
-
-      final healthInfoCompleted =
-          userDoc.data()?['healthInfoCompleted'] == true;
+      final healthInfoCompleted = profile.healthInfoCompleted;
       if (healthInfoCompleted) {
         Get.offAll(() => const HomePage());
       } else {
@@ -158,7 +155,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
       case 'network-request-failed':
         return 'تعذر الاتصال بالإنترنت. تحقق من الشبكة وحاول مجدداً.';
       case 'user-disabled':
-        return 'هذا الحساب معطل. يرجى التواصل مع الدعم.';
+        return 'الحساب معطل. تواصل مع الدعم.';
       default:
         return 'تعذر تنفيذ الطلب حالياً. حاول مرة أخرى.';
     }
@@ -219,7 +216,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage>
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'أرسلنا رابط التأكيد إلى بريدك الإلكتروني. افتح الرسالة واضغط على الرابط؛ سيفتح التطبيق ويكمل الدخول تلقائياً. إذا لم ينتقل وحده، استخدم زر المتابعة أدناه.',
+                    'افتح رابط التأكيد في بريدك، ثم اضغط متابعة.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 15,

@@ -224,9 +224,8 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
 
     final active = insuranceController.insurances.where((item) {
       if (!item.isActive) return false;
-      return item.coveredMemberIds.contains(
-        beneficiary.isSelf ? 'self' : beneficiary.id,
-      );
+      return item.beneficiaryId ==
+          (beneficiary.isSelf ? 'self' : beneficiary.id);
     });
 
     return active
@@ -268,6 +267,8 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
   }
 
   Future<BeneficiaryModel?> _selectBeneficiary({required String title}) async {
+    await Get.find<FamilyController>().refreshMembers();
+    if (!mounted) return null;
     final result = await showModalBottomSheet<BeneficiarySelectionResult>(
       context: context,
       isScrollControlled: true,
@@ -886,7 +887,7 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
           SizedBox(width: 9),
           Expanded(
             child: Text(
-              'الأسعار والتوفر تقديرية وتخضع لمراجعة الصيدلية. المنتجات المتشابهة بالاسم ليست بدائل علاجية معتمدة إلا بعد مراجعة الصيدلي.',
+              'تؤكد الصيدلية السعر والتوفر. تشابه الأسماء لا يعني بديلًا علاجيًا؛ راجع الصيدلي.',
               style: TextStyle(
                 color: SearchUiColors.darkText,
                 fontSize: 12.2,

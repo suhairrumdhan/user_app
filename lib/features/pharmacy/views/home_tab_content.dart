@@ -79,17 +79,17 @@ class _HomeTabContentState extends State<HomeTabContent> {
     _mapController.move(LatLng(lat, lng), 17.0);
   }
 
-  Future<bool> _showPreviewDialog(File file, String type) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => PreviewScreen(
-            file: file,
-            fileType: type,
-            onConfirm: () => Navigator.pop(context, true),
-            onCancel: () => Navigator.pop(context, false),
-          ),
-        ) ??
-        false;
+  Future<File?> _showPreviewDialog(File file, String type) async {
+    return await showDialog<File>(
+      context: context,
+      builder: (context) => PreviewScreen(
+        file: file,
+        fileType: type,
+        onConfirm: () => Navigator.pop(context, file),
+        onImageConfirmed: (image) => Navigator.pop(context, image),
+        onCancel: () => Navigator.pop(context),
+      ),
+    );
   }
 
   Future<void> _processExtractedText(
@@ -107,19 +107,13 @@ class _HomeTabContentState extends State<HomeTabContent> {
 
       final response = await PrescriptionApiService.analyzePrescription(
         textForMatching,
+        documentInput: true,
       );
       PrescriptionDiagnostics.flaskResponse(diagnosticId, response);
-      final medicines = response['medicines'] as List<dynamic>? ?? [];
-      final unmatched = response['unmatchedLines'] as List<dynamic>? ?? [];
-
-      if (medicines.isEmpty && unmatched.isEmpty) {
-        throw Exception('لم يتم العثور على أسماء أدوية للمراجعة في الوصفة');
-      }
-
       final parsedMedicines = DrugParser.parseReviewResponse(response);
 
       if (parsedMedicines.isEmpty) {
-        throw Exception('فشل تحليل الأدوية');
+        throw Exception('لم يتم العثور على أسماء أدوية في الوصفة');
       }
 
       final searchController = Get.isRegistered<app_search.SearchController>()
@@ -139,9 +133,6 @@ class _HomeTabContentState extends State<HomeTabContent> {
             initialMedicines: parsedMedicines,
             searchSource: 'prescription',
             isReviewMode: true,
-            unmatchedMedicineCount: parsedMedicines
-                .where((m) => m.needsReview)
-                .length,
             prescriptionFile: _selectedFile,
             prescriptionFileType: _fileType,
           ),
@@ -154,13 +145,45 @@ class _HomeTabContentState extends State<HomeTabContent> {
         e.toString(),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+      await _offerManualPrescriptionRecovery();
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _offerManualPrescriptionRecovery() async {
+    if (!mounted) return;
+    final manual = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تعذر تحليل الوصفة'),
+        content: const Text('أعد المحاولة أو أدخل أسماء الأدوية يدويًا.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('رجوع'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('إدخال الأدوية يدويًا'),
+          ),
+        ],
+      ),
+    );
+    if (manual == true && mounted) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ManualMedicineSearchPage(
+            searchSource: 'prescription',
+            isReviewMode: true,
+            prescriptionFile: _selectedFile,
+            prescriptionFileType: _fileType,
+          ),
+        ),
+      );
     }
   }
 
@@ -433,24 +456,37 @@ class _HomeTabContentState extends State<HomeTabContent> {
                       onTap: () => showImageSourceDialog(
                         context: context,
                         onPickImage: (source) async {
-                          setState(() => _isLoading = true);
+                          setState(() {
+                            _isLoading = true;
+                            _selectedFile = null;
+                            _fileType = null;
+                            _extractedText = '';
+                          });
                           try {
                             final imageFile = await FileUtils.pickImage(source);
                             if (imageFile != null) {
+                              if (!mounted) return;
                               final confirmed = await _showPreviewDialog(
                                 imageFile,
                                 'image',
                               );
-                              if (confirmed) {
+                              if (confirmed != null) {
+                                if (!mounted) return;
+                                setState(() {
+                                  _selectedFile = confirmed;
+                                  _fileType = 'image';
+                                  _extractedText = '';
+                                });
                                 final diagnosticId =
                                     PrescriptionDiagnostics.newRunId();
                                 final extractedText =
                                     await FileUtils.extractTextFromImage(
-                                      imageFile,
+                                      confirmed,
                                       diagnosticId: diagnosticId,
                                     );
+                                if (!mounted) return;
                                 setState(() {
-                                  _selectedFile = imageFile;
+                                  _selectedFile = confirmed;
                                   _fileType = 'image';
                                   _extractedText = extractedText;
                                 });
@@ -464,18 +500,27 @@ class _HomeTabContentState extends State<HomeTabContent> {
                             }
                           } catch (e) {
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('تعذر إضافة الوصفة'),
-                                ),
-                              );
+                              if (_selectedFile != null) {
+                                await _offerManualPrescriptionRecovery();
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('تعذر إضافة الوصفة'),
+                                  ),
+                                );
+                              }
                             }
                           } finally {
                             if (mounted) setState(() => _isLoading = false);
                           }
                         },
                         onPickPDF: () async {
-                          setState(() => _isLoading = true);
+                          setState(() {
+                            _isLoading = true;
+                            _selectedFile = null;
+                            _fileType = null;
+                            _extractedText = '';
+                          });
                           try {
                             final pdfFile = await FileUtils.pickPDF();
                             if (pdfFile != null) {
@@ -483,7 +528,13 @@ class _HomeTabContentState extends State<HomeTabContent> {
                                 pdfFile,
                                 'pdf',
                               );
-                              if (confirmed) {
+                              if (confirmed != null) {
+                                if (!mounted) return;
+                                setState(() {
+                                  _selectedFile = pdfFile;
+                                  _fileType = 'pdf';
+                                  _extractedText = '';
+                                });
                                 final diagnosticId =
                                     PrescriptionDiagnostics.newRunId();
                                 final extractedText =
@@ -506,11 +557,15 @@ class _HomeTabContentState extends State<HomeTabContent> {
                             }
                           } catch (e) {
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('تعذر إضافة الوصفة'),
-                                ),
-                              );
+                              if (_selectedFile != null) {
+                                await _offerManualPrescriptionRecovery();
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('تعذر إضافة الوصفة'),
+                                  ),
+                                );
+                              }
                             }
                           } finally {
                             if (mounted) setState(() => _isLoading = false);

@@ -33,15 +33,17 @@ function invoke(handler, command, payload = {}, operationId = null, auth = null)
 
 function seed() {
   return new FakeFirestore({
+    "pharmacies/pharmacy": {status: "approved", isActive: true},
     "orders/order-one": {
       schemaVersion: 3,
       orderId: "order-one",
       orderNumber: "260913-1000",
       status: "confirmedReserved",
+      estimatedTotalPrice: 15,
       statusHistory: [],
       user: {userId: "user-one"},
       insurance: {enabled: true},
-      insuranceSelection: {companyId: "insurance-one", companyCode: "TEST", cardId: "card", cardNumber: "CARD"},
+      insuranceSelection: {companyId: "insurance-one", companyCode: "TEST", cardId: "card", cardNumber: "CARD", coveragePercentage: 25},
       beneficiary: {type: "self"},
       pharmacy: {pharmacyId: "pharmacy-one"},
       medicines: [{matchedMedicineId: "medicine-a", quantity: 2}],
@@ -60,16 +62,20 @@ function seed() {
       reservedQuantity: 2,
       pieceQuantity: 0,
       reservedPieceQuantity: 0,
+      sellingPrice: 100,
+      piecePrice: 10,
+      unitsPerPackage: 10,
       isActive: true,
       expiryDate: Timestamp.fromDate(new Date("2099-01-01T00:00:00Z")),
     },
+    "pharmacies/pharmacy-one/shift_states/owner:pharmacy-one": {activeShiftId: "shift-a"},
     "pharmacies/pharmacy-one/shifts/shift-a": {
-      status: "open",
+      status: "open", pharmacyId: "pharmacy-one", openedByKey: "owner:pharmacy-one",
       cashTotal: 0,
       cardTotal: 0,
       salesCount: 0,
     },
-    "pharmacies/pharmacy-one": {acceptedInsuranceCodes: ["TEST"]},
+    "pharmacies/pharmacy-one": {status: "approved", isActive: true, acceptedInsuranceCodes: ["TEST"]},
     "users/user-one/insurances/card": {
       companyCode: "TEST", cardNumber: "CARD", startDate: "2020-01-01", endDate: "2099-01-01",
     },
@@ -77,7 +83,7 @@ function seed() {
       status: "فعال", code: "TEST", discountPercentage: 25,
     },
     "pharmacies/pharmacy-one/shifts/shift-b": {
-      status: "open",
+      status: "open", pharmacyId: "pharmacy-one", openedByKey: "owner:pharmacy-one",
       cashTotal: 0,
       cardTotal: 0,
       salesCount: 0,
@@ -155,7 +161,7 @@ for (const command of ["markReady", "completeOrder", "cancelAfterInvoice", "mark
       if (["completeOrder", "markNotCollected"].includes(command)) await invoke(handler, "markReady");
       if (command === "markNotCollected") {
         employeeActor = seedEmployeeSession(database, "pharmacy-one", "manager",
-          {isActive: true, roleId: "admin", permissions: {"orders.update_status": true}});
+          {isActive: true, roleId: "admin", permissions: {"orders.update_status": true, "sales.create": true, "sales.refund": true, "sales.override_price": true}});
         database.write("orders/order-one", {...database.read("orders/order-one"),
           pickupDeadline: Timestamp.fromDate(new Date("2020-01-01"))});
       }
@@ -208,7 +214,7 @@ for (const variant of ["expired-card", "inactive-card", "missing-card", "changed
     if (variant === "uncovered-member") database.write("orders/order-one", {
       ...database.read("orders/order-one"), beneficiary: {type: "family", familyMemberId: "not-covered"},
     });
-    if (variant === "removed-company") database.write("pharmacies/pharmacy-one", {acceptedInsuranceCodes: []});
+    if (variant === "removed-company") database.write("pharmacies/pharmacy-one", {...database.read("pharmacies/pharmacy-one"), acceptedInsuranceCodes: []});
     if (variant === "omitted-coverage") {
       payload.invoice.insuranceCompanyId = null;
       payload.invoice.insuranceDiscount = 0;
@@ -232,6 +238,7 @@ test("partial piece offer completes invoice using only accepted quantities from 
   });
   database.write("pharmacies/pharmacy-one/medicines/medicine-a", {
     quantity: 1, pieceQuantity: 0, unitsPerPackage: 10, reservedPieceQuantity: 1,
+    sellingPrice: 100, piecePrice: 10,
   });
   const handler = buildHandler(database);
   await invoke(handler, "createPartialOffer", {
@@ -253,6 +260,7 @@ test("partial piece offer completes invoice using only accepted quantities from 
   await invoke(handler, "startPreparing", payload, "pieces-invoice");
   assert.deepEqual(database.read("pharmacies/pharmacy-one/medicines/medicine-a"), stock);
   await invoke(handler, "markReady");
+  database.write("pharmacies/pharmacy-one/shift_states/owner:pharmacy-one", {activeShiftId: "shift-b"});
   await invoke(handler, "completeOrder", {collectionShiftId: "shift-b"});
   assert.equal(database.read("orders/order-one").status, "completed");
 });
@@ -262,7 +270,7 @@ test("pre-delivery reversal quarantines stock that expired after invoice creatio
   const handler = buildHandler(database);
   await invoke(handler, "startPreparing", invoicePayload());
   const path = "pharmacies/pharmacy-one/medicines/medicine-a";
-  database.write(path, {...database.read(path), expiryDate: "2020-01-01"});
+  database.write(`${path}/batches/legacy-opening`, {...database.read(`${path}/batches/legacy-opening`), expiryDate: "2020-01-01"});
   await invoke(handler, "cancelAfterInvoice", {reason: "Expired before pickup"});
   assert.equal(database.read(path).quantity, 8);
   const quarantines = database.paths("pharmacies/pharmacy-one/quarantinedReturns/");
@@ -296,6 +304,7 @@ test("delivery collects customer in shift B and records insurance once", async (
   const handler = buildHandler(database);
   await invoke(handler, "startPreparing", invoicePayload());
   await invoke(handler, "markReady");
+  database.write("pharmacies/pharmacy-one/shift_states/owner:pharmacy-one", {activeShiftId: "shift-b"});
   const operationId = "canonical-delivery-fixed";
   const first = await invoke(
     handler,

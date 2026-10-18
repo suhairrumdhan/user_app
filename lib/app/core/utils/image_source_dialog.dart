@@ -78,6 +78,7 @@ void showImageSourceDialog({
                   iconColor: const Color(0xFF2563EB),
                   iconBg: const Color(0xFFEFF6FF),
                   title: 'الكاميرا',
+                  subtitle: 'صوّر الوصفة بشكل عمودي',
                   onTap: () {
                     Navigator.pop(context);
                     onPickImage(ImageSource.camera);
@@ -91,6 +92,7 @@ void showImageSourceDialog({
                   iconColor: const Color(0xFF16A34A),
                   iconBg: const Color(0xFFECFDF3),
                   title: 'الصور',
+                  subtitle: 'اختر صورة عمودية',
                   onTap: () {
                     Navigator.pop(context);
                     onPickImage(ImageSource.gallery);
@@ -146,6 +148,7 @@ class _SourceOptionTile extends StatelessWidget {
   final Color iconColor;
   final Color iconBg;
   final String title;
+  final String? subtitle;
   final VoidCallback onTap;
 
   const _SourceOptionTile({
@@ -153,6 +156,7 @@ class _SourceOptionTile extends StatelessWidget {
     required this.iconColor,
     required this.iconBg,
     required this.title,
+    this.subtitle,
     required this.onTap,
   });
 
@@ -183,14 +187,30 @@ class _SourceOptionTile extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  title,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F172A),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               const SizedBox(width: 8),

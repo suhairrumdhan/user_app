@@ -44,6 +44,16 @@ test("canonical states and Arabic labels match the approved F03 contract", () =>
 
 test("transition matrix exactly matches the approved F03 workflow", () => {
   const expected = [
+    "underReview|partialOfferPending|pharmacy|proposeFullOffer",
+    "underReview|partialOfferPending|pharmacy|confirmFullOrder",
+    "confirmedReserved|partialOfferPending|pharmacy|proposeFullOffer",
+    "partialOfferPending|partialOfferPending|pharmacy|proposeFullOffer",
+    "partialOfferPending|cancelled|pharmacy|cancelPendingReplacement",
+    "confirmedReserved|partialOfferPending|pharmacy|proposeReplacementOffer",
+    "partialOfferPending|partialOfferPending|pharmacy|proposeReplacementOffer",
+    "preparing|partialOfferPending|pharmacy|proposeReplacementOffer",
+    "ready|partialOfferPending|pharmacy|proposeReplacementOffer",
+    "underReview|partialOfferPending|pharmacy|proposeReplacementOffer",
     "confirmedReserved|cancelled|user|cancelOrder",
     "confirmedReserved|partialOfferPending|pharmacy|revisePartialOffer",
     "confirmedReserved|preparing|pharmacy|startPreparing",

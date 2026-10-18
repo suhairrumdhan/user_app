@@ -21,8 +21,9 @@ class AddPreviousMedicationFromNotificationSheet extends StatefulWidget {
 
 class _AddPreviousMedicationFromNotificationSheetState
     extends State<AddPreviousMedicationFromNotificationSheet> {
-  final PreviousMedicationsController controller =
-  Get.put(PreviousMedicationsController());
+  final PreviousMedicationsController controller = Get.put(
+    PreviousMedicationsController(),
+  );
 
   final TextEditingController _notesController = TextEditingController();
 
@@ -114,7 +115,7 @@ class _AddPreviousMedicationFromNotificationSheetState
     if (selectedIndexes.isEmpty) {
       Get.snackbar(
         'تنبيه',
-        'اختاري دواءً واحدًا على الأقل',
+        'اختر دواءً واحدًا على الأقل',
         snackPosition: SnackPosition.BOTTOM,
       );
       return;
@@ -132,9 +133,7 @@ class _AddPreviousMedicationFromNotificationSheetState
       return;
     }
 
-    final selectedMedicines = selectedIndexes
-        .map((i) => medicines[i])
-        .toList();
+    final selectedMedicines = selectedIndexes.map((i) => medicines[i]).toList();
 
     final added = await controller.addBatchFromOrder(
       orderId: orderId,
@@ -144,8 +143,9 @@ class _AddPreviousMedicationFromNotificationSheetState
       treatmentStartDate: treatmentStartDate,
       treatmentEndDate: treatmentEndDate,
       showToPharmacistFrom: takenAt,
-      showToPharmacistUntil:
-      isVisibleToPharmacist.value ? showToPharmacistUntil : null,
+      showToPharmacistUntil: isVisibleToPharmacist.value
+          ? showToPharmacistUntil
+          : null,
       isVisibleToPharmacist: isVisibleToPharmacist.value,
       pharmacyId: widget.notification.pharmacyId,
       pharmacyName: widget.notification.pharmacyName,
@@ -159,7 +159,7 @@ class _AddPreviousMedicationFromNotificationSheetState
       if (createReminderLater.value) {
         Get.snackbar(
           'التذكير',
-          'الخطوة التالية: افتحي شاشة إنشاء التذكير وربطيها بالسجلات الجديدة',
+          'أضف تذكيرًا من صفحة التذكيرات.',
           snackPosition: SnackPosition.BOTTOM,
         );
       }
@@ -168,18 +168,18 @@ class _AddPreviousMedicationFromNotificationSheetState
 
   String _medicineName(Map<String, dynamic> item) {
     return (item['matchedMedicineName'] ??
-        item['medicineName'] ??
-        item['requestedName'] ??
-        '')
-        .toString()
-        .trim()
-        .isEmpty
+                item['medicineName'] ??
+                item['requestedName'] ??
+                '')
+            .toString()
+            .trim()
+            .isEmpty
         ? 'دواء'
         : (item['matchedMedicineName'] ??
-        item['medicineName'] ??
-        item['requestedName'])
-        .toString()
-        .trim();
+                  item['medicineName'] ??
+                  item['requestedName'])
+              .toString()
+              .trim();
   }
 
   String _formatDate(DateTime? date) {
@@ -192,9 +192,7 @@ class _AddPreviousMedicationFromNotificationSheetState
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFFF7FAFD),
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(30),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
       ),
       child: SafeArea(
         top: false,
@@ -232,7 +230,7 @@ class _AddPreviousMedicationFromNotificationSheetState
               ),
               const SizedBox(height: 8),
               Text(
-                'تم استلام الطلب بنجاح. اختاري الأدوية التي تريدين حفظها في السجل السابق.',
+                'اختر الأدوية لإضافتها إلى السجل الدوائي.',
                 style: TextStyle(
                   color: Colors.grey.shade600,
                   fontSize: 13.4,
@@ -249,62 +247,61 @@ class _AddPreviousMedicationFromNotificationSheetState
                         title: 'الأدوية المستلمة',
                         child: medicines.isEmpty
                             ? Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Text(
-                            'لا توجد أدوية مرفقة داخل هذا الإشعار.',
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        )
-                            : Column(
-                          children: List.generate(medicines.length, (i) {
-                            final item = medicines[i];
-                            final selected =
-                            selectedIndexes.contains(i);
-
-                            return CheckboxListTile(
-                              value: selected,
-                              activeColor: SearchUiColors.primary,
-                              controlAffinity:
-                              ListTileControlAffinity.leading,
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(
-                                _medicineName(item),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 14,
+                                padding: const EdgeInsets.all(14),
+                                child: Text(
+                                  'لا توجد أدوية مرفقة داخل هذا الإشعار.',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
+                              )
+                            : Column(
+                                children: List.generate(medicines.length, (i) {
+                                  final item = medicines[i];
+                                  final selected = selectedIndexes.contains(i);
+
+                                  return CheckboxListTile(
+                                    value: selected,
+                                    activeColor: SearchUiColors.primary,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    contentPadding: EdgeInsets.zero,
+                                    title: Text(
+                                      _medicineName(item),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      (item['strength'] ??
+                                                  item['dosage'] ??
+                                                  item['dosageForm'] ??
+                                                  'بدون تفاصيل')
+                                              .toString()
+                                              .trim()
+                                              .isEmpty
+                                          ? 'بدون تفاصيل'
+                                          : (item['strength'] ??
+                                                    item['dosage'] ??
+                                                    item['dosageForm'])
+                                                .toString()
+                                                .trim(),
+                                    ),
+                                    onChanged: (value) {
+                                      setState(() {
+                                        if (value == true) {
+                                          selectedIndexes.add(i);
+                                        } else {
+                                          selectedIndexes.remove(i);
+                                        }
+                                      });
+                                    },
+                                  );
+                                }),
                               ),
-                              subtitle: Text(
-                                (item['strength'] ??
-                                    item['dosage'] ??
-                                    item['dosageForm'] ??
-                                    'بدون تفاصيل')
-                                    .toString()
-                                    .trim()
-                                    .isEmpty
-                                    ? 'بدون تفاصيل'
-                                    : (item['strength'] ??
-                                    item['dosage'] ??
-                                    item['dosageForm'])
-                                    .toString()
-                                    .trim(),
-                              ),
-                              onChanged: (value) {
-                                setState(() {
-                                  if (value == true) {
-                                    selectedIndexes.add(i);
-                                  } else {
-                                    selectedIndexes.remove(i);
-                                  }
-                                });
-                              },
-                            );
-                          }),
-                        ),
                       ),
                       const SizedBox(height: 12),
                       _SectionCard(
@@ -325,9 +322,8 @@ class _AddPreviousMedicationFromNotificationSheetState
                               value: _formatDate(treatmentStartDate),
                               onTap: () => _pickDate(
                                 initialDate:
-                                treatmentStartDate ?? DateTime.now(),
-                                onSelected: (date) =>
-                                treatmentStartDate = date,
+                                    treatmentStartDate ?? DateTime.now(),
+                                onSelected: (date) => treatmentStartDate = date,
                               ),
                             ),
                             const SizedBox(height: 10),
@@ -335,8 +331,7 @@ class _AddPreviousMedicationFromNotificationSheetState
                               label: 'نهاية العلاج',
                               value: _formatDate(treatmentEndDate),
                               onTap: () => _pickDate(
-                                initialDate:
-                                treatmentEndDate ?? DateTime.now(),
+                                initialDate: treatmentEndDate ?? DateTime.now(),
                                 onSelected: (date) {
                                   treatmentEndDate = date;
                                   showToPharmacistUntil = date;
@@ -352,15 +347,13 @@ class _AddPreviousMedicationFromNotificationSheetState
                         child: Column(
                           children: [
                             Obx(
-                                  () => SwitchListTile(
+                              () => SwitchListTile(
                                 value: isVisibleToPharmacist.value,
                                 activeColor: SearchUiColors.primary,
                                 contentPadding: EdgeInsets.zero,
                                 title: const Text(
                                   'إظهار هذا الدواء للصيدلي مؤقتًا',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                                  style: TextStyle(fontWeight: FontWeight.w800),
                                 ),
                                 subtitle: const Text(
                                   'يمكن إيقاف ظهوره لاحقًا مع بقاءه في السجل',
@@ -372,7 +365,7 @@ class _AddPreviousMedicationFromNotificationSheetState
                             ),
                             const SizedBox(height: 4),
                             Obx(
-                                  () => AnimatedOpacity(
+                              () => AnimatedOpacity(
                                 opacity: isVisibleToPharmacist.value ? 1 : 0.5,
                                 duration: const Duration(milliseconds: 180),
                                 child: IgnorePointer(
@@ -382,9 +375,10 @@ class _AddPreviousMedicationFromNotificationSheetState
                                     value: _formatDate(showToPharmacistUntil),
                                     onTap: () => _pickDate(
                                       initialDate:
-                                      showToPharmacistUntil ?? DateTime.now(),
+                                          showToPharmacistUntil ??
+                                          DateTime.now(),
                                       onSelected: (date) =>
-                                      showToPharmacistUntil = date,
+                                          showToPharmacistUntil = date,
                                     ),
                                   ),
                                 ),
@@ -430,17 +424,15 @@ class _AddPreviousMedicationFromNotificationSheetState
                             ),
                             const SizedBox(height: 10),
                             Obx(
-                                  () => CheckboxListTile(
+                              () => CheckboxListTile(
                                 value: createReminderLater.value,
                                 activeColor: SearchUiColors.primary,
                                 controlAffinity:
-                                ListTileControlAffinity.leading,
+                                    ListTileControlAffinity.leading,
                                 contentPadding: EdgeInsets.zero,
                                 title: const Text(
                                   'أريد إنشاء تذكير لهذا الدواء لاحقًا',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                                  style: TextStyle(fontWeight: FontWeight.w800),
                                 ),
                                 subtitle: const Text(
                                   'سيتم حفظ السجل الآن ثم ربطه بالتذكير لاحقًا',
@@ -455,7 +447,7 @@ class _AddPreviousMedicationFromNotificationSheetState
                       ),
                       const SizedBox(height: 18),
                       Obx(
-                            () => SizedBox(
+                        () => SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
                             onPressed: controller.isProcessing.value
@@ -472,13 +464,13 @@ class _AddPreviousMedicationFromNotificationSheetState
                             ),
                             icon: controller.isProcessing.value
                                 ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.2,
-                                color: Colors.white,
-                              ),
-                            )
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                      color: Colors.white,
+                                    ),
+                                  )
                                 : const Icon(Iconsax.add_circle),
                             label: const Text(
                               'إضافة إلى السجل',
@@ -506,10 +498,7 @@ class _SectionCard extends StatelessWidget {
   final String title;
   final Widget child;
 
-  const _SectionCard({
-    required this.title,
-    required this.child,
-  });
+  const _SectionCard({required this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -577,9 +566,7 @@ class _DateTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFFF7FAFD),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Colors.grey.shade200,
-          ),
+          border: Border.all(color: Colors.grey.shade200),
         ),
         child: Row(
           children: [

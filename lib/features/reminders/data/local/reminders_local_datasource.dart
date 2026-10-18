@@ -170,6 +170,55 @@ class RemindersLocalDataSource {
     });
   }
 
+  Future<bool> recordMedicationAction({
+    required MedicationReminderModel reminder,
+    required String action,
+    required DateTime actionAt,
+    Duration duplicateWindow = const Duration(seconds: 30),
+  }) async {
+    final uid = _currentUserId;
+    return _db.writeTxn(() async {
+      final duplicate = await _db.reminderLogModels
+          .filter()
+          .ownerUserIdEqualTo(uid)
+          .and()
+          .reminderTypeEqualTo('medication')
+          .and()
+          .reminderLocalIdEqualTo(reminder.id)
+          .and()
+          .actionTypeEqualTo(action)
+          .and()
+          .createdAtGreaterThan(actionAt.subtract(duplicateWindow))
+          .findFirst();
+      if (duplicate != null) return false;
+
+      final stored = await _db.medicationReminderModels.get(reminder.id);
+      if (stored == null || stored.ownerUserId != uid) return false;
+
+      if (action == 'taken') {
+        stored.lastTakenAt = actionAt;
+      } else if (action == 'snoozed') {
+        stored.lastSnoozedAt = actionAt;
+      }
+      stored.updatedAt = actionAt;
+      await _db.medicationReminderModels.put(stored);
+
+      final log = ReminderLogModel()
+        ..ownerUserId = uid
+        ..reminderType = 'medication'
+        ..reminderLocalId = stored.id
+        ..ownerBeneficiaryId = stored.owner.beneficiaryId
+        ..ownerName = stored.owner.name
+        ..actionType = action
+        ..scheduledAt = actionAt
+        ..actionAt = actionAt
+        ..title = stored.medicineName
+        ..createdAt = actionAt;
+      await _db.reminderLogModels.put(log);
+      return true;
+    });
+  }
+
   Future<List<ReminderLogModel>> getAllLogs() {
     return _db.reminderLogModels
         .filter()

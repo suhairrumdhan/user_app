@@ -20,9 +20,32 @@ service firebase.storage {
         && session.get('revokedAt', null) == null
         && session.expiresAt > request.time;
     }
+    function chatParticipant(chatId) {
+      let chat = firestore.get(/databases/(default)/documents/chats/$(chatId)).data;
+      let pharmacyId = chat.get('pharmacyId', '');
+      return signedIn()
+        && (chat.get('userId', '') == request.auth.uid
+          || pharmacyId == request.auth.uid
+          || (request.auth.token.get('pharmacyId', '') == pharmacyId
+            && employeeSessionValid(pharmacyId)));
+    }
+    function attachment() {
+      return request.resource.size > 0
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches(
+          '(image/.*|application/.*|text/.*|audio/.*|video/.*)');
+    }
     match /pharmacy_requests_uploads/{tempId}/{allPaths=**} {
       allow read: if isAdmin();
-      allow create: if validDocument();
+      allow create: if false;
+      allow update, delete: if false;
+    }
+    match /registration/{uid}/{fileName} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create: if resource == null && signedIn() && request.auth.uid == uid
+        && request.auth.token.get('email_verified', false) == true
+        && request.resource.size > 0 && validDocument()
+        && request.resource.contentType.matches('(image/(png|jpeg|webp)|application/pdf)');
       allow update, delete: if false;
     }
     match /pharmacies/{pharmacyId}/{allPaths=**} {
@@ -32,6 +55,16 @@ service firebase.storage {
         || employeeSessionValid(pharmacyId)) && validDocument();
     }
     match /users/{uid}/{allPaths=**} { allow read, write: if signedIn() && request.auth.uid == uid; }
+    match /chat_images/{chatId}/{allPaths=**} {
+      allow read: if chatParticipant(chatId);
+      allow create: if chatParticipant(chatId) && attachment();
+      allow update, delete: if false;
+    }
+    match /chat_files/{chatId}/{allPaths=**} {
+      allow read: if chatParticipant(chatId);
+      allow create: if chatParticipant(chatId) && attachment();
+      allow update, delete: if false;
+    }
     match /{allPaths=**} { allow read, write: if false; }
   }
 }

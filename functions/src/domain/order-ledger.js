@@ -1,6 +1,7 @@
 "use strict";
 
 const {OrderContractError} = require("./order-contract");
+const {validateOrderShift} = require("./financial-authorization");
 const {readCanonicalOrderInvoice} = require("./order-invoice");
 
 function cents(value) {
@@ -21,7 +22,7 @@ function itemKey(item) {
 
 function claimDue(invoice) {
   return Math.max(0, cents(invoice.insuranceClaimAmount ?? invoice.companyShare ?? invoice.insuranceDiscount) -
-    cents(invoice.insuranceRefundedAmount) - cents(invoice.insuranceCollectedAmount) + cents(invoice.insuranceCreditAmount));
+    cents(invoice.insuranceRefundedAmount) - cents(invoice.insuranceCollectedAmount) - cents(invoice.insuranceCreditAppliedAmount) + cents(invoice.insuranceCreditAmount));
 }
 
 function financialEntry({pharmacyId, invoiceId, actor, timestamp, amount, type, accountType, direction, metadata}) {
@@ -31,7 +32,7 @@ function financialEntry({pharmacyId, invoiceId, actor, timestamp, amount, type, 
     currency: "LYD", metadata};
 }
 
-async function refundDeliveredOrder({transaction, db, order, actor, payload, operationKey, timestamp}) {
+async function refundDeliveredOrder({transaction, db, order, actor, payload, operationKey, timestamp, directInvoice = null}) {
   if (actor.type !== "pharmacy" || order.status !== "completed") {
     throw new OrderContractError("failed-precondition", "Only delivered orders can be refunded by the pharmacy.");
   }
@@ -42,11 +43,14 @@ async function refundDeliveredOrder({transaction, db, order, actor, payload, ope
   }
   const pharmacyId = order.pharmacy.pharmacyId;
   const pharmacy = db.collection("pharmacies").doc(pharmacyId);
-  const {invoice, invoiceRef} = await readCanonicalOrderInvoice({
+  const {invoice, invoiceRef} = directInvoice || await readCanonicalOrderInvoice({
     transaction, db, order, paymentState: "delivered",
   });
+  const originalInvoiceId = invoiceRef.id;
+  const orderId = order.orderId || null;
+  const source = directInvoice ? "posRefund" : "orderRefund";
   const shiftRef = pharmacy.collection("shifts").doc(shiftId);
-  const shiftSnapshot = await transaction.get(shiftRef);
+  const {snapshot: shiftSnapshot} = await validateOrderShift({transaction, db, pharmacyId, actor, shiftId});
   if (!shiftSnapshot.exists || shiftSnapshot.data().status !== "open") {
     throw new OrderContractError("failed-precondition", "Refund requires an open shift.");
   }
@@ -66,7 +70,7 @@ async function refundDeliveredOrder({transaction, db, order, actor, payload, ope
     const discount = cents(line.discountAmount) > 0 ? cents(line.discountAmount) :
       Math.round(gross * Number(line.discountPercentage || 0) / 100);
     const previous = originals.get(key);
-    originals.set(key, {line, quantity: (previous?.quantity || 0) + quantity,
+    originals.set(key, {line, allocations: [...(previous?.allocations || []), ...(line.batchAllocations || [])], quantity: (previous?.quantity || 0) + quantity,
       net: (previous?.net || 0) + Math.max(0, gross - discount)});
   }
   const requested = new Map();
@@ -97,7 +101,7 @@ async function refundDeliveredOrder({transaction, db, order, actor, payload, ope
   const companyCumulative = Math.round(cents(invoice.companyShare ?? invoice.insuranceDiscount) * ratio);
   const customerRefund = customerCumulative - cents(invoice.refundedCustomerAmount);
   const companyRefund = companyCumulative - cents(invoice.insuranceRefundedAmount);
-  if (customerRefund < 0 || companyRefund < 0 || customerCumulative > cents(invoice.paidAmount)) {
+  if (customerRefund < 0 || companyRefund < 0 || customerCumulative > cents(invoice.paidAmount ?? (directInvoice ? invoice.total : 0))) {
     throw new OrderContractError("failed-precondition", "Refund cannot exceed actual customer payment.");
   }
   const cashOut = cents(payload.cashOut);
@@ -108,14 +112,30 @@ async function refundDeliveredOrder({transaction, db, order, actor, payload, ope
   }
   const dueReduction = Math.min(companyRefund, claimDue(invoice));
   const companyCredit = companyRefund - dueReduction;
-  const refundId = `order-refund-${operationKey}`;
+  const refundId = `${directInvoice ? "pos" : "order"}-refund-${operationKey}`;
   const refundRef = pharmacy.collection("sales").doc(refundId);
-  const items = [...requested].map(([key, quantity]) => ({...originals.get(key).line, quantity}));
+  const items = [...requested].map(([key, quantity]) => {
+    const original = originals.get(key);
+    let skip = Number(invoice.refundedQuantities?.[key] || 0);
+    let remaining = quantity;
+    const batchAllocations = [];
+    for (const part of original.allocations) {
+      const piece = original.line.sellAsPiece === true;
+      const units = piece ? part.pieces : part.packages;
+      const ignored = Math.min(skip, units);
+      skip -= ignored;
+      const taken = Math.min(remaining, units - ignored);
+      if (taken) batchAllocations.push({...part, packages: piece ? 0 : taken, pieces: piece ? taken : 0});
+      remaining -= taken;
+    }
+    return {...original.line, quantity, batchAllocations,
+      batchTraceStatus: remaining ? "legacyUnallocated" : "allocated"};
+  });
   const fullRefund = [...originals].every(([key, item]) => returned[key] === item.quantity);
   transaction.create(refundRef, {
     schemaVersion: 3, id: refundId, invoiceNumber: refundId, pharmacyId,
-    source: "orderRefund", type: "refund", status: "completed", isSaved: true, isDeleted: false,
-    orderId: order.orderId, refSaleId: order.invoiceId, refInvoiceNumber: invoice.invoiceNumber,
+    source, type: "refund", status: "completed", isSaved: true, isDeleted: false,
+    orderId, refSaleId: originalInvoiceId, refInvoiceNumber: invoice.invoiceNumber,
     items, total: 0, subtotal: (customerRefund + companyRefund) / 100,
     cashOut: cashOut / 100, cardOut: cardOut / 100,
     customerRefund: customerRefund / 100, insuranceRefund: companyRefund / 100,
@@ -126,23 +146,24 @@ async function refundDeliveredOrder({transaction, db, order, actor, payload, ope
   });
   for (const [index, item] of items.entries()) {
     transaction.create(pharmacy.collection("quarantinedReturns").doc(`${refundId}-${index}`), {
-      refundId, orderId: order.orderId, invoiceId: order.invoiceId,
+      refundId, orderId, invoiceId: originalInvoiceId,
       medicineId: item.medicineId, quantity: item.quantity, soldByPiece: item.sellAsPiece === true,
+      batchAllocations: item.batchAllocations, batchTraceStatus: item.batchTraceStatus,
       reason: "returned-after-delivery", availableForSale: false, createdAt: timestamp,
     });
   }
-  const metadata = {orderId: order.orderId, refundId, source: "orderRefund"};
+  const metadata = {orderId, refundId, source};
   for (const [method, amount] of [["cash", cashOut], ["card", cardOut]]) {
     if (!amount) continue;
     transaction.create(pharmacy.collection("financial_transactions").doc(`${refundId}-${method}`), {
-      ...financialEntry({pharmacyId, invoiceId: order.invoiceId, actor, timestamp, amount,
+      ...financialEntry({pharmacyId, invoiceId: originalInvoiceId, actor, timestamp, amount,
         type: "refund", accountType: method === "cash" ? "cashbox" : "bank", direction: "outflow", metadata}),
       paymentMethod: method, shiftId, title: "رد حصة الزبون من الطلب",
     });
   }
   if (companyRefund) {
     transaction.create(pharmacy.collection("financial_transactions").doc(`${refundId}-insurance`), {
-      ...financialEntry({pharmacyId, invoiceId: order.invoiceId, actor, timestamp, amount: companyRefund,
+      ...financialEntry({pharmacyId, invoiceId: originalInvoiceId, actor, timestamp, amount: companyRefund,
         type: "refund", accountType: "insuranceReceivable", direction: "payable",
         metadata: {...metadata, dueReduction: dueReduction / 100, companyCredit: companyCredit / 100}}),
       insuranceCompanyId: companyId, title: "تسوية تأمين مرتجع طلب",
@@ -171,10 +192,19 @@ async function refundDeliveredOrder({transaction, db, order, actor, payload, ope
     insuranceCreditAmount: (cents(invoice.insuranceCreditAmount) + companyCredit) / 100,
     refundState: fullRefund ? "refunded" : "partiallyRefunded", lastRefundId: refundId, updatedAt: timestamp,
   });
-  transaction.update(db.collection("orders").doc(order.orderId), {
+  if (!directInvoice) transaction.update(db.collection("orders").doc(order.orderId), {
     refundState: fullRefund ? "refunded" : "partiallyRefunded", lastRefundId: refundId, updatedAt: timestamp,
   });
-  return {success: true, orderId: order.orderId, refundId,
+  transaction.create(invoiceRef.collection("returns").doc(refundId), {
+    refundId, items, customerRefund: customerRefund / 100, companyRefund: companyRefund / 100,
+    reason, createdAt: timestamp, createdBy: actor.id, operationId: operationKey,
+  });
+  if (companyRefund) transaction.create(pharmacy.collection("insurance_ledger").doc(`${refundId}-insurance`), {
+    type: "refund", invoiceId: originalInvoiceId, insuranceCompanyId: companyId,
+    amount: companyRefund / 100, dueReduction: dueReduction / 100, companyCredit: companyCredit / 100,
+    createdAt: timestamp, createdBy: actor.id, operationId: operationKey,
+  });
+  return {success: true, orderId, refundId,
     customerRefund: customerRefund / 100, insuranceCredit: companyCredit / 100,
     insuranceDueReduction: dueReduction / 100};
 }
@@ -182,8 +212,8 @@ async function refundDeliveredOrder({transaction, db, order, actor, payload, ope
 async function collectInsurancePayment({transaction, db, pharmacyId, actor, payload, operationKey, timestamp}) {
   const companyId = text(payload.companyId);
   const amount = cents(payload.amount);
-  if (!companyId || amount <= 0 || !["cash", "card", "bank", "bank_transfer"].includes(text(payload.paymentMethod))) {
-    throw new OrderContractError("invalid-argument", "Company, positive amount and payment method are required.");
+  if (!companyId || !["cash", "card", "bank", "bank_transfer"].includes(text(payload.paymentMethod))) {
+    throw new OrderContractError("invalid-argument", "Company, non-negative amount and payment method are required.");
   }
   const pharmacy = db.collection("pharmacies").doc(pharmacyId);
   const companyRef = pharmacy.collection("insurance_companies").doc(companyId);
@@ -207,32 +237,53 @@ async function collectInsurancePayment({transaction, db, pharmacyId, actor, payl
   const totalDue = invoices.reduce((sum, doc) => sum + claimDue(doc.data()), 0);
   if (amount > totalDue) throw new OrderContractError("failed-precondition", "Collection exceeds delivered outstanding claims.");
   const allocations = [];
+  const creditAllocations = [];
+  const availableCredit = cents(companySnapshot.data().creditBalance);
+  const hasExplicitCredit = Object.prototype.hasOwnProperty.call(payload, "creditAmount");
+  const requestedCredit = hasExplicitCredit ? cents(payload.creditAmount) : Math.min(availableCredit, totalDue);
+  if (requestedCredit > availableCredit) {
+    throw new OrderContractError("failed-precondition", "Settlement exceeds the company credit balance.");
+  }
+  if (requestedCredit > totalDue) {
+    throw new OrderContractError("failed-precondition", "Settlement exceeds delivered outstanding claims.");
+  }
+  let remainingCredit = requestedCredit;
+  const creditApplied = requestedCredit;
+  if (!amount && !creditApplied) throw new OrderContractError("failed-precondition", "No payment or credit is available to settle.");
+  if (amount > totalDue - creditApplied) {
+    throw new OrderContractError("failed-precondition", "Collection exceeds outstanding claims after company credit.");
+  }
   let remaining = amount;
   for (const doc of invoices) {
-    if (!remaining) break;
-    const allocated = Math.min(remaining, claimDue(doc.data()));
-    allocations.push({invoiceId: doc.id, amount: allocated / 100});
+    if (!remaining && !remainingCredit) break;
+    const due = claimDue(doc.data());
+    const credit = Math.min(remainingCredit, due);
+    remainingCredit -= credit;
+    const allocated = Math.min(remaining, due - credit);
+    remaining -= allocated;
+    if (allocated) allocations.push({invoiceId: doc.id, amount: allocated / 100});
+    if (credit) creditAllocations.push({invoiceId: doc.id, amount: credit / 100});
     transaction.update(pharmacy.collection("sales").doc(doc.id), {
       insuranceCollectedAmount: (cents(doc.data().insuranceCollectedAmount) + allocated) / 100,
-      insuranceClaimStatus: allocated === claimDue(doc.data()) ? "collected" : "partiallyCollected",
+      insuranceCreditAppliedAmount: (cents(doc.data().insuranceCreditAppliedAmount) + credit) / 100,
+      insuranceClaimStatus: allocated + credit === due ? "collected" : "partiallyCollected",
       updatedAt: timestamp,
     });
-    remaining -= allocated;
   }
   const collectionId = `insurance-${operationKey}`;
   const transactionId = `${collectionId}-receipt`;
   const company = companySnapshot.data();
   const receipt = {
     pharmacyId, insuranceCompanyId: companyId, insuranceCompanyName: text(company.name),
-    amount: amount / 100, allocations, paymentMethod: payload.paymentMethod,
+    amount: amount / 100, allocations, creditAllocations, creditApplied: creditApplied / 100, paymentMethod: payload.paymentMethod,
     collectionYear: Number(payload.collectionYear) || timestamp.toDate().getUTCFullYear(),
     collectionMonth: Number(payload.collectionMonth) || timestamp.toDate().getUTCMonth() + 1,
     referenceNumber: text(payload.referenceNumber) || null, notes: text(payload.notes) || null,
     collectionDate: timestamp, createdAt: timestamp, createdBy: actor.id,
-    financialPosted: true, financialTransactionId: transactionId, isVoided: false,
+    financialPosted: true, financialTransactionId: amount ? transactionId : (creditApplied ? `${collectionId}-credit` : null), isVoided: false,
   };
   transaction.create(pharmacy.collection("insurance_collections").doc(collectionId), receipt);
-  transaction.create(pharmacy.collection("financial_transactions").doc(transactionId), {
+  if (amount) transaction.create(pharmacy.collection("financial_transactions").doc(transactionId), {
     ...financialEntry({pharmacyId, invoiceId: collectionId, actor, timestamp, amount,
       type: "insuranceCollection", accountType: "insuranceReceivable", direction: "inflow",
       metadata: {allocations, source: "insuranceCollection"}}),
@@ -240,15 +291,30 @@ async function collectInsurancePayment({transaction, db, pharmacyId, actor, payl
     insuranceCompanyName: text(company.name), paymentMethod: payload.paymentMethod,
     title: "تحصيل تأمين موزع على الفواتير",
   });
+  if (creditApplied) transaction.create(pharmacy.collection("financial_transactions").doc(`${collectionId}-credit`), {
+    ...financialEntry({pharmacyId, invoiceId: collectionId, actor, timestamp, amount: creditApplied,
+      type: "insuranceSettlement", accountType: "insuranceReceivable", direction: "settlement",
+      metadata: {creditAllocations, source: "insuranceCreditSettlement"}}),
+    referenceCollection: "insurance_collections", insuranceCompanyId: companyId,
+    insuranceCompanyName: text(company.name), paymentMethod: "credit",
+    title: "تسوية رصيد دائن من مرتجعات التأمين",
+  });
   transaction.update(companyRef, {
     totalCollected: (cents(company.totalCollected) + amount) / 100,
-    currentReceivable: (totalDue - amount) / 100,
-    lastCollectionId: collectionId, lastCollectionTransactionId: transactionId,
+    currentReceivable: (totalDue - amount - creditApplied) / 100,
+    creditBalance: (cents(company.creditBalance) - creditApplied) / 100,
+    lastCollectionId: collectionId, lastCollectionTransactionId: amount ? transactionId : null,
     updatedAt: timestamp,
   });
+  transaction.create(pharmacy.collection("insurance_ledger").doc(collectionId), {
+    type: amount ? "collection" : "creditSettlement", insuranceCompanyId: companyId, amount: amount / 100, allocations,
+    creditAllocations, creditApplied: creditApplied / 100, createdAt: timestamp,
+    createdBy: actor.id, operationId: operationKey,
+  });
   return {success: true, collectionId, transactionId, companyId, companyName: text(company.name),
-    amount: amount / 100, previousReceivable: totalDue / 100, newReceivable: (totalDue - amount) / 100,
-    allocations};
+    amount: amount / 100, previousReceivable: totalDue / 100, newReceivable: (totalDue - amount - creditApplied) / 100,
+    creditApplied: creditApplied / 100, remainingCreditBalance: (availableCredit - creditApplied) / 100,
+    allocations, creditAllocations};
 }
 
 module.exports = {cents, claimDue, refundDeliveredOrder, collectInsurancePayment};

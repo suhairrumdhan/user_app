@@ -45,3 +45,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local test Firebase credentials/configs and generated exports
+/firebase.admin*.json
+/output/
+/outputs/
+/releases/
+/functions/node_modules/
+

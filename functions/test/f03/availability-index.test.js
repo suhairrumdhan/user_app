@@ -24,7 +24,7 @@ const project = (overrides = {}, profile = pharmacy) => buildMedicineSearchIndex
 
 test("new index contains searchable tokens and current unreserved package/piece quantities", () => {
   const index = project();
-  assert.equal(index.indexVersion, 7);
+  assert.equal(index.indexVersion, 8);
   assert.equal(index.available, true);
   assert.equal(index.availableQuantity, 2);
   assert.equal(index.availablePieceQuantity, 20);

@@ -3,10 +3,14 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn(){ return request.auth != null; }
     function adminDoc(){ return get(/databases/$(database)/documents/adminEmployees/$(request.auth.uid)); }
-    function isAdmin(){ return signedIn() && adminDoc().data.isActive == true; }
-    function isSuper(){ return isAdmin() && adminDoc().data.role == 'super_admin'; }
-    function can(key){ return isSuper() || (isAdmin() && adminDoc().data.permissions[key] == true); }
+    function isAdmin(){ return signedIn() && request.auth.token.get('actorType', '') != 'pharmacy_employee' && exists(/databases/$(database)/documents/adminEmployees/$(request.auth.uid)) && adminDoc().data.isActive == true; }
+    function can(key){ return isAdmin() && key in ['requests.view', 'audit.view', 'notifications.view', 'orders.view']; }
     function own(uid){ return signedIn() && request.auth.uid == uid; }
+    function approvedOwner(uid) {
+      let pharmacy = get(/databases/$(database)/documents/pharmacies/$(uid)).data;
+      return own(uid) && request.auth.token.get('email_verified', false) == true
+        && pharmacy.status == 'approved' && pharmacy.get('isActive', true) == true;
+    }
     function employeeTokenFor(pharmacyId) {
       return signedIn()
         && request.auth.token.get('actorType', '') == 'pharmacy_employee'
@@ -47,17 +51,23 @@ service cloud.firestore {
           || (!(key in overrides) && role.get('permissions', {}).get(key, false) == true));
     }
     function pharmacyMember(pharmacyId) {
-      return own(pharmacyId) || employeeSessionValid(pharmacyId);
+      return approvedOwner(pharmacyId) || employeeSessionValid(pharmacyId);
     }
     function pharmacyCan(pharmacyId, key) {
-      return own(pharmacyId) || employeeCan(pharmacyId, key);
+      return approvedOwner(pharmacyId) || employeeCan(pharmacyId, key);
     }
     function selfEmployee(pharmacyId, employeeId) {
       return employeeSessionValid(pharmacyId)
         && request.auth.token.get('employeeId', '') == employeeId;
     }
+    function pharmacyNotificationAccess(pharmacyId, type) {
+      return approvedOwner(pharmacyId)
+        || (type in ['newOrder', 'orderUpdate'] && employeeCan(pharmacyId, 'orders.view'))
+        || (type == 'chatMessage' && employeeCan(pharmacyId, 'messages.view'))
+        || (type in ['lowStock', 'nearExpiry', 'expiredStock'] && employeeCan(pharmacyId, 'inventory.view'));
+    }
     function pharmacyReadAccess(pharmacyId, collection) {
-      return own(pharmacyId)
+      return approvedOwner(pharmacyId)
         || (collection in ['medicines'] && employeeCan(pharmacyId, 'inventory.view'))
         || (collection in ['suppliers'] && employeeCan(pharmacyId, 'suppliers.view'))
         || (collection in ['insurance_companies', 'insurance_collections'] && employeeCan(pharmacyId, 'insurance.view'))
@@ -70,7 +80,7 @@ service cloud.firestore {
         || (collection in ['roles', 'permissions'] && employeeCan(pharmacyId, 'employees.view'));
     }
     function pharmacyWriteAccess(pharmacyId, collection) {
-      return own(pharmacyId)
+      return approvedOwner(pharmacyId)
         || (collection in ['medicines'] && (employeeCan(pharmacyId, 'inventory.create')
           || employeeCan(pharmacyId, 'inventory.update') || employeeCan(pharmacyId, 'inventory.delete')))
         || (collection in ['suppliers'] && (employeeCan(pharmacyId, 'suppliers.create')
@@ -94,7 +104,7 @@ service cloud.firestore {
     }
     function chatParticipant(data) {
       return signedIn()
-        && (data.userId == request.auth.uid || pharmacyCan(data.pharmacyId, 'messages.view'));
+        && (data.get('userId', '') == request.auth.uid || pharmacyCan(data.get('pharmacyId', '_'), 'messages.view'));
     }
     function orderParticipant(data) {
       return signedIn() && (data.user.userId == request.auth.uid
@@ -137,39 +147,42 @@ service cloud.firestore {
     }
 
     match /adminEmployees/{uid} {
-      allow read: if isSuper() || can('employees.view') || own(uid);
-      allow create: if can('employees.create');
-      allow update: if can('employees.update') || can('employees.disable');
+      allow read: if own(uid);
+      allow create, update: if false;
       allow delete: if false;
     }
     match /adminAuditLogs/{id} {
       allow read: if can('audit.view');
-      allow create: if isAdmin();
+      allow create: if false;
       allow update, delete: if false;
     }
     match /adminBroadcastNotifications/{id} {
       allow read: if can('notifications.view');
-      allow create: if can('notifications.send');
-      allow update: if isAdmin();
+      allow create, update: if false;
       allow delete: if false;
     }
     match /pharmacyRequests/{id} {
-      allow create: if signedIn();
-      allow read: if can('requests.view') || (signedIn() && (resource.data.pharmacyId == request.auth.uid || resource.data.id == request.auth.uid));
-      allow update: if can('requests.review') || can('requests.approve') || can('requests.reject') || (signedIn() && resource.data.id == request.auth.uid && resource.data.status in ['draft','requires_changes']);
-      allow delete: if false;
+      allow read: if own(id) || can('requests.view');
+      allow write: if false;
+      match /{collection}/{item} {
+        allow read: if collection in ['versions', 'history', 'notifications'] && (own(id) || can('requests.view'));
+        allow update: if collection == 'notifications' && own(id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt'])
+          && request.resource.data.isRead == true && request.resource.data.readAt == request.time;
+        allow create, delete: if false;
+      }
     }
     match /pharmacies/{id} {
-      allow read: if signedIn();
-      allow create: if can('requests.approve');
-      allow update: if can('pharmacies.manage') || can('requests.approve')
-        || (employeeCan(id, 'settings.update')
+      allow read: if signedIn() && !isAdmin();
+      allow create: if false;
+      allow update: if (employeeCan(id, 'settings.update')
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'status', 'isBlocked', 'isActive', 'approvedDate', 'approvedBy',
-            'sourceRequestId', 'id', 'ownerUid'
+            'sourceRequestId', 'id', 'ownerUid', 'visibilityRevision', 'visibilityReason', 'visibilityChangedAt', 'visibilityChangedBy'
           ]))
-        || (own(id) && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          'status', 'isBlocked', 'isActive', 'approvedDate', 'approvedBy', 'sourceRequestId'
+        || (approvedOwner(id) && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'status', 'isBlocked', 'isActive', 'approvedDate', 'approvedBy', 'sourceRequestId', 'id', 'ownerUid',
+          'visibilityRevision', 'visibilityReason', 'visibilityChangedAt', 'visibilityChangedBy'
         ]));
       allow delete: if false;
       match /settings/businessHours {
@@ -177,10 +190,44 @@ service cloud.firestore {
         allow write: if pharmacyCan(id, 'settings.update');
       }
       match /employees/{employeeId} {
-        allow read: if own(id) || selfEmployee(id, employeeId)
+        allow read: if approvedOwner(id) || selfEmployee(id, employeeId)
           || employeeCan(id, 'employees.view');
         // Account, role, active-state and override mutations are callable-only.
         allow create, update, delete: if false;
+      }
+      match /notifications/{notificationId} {
+        allow read: if pharmacyNotificationAccess(id, resource.data.type);
+        allow update: if pharmacyNotificationAccess(id, resource.data.type)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt', 'isDeleted'])
+          && request.resource.data.isRead is bool && request.resource.data.isDeleted is bool
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['readAt']) || request.resource.data.readAt == request.time);
+        allow create, delete: if false;
+      }
+      match /stockAlertStates/{stateId} {
+        allow read, write: if false;
+      }
+      match /purchase_submission_keys/{submissionId} {
+        allow read, write: if false;
+      }
+      match /quarantinedReturns/{returnId} {
+        allow read: if pharmacyCan(id, 'inventory.view') || pharmacyCan(id, 'sales.refund') || pharmacyCan(id, 'finance.view');
+        allow write: if false;
+        match /dispositions/{decisionId} {
+          allow read: if pharmacyCan(id, 'inventory.view') || pharmacyCan(id, 'sales.refund');
+          allow write: if false;
+        }
+      }
+      match /roles/{roleId} {
+        allow get: if approvedOwner(id) || (employeeSessionValid(id)
+          && employeeData(id).roleId == roleId) || employeeCan(id, 'employees.view');
+        allow list: if approvedOwner(id) || employeeCan(id, 'employees.view');
+        allow write: if false;
+      }
+      match /permissions/{roleId} {
+        allow get: if approvedOwner(id) || (employeeSessionValid(id)
+          && employeeData(id).roleId == roleId) || employeeCan(id, 'employees.view');
+        allow list: if approvedOwner(id) || employeeCan(id, 'employees.view');
+        allow write: if false;
       }
       match /employeeCredentials/{employeeId} {
         allow read, write: if false;
@@ -195,49 +242,116 @@ service cloud.firestore {
         allow read, write: if false;
       }
       match /sales/{saleId} {
-        allow read: if pharmacyCan(id, 'sales.view');
-        allow create: if pharmacyCan(id, 'sales.create') && !saleId.matches('order-.*')
-          && directSale(request.resource.data, id);
-        allow update: if (own(id) || employeeCan(id, 'sales.edit'))
-          && directSale(resource.data, id)
-          && directSale(request.resource.data, id);
-        allow delete: if false;
+        allow read: if pharmacyCan(id, 'sales.view') || pharmacyCan(id, 'sales.create') || pharmacyCan(id, 'finance.view');
+        allow create, update, delete: if false;
+        match /returns/{returnId} {
+          allow read: if pharmacyCan(id, 'sales.view') || pharmacyCan(id, 'sales.refund');
+          allow write: if false;
+        }
       }
       match /financial_transactions/{entryId} {
         allow read: if pharmacyCan(id, 'finance.view');
-        allow create: if pharmacyCan(id, 'sales.create')
-          && directFinancialEntry(request.resource.data, id);
-        allow update: if (own(id) || employeeCan(id, 'sales.edit'))
-          && directFinancialEntry(resource.data, id)
-          && directFinancialEntry(request.resource.data, id);
-        allow delete: if false;
+        allow write: if false;
+      }
+      match /payroll_periods/{periodId} {
+        allow read: if pharmacyCan(id, 'finance.view') || pharmacyCan(id, 'finance.payroll.view');
+        allow write: if false;
+      }
+      match /salary_payments/{paymentId} {
+        allow read: if pharmacyCan(id, 'finance.view') || pharmacyCan(id, 'finance.payroll.view');
+        allow write: if false;
+      }
+      match /shifts/{shiftId} {
+        allow read: if pharmacyCan(id, 'shifts.view') || pharmacyCan(id, 'sales.create') || pharmacyCan(id, 'finance.view');
+        allow write: if false;
+      }
+      match /shift_states/{actorKey} {
+        allow read: if pharmacyCan(id, 'shifts.view') || pharmacyCan(id, 'sales.create');
+        allow write: if false;
+      }
+      match /financial_operations/{operationId} {
+        allow read, write: if false;
+      }
+      match /insurance_ledger/{entryId} {
+        allow read: if pharmacyCan(id, 'insurance.view') || pharmacyCan(id, 'finance.view');
+        allow write: if false;
+      }
+      match /insurance_collections/{entryId} {
+        allow read: if pharmacyCan(id, 'insurance.view') || pharmacyCan(id, 'finance.view');
+        allow write: if false;
+      }
+      match /audit_logs/{entryId} {
+        allow read: if pharmacyMember(id);
+        allow create: if pharmacyMember(id) && !entryId.matches('finance-.*');
+        allow update, delete: if false;
+      }
+      match /medicines/{medicineId}/{sub=**} {
+        allow read: if pharmacyCan(id, 'inventory.view') || pharmacyCan(id, 'purchases.create') || pharmacyCan(id, 'sales.create') || pharmacyCan(id, 'finance.view');
+        allow write: if false;
+      }
+      match /purchase_invoices/{invoiceId}/{sub=**} {
+        allow read: if pharmacyCan(id, 'purchases.view') || pharmacyCan(id, 'purchases.create') || pharmacyCan(id, 'purchases.payment') || pharmacyCan(id, 'finance.view');
+        allow write: if false;
+      }
+      match /suppliers/{supplierId} {
+        allow read: if pharmacyCan(id, 'suppliers.view') || pharmacyCan(id, 'purchases.view') || pharmacyCan(id, 'finance.view');
+        allow write: if false;
+      }
+      match /insurance_companies/{companyId} {
+        allow read: if pharmacyCan(id, 'insurance.view') || pharmacyCan(id, 'sales.create') || pharmacyCan(id, 'finance.view');
+        allow write: if false;
       }
       match /{collection}/{sub=**} {
         allow read: if pharmacyReadAccess(id, collection)
           && !(collection in [
+          'notifications', 'stockAlertStates', 'purchase_submission_keys',
           'employeeCredentials', 'employeeUsernames', 'employeeSessions',
           'employeeLoginAttempts'
         ]);
         allow write: if pharmacyWriteAccess(id, collection)
           && !(collection in [
-            'sales', 'financial_transactions', 'quarantinedReturns', 'employees',
+            'notifications', 'stockAlertStates', 'purchase_submission_keys',
+            'sales', 'financial_transactions', 'financial_operations', 'insurance_ledger',
+            'insurance_collections', 'purchase_invoices', 'medicines', 'suppliers', 'insurance_companies',
+            'shifts', 'shift_states', 'expenses', 'salary_payments', 'audit_logs', 'insurance_codes', 'purchase_counters', 'quarantinedReturns', 'employees',
             'employeeCredentials', 'employeeUsernames', 'employeeSessions',
-            'employeeLoginAttempts'
+            'employeeLoginAttempts', 'roles', 'permissions', 'payroll_periods'
           ]);
       }
     }
     match /users/{uid} {
-      allow read: if own(uid) || can('users.view');
+      allow read: if own(uid) && !isAdmin();
       allow create: if own(uid);
-      allow update: if own(uid) || can('users.block');
+      allow update: if own(uid) && !isAdmin();
       allow delete: if own(uid);
+      match /insurances/{insuranceId} {
+        allow read, delete: if own(uid) && !isAdmin();
+        allow create: if own(uid) && !isAdmin()
+          && request.resource.data.beneficiaryId == insuranceId
+          && request.resource.data.beneficiaryType in ['self', 'family']
+          && request.resource.data.policyNumber is string
+          && request.resource.data.policyNumber.size() > 0
+          && request.resource.data.companyCode is string
+          && request.resource.data.companyCode.size() > 0
+          && request.resource.data.coveredMemberIds == [insuranceId];
+        allow update: if own(uid) && !isAdmin()
+          && resource.data.beneficiaryId == insuranceId
+          && request.resource.data.beneficiaryId == insuranceId
+          && request.resource.data.beneficiaryType == resource.data.beneficiaryType
+          && request.resource.data.policyNumber is string
+          && request.resource.data.policyNumber.size() > 0
+          && request.resource.data.companyCode is string
+          && request.resource.data.companyCode.size() > 0
+          && request.resource.data.coveredMemberIds == [insuranceId];
+      }
       match /{collection}/{sub=**} {
-        allow read: if own(uid);
-        allow write: if own(uid) && collection != 'orderIncidents';
+        allow read: if own(uid) && !isAdmin();
+        allow write: if own(uid)
+          && !(collection in ['orderIncidents', 'insurances']);
       }
     }
     match /orders/{id} {
-      allow read: if orderParticipant(resource.data);
+      allow read: if !isAdmin() && orderParticipant(resource.data);
       allow create: if false;
       allow update: if signedIn()
         && (resource.data.user.userId == request.auth.uid
@@ -298,8 +412,8 @@ service cloud.firestore {
     }
     match /complaints/{id} {
       allow create: if signedIn();
-      allow read: if can('complaints.view') || (signedIn() && resource.data.createdBy == request.auth.uid);
-      allow update: if can('complaints.review');
+      allow read: if signedIn() && !isAdmin() && resource.data.createdBy == request.auth.uid;
+      allow update: if false;
       allow delete: if false;
     }
     match /medicine_search_index/{id} {

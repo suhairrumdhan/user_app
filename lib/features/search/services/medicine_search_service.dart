@@ -6,15 +6,19 @@ import '../models/pharmacy_search_filters.dart';
 import '../models/pharmacy_search_result.dart';
 import '../models/matched_medicine_result.dart';
 import 'medicine_matcher.dart';
+import 'medicine_search_query.dart';
 import 'medicine_normalizer.dart';
 import 'pharmacy_distance.dart';
 import '../../../shared/availability_policy.dart';
 
 class MedicineSearchService {
-  final FirebaseFirestore _firestore;
+  final FirebaseFirestore? _firestoreOverride;
+  FirebaseFirestore get _firestore =>
+      _firestoreOverride ?? FirebaseFirestore.instance;
+  MedicineSearchService._evaluationOnly() : _firestoreOverride = null;
 
   MedicineSearchService({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _firestoreOverride = firestore;
 
   Future<List<PharmacySearchResult>> searchPharmacies({
     required List<MedicineSearchRequest> requests,
@@ -54,50 +58,42 @@ class MedicineSearchService {
       groupedByPharmacy.keys.toList(),
     );
 
-    final List<PharmacySearchResult> results = [];
-
-    for (final entry in groupedByPharmacy.entries) {
-      final pharmacyId = entry.key;
-      final pharmacyMedicines = entry.value;
-      final pharmacyData = pharmacyMetadata[pharmacyId];
-      if (pharmacyData == null) continue;
-
-      final result = _evaluatePharmacyFromIndex(
-        pharmacyId: pharmacyId,
-        pharmacyMedicines: pharmacyMedicines,
-        pharmacyData: pharmacyData,
-        requests: requests,
-        filters: filters,
-        userInsuranceCodes: userInsuranceCodes,
-        userLat: userLat,
-        userLng: userLng,
-      );
-
-      if (result != null) {
-        results.add(result);
-      }
-    }
-
-    debugPrint('✅ final pharmacy results: ${results.length}');
-    return _sortResults(results, filters.sortBy);
+    return evaluateCandidates(
+      groupedByPharmacy: groupedByPharmacy,
+      pharmacyMetadata: pharmacyMetadata,
+      requests: List<MedicineSearchRequest>.of(requests),
+      filters: filters,
+      userInsuranceCodes: List<String>.of(userInsuranceCodes),
+      userLat: userLat,
+      userLng: userLng,
+    );
   }
+
+  /// Runs CPU-bound matching outside the Android UI/platform thread.
+  @visibleForTesting
+  static Future<List<PharmacySearchResult>> evaluateCandidates({
+    required Map<String, List<Map<String, dynamic>>> groupedByPharmacy,
+    required Map<String, Map<String, dynamic>> pharmacyMetadata,
+    required List<MedicineSearchRequest> requests,
+    required PharmacySearchFilters filters,
+    List<String> userInsuranceCodes = const [],
+    double? userLat,
+    double? userLng,
+  }) => compute(_evaluateSearchCandidates, <String, Object?>{
+    'grouped': groupedByPharmacy,
+    'metadata': pharmacyMetadata,
+    'requests': requests,
+    'filters': filters,
+    'insurance': userInsuranceCodes,
+    'lat': userLat,
+    'lng': userLng,
+  }, debugLabel: 'medicine-search-matching');
 
   Future<List<Map<String, dynamic>>> _fetchCandidateIndexDocuments(
     List<MedicineSearchRequest> requests,
   ) async {
-    final tokens = <String>{};
-    for (final request in requests) {
-      tokens.addAll(request.searchTokens);
-      tokens.addAll(MedicineNormalizer.buildSearchTokens(request.rawText));
-      final base =
-          request.baseName ??
-          MedicineNormalizer.extractBaseName(request.rawText);
-      if (base.trim().isNotEmpty) tokens.add(base.trim());
-    }
-
-    final normalizedTokens = tokens
-        .map(MedicineNormalizer.normalize)
-        .where((token) => token.length >= 2)
+    final normalizedTokens = requests
+        .expand((request) => MedicineSearchQuery.tokens(request.rawText))
         .toSet()
         .toList();
     if (normalizedTokens.isEmpty) return [];
@@ -277,19 +273,22 @@ class MedicineSearchService {
           isAlternative: false,
         );
 
-        final alternativeMatches =
-            (filters.alternativesAllowed
-                    ? topMatches.skip(1)
-                    : const Iterable<MatchedMedicineResult>.empty())
-                .map(
-                  (item) => item.copyWith(
-                    requestKey: request.requestKey,
-                    requestedName: request.rawText,
-                    isAlternative: true,
-                    similarMatches: const [],
-                  ),
-                )
-                .toList();
+        final alternativeMatches = topMatches
+            .skip(1)
+            .where(
+              (item) =>
+                  filters.alternativesAllowed ||
+                  item.matchedMedicineId == bestMatch.matchedMedicineId,
+            )
+            .map(
+              (item) => item.copyWith(
+                requestKey: request.requestKey,
+                requestedName: request.rawText,
+                isAlternative: true,
+                similarMatches: const [],
+              ),
+            )
+            .toList();
 
         debugPrint(
           '   ✅ matched "${request.rawText}" -> "${bestMatch.matchedMedicineName}" '
@@ -635,4 +634,30 @@ class MedicineSearchService {
     if (value is String) return double.tryParse(value);
     return null;
   }
+}
+
+List<PharmacySearchResult> _evaluateSearchCandidates(
+  Map<String, Object?> input,
+) {
+  final evaluator = MedicineSearchService._evaluationOnly();
+  final grouped = input['grouped']! as Map<String, List<Map<String, dynamic>>>;
+  final metadata = input['metadata']! as Map<String, Map<String, dynamic>>;
+  final filters = input['filters']! as PharmacySearchFilters;
+  final results = <PharmacySearchResult>[];
+  for (final entry in grouped.entries) {
+    final data = metadata[entry.key];
+    if (data == null) continue;
+    final result = evaluator._evaluatePharmacyFromIndex(
+      pharmacyId: entry.key,
+      pharmacyMedicines: entry.value,
+      pharmacyData: data,
+      requests: input['requests']! as List<MedicineSearchRequest>,
+      filters: filters,
+      userInsuranceCodes: input['insurance']! as List<String>,
+      userLat: input['lat'] as double?,
+      userLng: input['lng'] as double?,
+    );
+    if (result != null) results.add(result);
+  }
+  return evaluator._sortResults(results, filters.sortBy);
 }

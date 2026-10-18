@@ -220,7 +220,7 @@ class AddAppointmentController extends GetxController {
     } catch (e) {
       Get.snackbar(
         'خطأ',
-        'فشل في حفظ تذكير الموعد: $e',
+        'فشل في حفظ تذكير الموعد',
         snackPosition: SnackPosition.BOTTOM,
       );
       return false;

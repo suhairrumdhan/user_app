@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const admin = require("firebase-admin");
 const {
+  exchangeCustomToken,
   initializeLiveSuite,
   readDocument,
   testOrder,
@@ -41,6 +42,12 @@ async function seedBase(context) {
     id: context.accountingEmployeeId,
     roleId: "admin",
     isActive: true,
+    permissionOverrides: {
+      "orders.update_status": true,
+      "sales.create": true,
+      "sales.refund": true,
+      "sales.override_price": true,
+    },
   });
   batch.set(context.db.doc(pathFor(context, "insurance_companies/live-insurance")), {
     status: "فعال", code: "LIVE", discountPercentage: 25,
@@ -52,17 +59,27 @@ async function seedBase(context) {
   for (const shiftId of [context.shiftA, context.shiftB]) {
     batch.set(context.db.doc(pathFor(context, `shifts/${shiftId}`)), {
       status: "open",
+      pharmacyId: context.pharmacyUid,
+      openedByKey: `employee:${context.accountingEmployeeId}`,
       cashTotal: 0,
       cardTotal: 0,
       salesCount: 0,
       updatedAt: now,
     });
   }
+  batch.set(context.db.doc(pathFor(
+    context,
+    `shift_states/employee:${context.accountingEmployeeId}`,
+  )), {activeShiftId: context.shiftA});
   await batch.commit();
   await writeEvidence(context, "running");
 }
 
 async function seedOrder(context, label, options = {}) {
+  await context.db.doc(pathFor(
+    context,
+    `shift_states/employee:${context.accountingEmployeeId}`,
+  )).set({activeShiftId: context.shiftA});
   const orderId = `live-accounting-${label}-${context.runId}`;
   const medicineId = `live-accounting-med-${label}-${context.runId}`;
   const medicine = {
@@ -140,10 +157,11 @@ test("F03 atomic accounting on the live Firebase project", {
       password: "LiveEmployee-2026",
     },
   );
-  context.accountingEmployeeActor = {
-    employeeId: context.accountingEmployeeId,
-    employeeSession: accountingLogin.sessionToken,
-  };
+  context.tokens.accountingEmployee = await exchangeCustomToken(
+    context.apiKey,
+    accountingLogin.customToken,
+  );
+  context.employeeTokenKey = "accountingEmployee";
   try {
     await t.test("invoice in shift A and delivery in shift B post exactly once", async () => {
       const {orderId, medicineId} = await seedOrder(context, "delivery");
@@ -173,6 +191,10 @@ test("F03 atomic accounting on the live Firebase project", {
       assert.equal(medicineBefore.reservedQuantity, 0);
 
       await context.call("pharmacy", "markReady", orderId);
+      await context.db.doc(pathFor(
+        context,
+        `shift_states/employee:${context.accountingEmployeeId}`,
+      )).set({activeShiftId: context.shiftB});
       await context.call("pharmacy", "completeOrder", orderId, {
         payload: {collectionShiftId: context.shiftB},
       });

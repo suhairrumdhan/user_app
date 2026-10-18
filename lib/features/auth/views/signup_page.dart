@@ -1,3 +1,4 @@
+import '../../../shared/libya_phone.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:icons_plus/icons_plus.dart';
@@ -95,9 +96,9 @@ class SignUpController extends GetxController {
       authService.registerWithEmail(
         context: context,
         email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-        confirmPassword: confirmPasswordController.text.trim(),
-        phoneNumber: phoneController.text.trim(),
+        password: passwordController.text,
+        confirmPassword: confirmPasswordController.text,
+        phoneNumber: LibyaPhone.normalize(phoneController.text),
         name: nameController.text.trim(),
         setLoading: (loading) => isLoading.value = loading,
       );
@@ -107,7 +108,7 @@ class SignUpController extends GetxController {
   void signInWithGoogle(BuildContext context) {
     authService.signInWithGoogle(
       context,
-          (loading) => isLoading.value = loading,
+      (loading) => isLoading.value = loading,
     );
   }
 
@@ -191,24 +192,16 @@ class _SignUpPageState extends State<SignUpPage> {
                     CustomTextField(
                       controller: controller.nameController,
                       label: "الاسم الكامل",
-                      validator: (value) =>
-                      value == null || value.isEmpty ? "يرجى إدخال الاسم" : null,
+                      validator: (value) => value == null || value.isEmpty
+                          ? "يرجى إدخال الاسم"
+                          : null,
                     ),
 
                     CustomTextField(
                       controller: controller.phoneController,
                       label: "رقم الهاتف",
                       inputType: TextInputType.phone,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return "يرجى إدخال رقم الهاتف";
-                        } else if (!RegExp(r'^[0-9+]+$').hasMatch(value)) {
-                          return "يرجى إدخال رقم هاتف صحيح";
-                        } else if (value.length < 8) {
-                          return "رقم الهاتف يجب أن يكون 8 أرقام على الأقل";
-                        }
-                        return null;
-                      },
+                      validator: (value) => LibyaPhone.validate(value),
                     ),
 
                     CustomTextField(
@@ -238,12 +231,16 @@ class _SignUpPageState extends State<SignUpPage> {
                           onVisibilityToggle: () {
                             setState(() => showPassword = !showPassword);
                           },
-                          validator: (value) => controller.validatePassword(value ?? ''),
+                          validator: (value) =>
+                              controller.validatePassword(value ?? ''),
                         ),
 
                         // رسالة قوة كلمة المرور البسيطة
                         Obx(() {
-                          if (controller.passwordStrengthMessage.value.isEmpty) {
+                          if (controller
+                              .passwordStrengthMessage
+                              .value
+                              .isEmpty) {
                             return const SizedBox.shrink();
                           }
                           return Container(
@@ -252,9 +249,12 @@ class _SignUpPageState extends State<SignUpPage> {
                               controller.passwordStrengthMessage.value,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: controller.passwordStrengthMessage.value.contains('قوية')
+                                color:
+                                    controller.passwordStrengthMessage.value
+                                        .contains('قوية')
                                     ? Colors.green
-                                    : controller.passwordStrengthMessage.value.contains('متوسطة')
+                                    : controller.passwordStrengthMessage.value
+                                          .contains('متوسطة')
                                     ? Colors.orange
                                     : Colors.red,
                               ),
@@ -272,12 +272,15 @@ class _SignUpPageState extends State<SignUpPage> {
                       isPasswordField: true,
                       showPassword: showConfirmPassword,
                       onVisibilityToggle: () {
-                        setState(() => showConfirmPassword = !showConfirmPassword);
+                        setState(
+                          () => showConfirmPassword = !showConfirmPassword,
+                        );
                       },
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return "يرجى تأكيد كلمة المرور";
-                        } else if (value != controller.passwordController.text) {
+                        } else if (value !=
+                            controller.passwordController.text) {
                           return "كلمة المرور غير متطابقة";
                         }
                         return null;
@@ -286,82 +289,86 @@ class _SignUpPageState extends State<SignUpPage> {
 
                     const SizedBox(height: 24),
 
-                    Obx(() => Container(
-                      width: double.infinity,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF5EABD6),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF5EABD6).withOpacity(0.3),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton(
-                        onPressed: controller.isLoading.value
-                            ? null
-                            : () => controller.register(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF5EABD6),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
+                    Obx(
+                      () => Container(
+                        width: double.infinity,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF5EABD6),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF5EABD6).withOpacity(0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
-                        child: controller.isLoading.value
-                            ? const SizedBox(
-                          height: 22,
-                          width: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+                        child: ElevatedButton(
+                          onPressed: controller.isLoading.value
+                              ? null
+                              : () => controller.register(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF5EABD6),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
-                        )
-                            : const Text(
-                          "إنشاء حساب",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          child: controller.isLoading.value
+                              ? const SizedBox(
+                                  height: 22,
+                                  width: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  "إنشاء حساب",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                         ),
                       ),
-                    )),
+                    ),
 
                     const SizedBox(height: 16),
 
-                    Obx(() => Container(
-                      width: double.infinity,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: ElevatedButton.icon(
-                        onPressed: controller.isLoading.value
-                            ? null
-                            : () => controller.signInWithGoogle(context),
-                        icon: const Icon(Bootstrap.google, color: Colors.red),
-                        label: const Text(
-                          "التسجيل باستخدام Google",
-                          style: TextStyle(
-                            color: Color(0xFF2C3E50),
-                            fontWeight: FontWeight.w500,
+                    Obx(
+                      () => Container(
+                        width: double.infinity,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: ElevatedButton.icon(
+                          onPressed: controller.isLoading.value
+                              ? null
+                              : () => controller.signInWithGoogle(context),
+                          icon: const Icon(Bootstrap.google, color: Colors.red),
+                          label: const Text(
+                            "التسجيل باستخدام Google",
+                            style: TextStyle(
+                              color: Color(0xFF2C3E50),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
                       ),
-                    )),
+                    ),
                   ],
                 ),
               ),

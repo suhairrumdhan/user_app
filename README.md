@@ -1,16 +1,28 @@
-# user_application
+# Roshita User App and Backend
 
-A new Flutter project.
+Source repository for the Roshita mobile application and its Firebase backend.
 
-## Getting Started
+## Repository map
 
-This project is a starting point for a Flutter application.
+- `lib/`: Flutter mobile application.
+- `functions/`: Firebase Cloud Functions, domain logic, and backend tests.
+- `backend/`: prescription processing service and its tests.
+- `test/`, `integration_test/`, `test_cases/`: application and acceptance tests.
+- `firestore.rules`, `storage.rules`, `firestore.indexes.json`: Firebase security and index configuration.
+- `docs/`: architecture, release, deployment, and testing notes.
 
-A few resources to get you started if this is your first Flutter project:
+## Setup
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+1. Install Flutter using the project version/channel expected by the local environment.
+2. Run `flutter pub get`.
+3. Create local Firebase configuration files as needed. Do not commit Admin SDK credentials.
+4. For Cloud Functions, run `npm ci` inside `functions/`.
+5. For the Python prescription service, install dependencies from `backend/requirements.txt`.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Tests
+
+- Flutter: `flutter test`
+- Cloud Functions: `cd functions; npm test`
+- Prescription service: follow `backend/tests/README.md`
+
+Live Firebase tests require an explicitly configured test project or emulator. Read the environment notes in `docs/` before running them.

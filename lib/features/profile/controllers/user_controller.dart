@@ -38,6 +38,10 @@ class UserController extends GetxController {
     try {
       isLoading.value = true;
       UserModel? fetchedUser = await _userRepo.getUser(uid);
+      final account = FirebaseAuth.instance.currentUser;
+      if (fetchedUser == null && account?.uid == uid) {
+        fetchedUser = await _userRepo.ensureUserProfile(account!);
+      }
       if (fetchedUser != null &&
           FirebaseAuth.instance.currentUser?.uid == uid) {
         user.value = fetchedUser;
@@ -250,7 +254,7 @@ class UserController extends GetxController {
         await _userRepo.saveUser(updatedUser);
         user.value = updatedUser;
 
-        print('✅ تم تحديث صورة الملف الشخصي بنجاح');
+        print('✅ تم تحديث الصورة.');
       }
     } catch (e) {
       print('❌ خطأ في تحديث صورة الملف الشخصي: $e');
@@ -323,7 +327,7 @@ class UserController extends GetxController {
         final updatedUser = user.value!.copyWith(profileImageUrl: imageUrl);
         user.value = updatedUser;
 
-        print('✅ تم تحديث صورة الملف الشخصي بنجاح');
+        print('✅ تم تحديث الصورة.');
         return true;
       }
 
@@ -371,7 +375,7 @@ class UserController extends GetxController {
         final updatedUser = user.value!.copyWith(profileImageUrl: imageUrl);
         user.value = updatedUser;
 
-        print('✅ تم تحديث صورة الملف الشخصي بنجاح');
+        print('✅ تم تحديث الصورة.');
         return true;
       }
 

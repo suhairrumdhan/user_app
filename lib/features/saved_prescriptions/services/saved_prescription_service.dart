@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'dart:async';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -9,20 +12,51 @@ import '../../search/services/medicine_normalizer.dart';
 import '../models/saved_prescription_model.dart';
 
 class SavedPrescriptionService {
-  SavedPrescriptionService._();
+  SavedPrescriptionService({
+    FirebaseFirestore? firestore,
+    String? Function()? currentUserId,
+    Future<String> Function(File, String, String?)? uploadFile,
+    Future<void> Function(String)? deleteFile,
+  }) : _firestore = firestore ?? FirebaseFirestore.instance,
+       _currentUserId =
+           currentUserId ?? (() => FirebaseAuth.instance.currentUser?.uid),
+       _uploadFile = uploadFile,
+       _deleteFile = deleteFile;
 
-  static final SavedPrescriptionService instance = SavedPrescriptionService._();
-
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  static final SavedPrescriptionService instance = SavedPrescriptionService();
+  final FirebaseFirestore _firestore;
+  final String? Function() _currentUserId;
+  final Future<String> Function(File, String, String?)? _uploadFile;
+  final Future<void> Function(String)? _deleteFile;
+  final _cleaning = <String>{};
+  FirebaseStorage get _storage => FirebaseStorage.instance;
 
   String get _userId {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null || uid.isEmpty) {
-      throw Exception('المستخدم غير مسجل الدخول');
-    }
+    final uid = _currentUserId();
+    if (uid == null || uid.isEmpty)
+      throw StateError('سجل الدخول لإدارة الوصفات.');
     return uid;
+  }
+
+  void _requireUser(String uid) {
+    if (_currentUserId() != uid)
+      throw StateError('تغير الحساب. افتح الوصفة من الحساب الحالي.');
+  }
+
+  Future<String> _upload(File file, String path, String? contentType) async {
+    if (_uploadFile != null) return _uploadFile(file, path, contentType);
+    final ref = _storage.ref(path);
+    await ref.putFile(file, SettableMetadata(contentType: contentType));
+    return ref.getDownloadURL();
+  }
+
+  Future<void> _removeFile(String path) async {
+    if (_deleteFile != null) return _deleteFile(path);
+    try {
+      await _storage.ref(path).delete();
+    } on FirebaseException catch (error) {
+      if (error.code != 'object-not-found') rethrow;
+    }
   }
 
   CollectionReference<Map<String, dynamic>> _collection(String userId) {
@@ -33,16 +67,23 @@ class SavedPrescriptionService {
   }
 
   Stream<List<SavedPrescriptionModel>> getSavedPrescriptions() {
-    final userId = _userId;
-
-    return _collection(userId)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-          .map((doc) => SavedPrescriptionModel.fromDoc(doc))
-          .toList(),
-    );
+    final uid = _userId;
+    return _collection(
+      uid,
+    ).orderBy('createdAt', descending: true).snapshots().map((snapshot) {
+      _requireUser(uid);
+      for (final doc in snapshot.docs) {
+        if (doc.data()['state'] == 'deleting') {
+          unawaited(
+            _finishDelete(uid, doc.id, doc.data()['storagePath'] as String?),
+          );
+        }
+      }
+      return snapshot.docs
+          .where((doc) => !['saving', 'deleting'].contains(doc.data()['state']))
+          .map(SavedPrescriptionModel.fromDoc)
+          .toList();
+    });
   }
 
   Future<String> savePrescription({
@@ -55,54 +96,32 @@ class SavedPrescriptionService {
   }) async {
     final userId = _userId;
 
-    final uniqueKey = _buildPrescriptionUniqueKey(
-      userId: userId,
-      beneficiaryId: beneficiary.id,
-      source: source,
-      medicines: medicines,
-    );
-
-    final duplicate = await _collection(userId)
-        .where('uniqueKey', isEqualTo: uniqueKey)
-        .limit(1)
-        .get();
-
-    if (duplicate.docs.isNotEmpty) {
-      final existingDoc = duplicate.docs.first;
-
-      await existingDoc.reference.update({
-        'searchHistory': FieldValue.arrayUnion([Timestamp.now()]),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      return existingDoc.id;
-    }
-
-    final docRef = _collection(userId).doc();
-
-    String? downloadUrl;
-    String? storagePath;
-    String? fileName;
-
-    if (originalFile != null) {
-      fileName = originalFile.path.split(Platform.pathSeparator).last;
-      final extension = fileName.contains('.') ? fileName.split('.').last : '';
-      final safeExtension = extension.isEmpty ? 'file' : extension;
-
-      storagePath =
-      'users/$userId/saved_prescriptions/${docRef.id}/original_file.$safeExtension';
-
-      final ref = _storage.ref(storagePath);
-
-      await ref.putFile(
-        originalFile,
-        SettableMetadata(
-          contentType: _resolveContentType(originalFileType, safeExtension),
-        ),
-      );
-
-      downloadUrl = await ref.getDownloadURL();
-    }
+    final fileHash = originalFile == null
+        ? null
+        : sha256.convert(await originalFile.readAsBytes()).toString();
+    final names =
+        medicines
+            .map(
+              (medicine) =>
+                  MedicineNormalizer.normalize(medicine.displayName.trim()),
+            )
+            .toList()
+          ..sort();
+    final uniqueKey = sha256
+        .convert(
+          utf8.encode(
+            jsonEncode([userId, beneficiary.id, source, names, fileHash]),
+          ),
+        )
+        .toString();
+    final docRef = _collection(userId).doc(uniqueKey);
+    final fileName = originalFile?.path.split(Platform.pathSeparator).last;
+    final extension = fileName != null && fileName.contains('.')
+        ? fileName.split('.').last.toLowerCase()
+        : 'file';
+    final storagePath = originalFile == null
+        ? null
+        : 'users/$userId/saved_prescriptions/$uniqueKey/original_file';
 
     final savedMedicines = medicines.map((medicine) {
       final raw = medicine.displayName.trim();
@@ -123,7 +142,7 @@ class SavedPrescriptionService {
 
     final now = Timestamp.now();
 
-    await docRef.set({
+    final record = <String, dynamic>{
       'userId': userId,
       'uniqueKey': uniqueKey,
       'beneficiaryId': beneficiary.id,
@@ -134,7 +153,7 @@ class SavedPrescriptionService {
       'medicines': savedMedicines.map((e) => e.toMap()).toList(),
       'medicineCount': medicines.length,
       'hasOriginalFile': originalFile != null,
-      'originalFileUrl': downloadUrl,
+      'originalFileUrl': null,
       'originalFileName': fileName,
       'originalFileType': originalFileType,
       'storagePath': storagePath,
@@ -143,10 +162,43 @@ class SavedPrescriptionService {
       'searchHistory': [now],
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
+    };
+    final saved = await _firestore.runTransaction((transaction) async {
+      _requireUser(userId);
+      final snapshot = await transaction.get(docRef);
+      if (snapshot.exists) {
+        if (snapshot.data()?['state'] == 'deleting')
+          throw StateError('الوصفة قيد الحذف. حاول مرة أخرى.');
+        return snapshot.data()?['state'] != 'saving';
+      }
+      transaction.set(docRef, {...record, 'state': 'saving'});
+      return false;
     });
-
+    if (saved) return docRef.id;
+    _requireUser(userId);
+    final url = originalFile == null
+        ? null
+        : await _upload(
+            originalFile,
+            storagePath!,
+            _resolveContentType(originalFileType, extension),
+          );
+    await _firestore.runTransaction((transaction) async {
+      _requireUser(userId);
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists || snapshot.data()?['state'] == 'deleting') {
+        throw StateError('الوصفة لم تعد متاحة للحفظ.');
+      }
+      if (snapshot.data()?['state'] != 'saving') return;
+      transaction.update(docRef, {
+        'state': 'saved',
+        'originalFileUrl': url,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
     return docRef.id;
   }
+
   Future<void> recordPrescriptionSearch(String prescriptionId) async {
     final userId = _userId;
 
@@ -156,36 +208,49 @@ class SavedPrescriptionService {
     });
   }
 
-  String _buildPrescriptionUniqueKey({
-    required String userId,
-    required String beneficiaryId,
-    required String source,
-    required List<MedicineModel> medicines,
-  }) {
-    final names = medicines
-        .map((m) => MedicineNormalizer.normalize(m.displayName.trim()))
-        .where((e) => e.isNotEmpty)
-        .toList()
-      ..sort();
-
-    return [
-      userId,
-      beneficiaryId,
-      source,
-      names.join('|'),
-    ].join('__');
-  }
   Future<void> deletePrescription(SavedPrescriptionModel prescription) async {
-    final userId = _userId;
+    final uid = _userId;
+    if (prescription.userId != uid)
+      throw StateError('الوصفة لا تخص الحساب الحالي.');
+    final ref = _collection(uid).doc(prescription.id);
+    final path = await _firestore.runTransaction((transaction) async {
+      _requireUser(uid);
+      final snapshot = await transaction.get(ref);
+      if (!snapshot.exists) return null;
+      transaction.update(ref, {
+        'state': 'deleting',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return snapshot.data()?['storagePath'] as String?;
+    });
+    // The durable deletion marker is the user-visible commit. Failed file cleanup
+    // remains discoverable and is resumed when the archive is opened again.
+    await _finishDelete(uid, prescription.id, path);
+  }
 
-    if (prescription.storagePath != null &&
-        prescription.storagePath!.trim().isNotEmpty) {
-      try {
-        await _storage.ref(prescription.storagePath).delete();
-      } catch (_) {}
+  Future<void> _finishDelete(String uid, String id, String? path) async {
+    final key = '$uid:$id';
+    if (!_cleaning.add(key)) return;
+    try {
+      _requireUser(uid);
+      if (path != null && path.isNotEmpty) {
+        if (!path.startsWith('users/$uid/saved_prescriptions/$id/')) {
+          throw StateError('مسار ملف الوصفة غير صالح.');
+        }
+        await _removeFile(path);
+      }
+      await _firestore.runTransaction((transaction) async {
+        _requireUser(uid);
+        final ref = _collection(uid).doc(id);
+        final snapshot = await transaction.get(ref);
+        if (snapshot.data()?['state'] == 'deleting') transaction.delete(ref);
+      });
+    } catch (error) {
+      // Keep the committed marker and storage path for safe retry.
+      print('Prescription cleanup deferred: $error');
+    } finally {
+      _cleaning.remove(key);
     }
-
-    await _collection(userId).doc(prescription.id).delete();
   }
 
   Future<void> updateNote({

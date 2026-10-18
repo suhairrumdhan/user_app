@@ -8,7 +8,7 @@ import 'add_edit_family_member_page.dart';
 class FamilyPage extends StatelessWidget {
   FamilyPage({super.key});
 
-  final controller = Get.put(FamilyController());
+  final controller = Get.find<FamilyController>();
   final Color pPrimaryColor = const Color(0xFF5EABD6);
 
   @override
@@ -20,7 +20,10 @@ class FamilyPage extends StatelessWidget {
           children: [
             // AppBar بنفس تصميم ProfilePage
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12,
+              ),
               child: Row(
                 children: [
                   IconButton(
@@ -54,11 +57,7 @@ class FamilyPage extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: Icon(
-                        Iconsax.add,
-                        color: pPrimaryColor,
-                        size: 22,
-                      ),
+                      child: Icon(Iconsax.add, color: pPrimaryColor, size: 22),
                     ),
                   ),
                 ],
@@ -82,7 +81,9 @@ class FamilyPage extends StatelessWidget {
                     if (!snapshot.hasData) {
                       return const Center(
                         child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF5EABD6)),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFF5EABD6),
+                          ),
                         ),
                       );
                     }
@@ -144,7 +145,10 @@ class FamilyPage extends StatelessWidget {
                       itemCount: members.length,
                       itemBuilder: (context, index) {
                         final m = members[index];
-                        return _buildMemberCard(m, context); // تمرير context هنا
+                        return _buildMemberCard(
+                          m,
+                          context,
+                        ); // تمرير context هنا
                       },
                     );
                   },
@@ -171,10 +175,7 @@ class FamilyPage extends StatelessWidget {
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(
-          color: Colors.grey[100]!,
-          width: 1,
-        ),
+        border: Border.all(color: Colors.grey[100]!, width: 1),
       ),
       child: Row(
         children: [
@@ -209,36 +210,22 @@ class FamilyPage extends StatelessWidget {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(
-                      Iconsax.heart,
-                      size: 14,
-                      color: Colors.grey[400],
-                    ),
+                    Icon(Iconsax.heart, size: 14, color: Colors.grey[400]),
                     const SizedBox(width: 4),
                     Text(
                       "صلة القرابة: ${member.relation ?? '-'}",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(
-                      Iconsax.cake,
-                      size: 14,
-                      color: Colors.grey[400],
-                    ),
+                    Icon(Iconsax.cake, size: 14, color: Colors.grey[400]),
                     const SizedBox(width: 4),
                     Text(
                       "العمر: ${member.age != null ? '${member.age} سنة' : '-'}",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                   ],
                 ),
@@ -246,18 +233,11 @@ class FamilyPage extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(
-                        Iconsax.health,
-                        size: 14,
-                        color: Colors.grey[400],
-                      ),
+                      Icon(Iconsax.health, size: 14, color: Colors.grey[400]),
                       const SizedBox(width: 4),
                       Text(
                         "فصيلة الدم: ${member.bloodType}",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ],
                   ),
@@ -275,11 +255,7 @@ class FamilyPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: IconButton(
-                  icon: Icon(
-                    Iconsax.edit,
-                    color: pPrimaryColor,
-                    size: 20,
-                  ),
+                  icon: Icon(Iconsax.edit, color: pPrimaryColor, size: 20),
                   onPressed: () {
                     Get.to(() => AddEditFamilyMemberPage(memberId: member.id));
                   },
@@ -292,11 +268,7 @@ class FamilyPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: IconButton(
-                  icon: const Icon(
-                    Iconsax.trash,
-                    color: Colors.red,
-                    size: 20,
-                  ),
+                  icon: const Icon(Iconsax.trash, color: Colors.red, size: 20),
                   onPressed: () => _showDeleteDialog(context, member),
                 ),
               ),
@@ -306,13 +278,12 @@ class FamilyPage extends StatelessWidget {
       ),
     );
   }
+
   void _showDeleteDialog(BuildContext context, FamilyMemberModel member) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("حذف فرد"),
         content: Text("هل أنت متأكد من حذف ${member.name}؟"),
         actions: [
@@ -325,10 +296,7 @@ class FamilyPage extends StatelessWidget {
               Navigator.pop(context);
               controller.deleteMember(member.id!);
             },
-            child: const Text(
-              "حذف",
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text("حذف", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),

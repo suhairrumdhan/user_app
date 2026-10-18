@@ -149,7 +149,7 @@ class _MedicationDetailsBody extends StatelessWidget {
                   );
                   if (updated == true && context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('تم تحديث التذكير بنجاح')),
+                      const SnackBar(content: Text('تم تحديث التذكير.')),
                     );
                   }
                 },
@@ -290,27 +290,38 @@ class _MedicationDetailsBody extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ActionButton(
-                        title: 'تم الأخذ',
-                        icon: Iconsax.tick_circle,
-                        color: const Color(0xFF4CAF50),
-                        onTap: () => controller.markMedicationTaken(reminder),
+                Obx(() {
+                  final busy = controller.isMedicationOperationInProgress(
+                    reminder.id,
+                  );
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: _ActionButton(
+                          title: 'تم الأخذ',
+                          icon: Iconsax.tick_circle,
+                          color: const Color(0xFF4CAF50),
+                          onTap: busy
+                              ? null
+                              : () => controller.markMedicationTaken(reminder),
+                          busy: busy,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _ActionButton(
-                        title: 'تأجيل',
-                        icon: Iconsax.timer_pause,
-                        color: const Color(0xFFFF9800),
-                        onTap: () => controller.snoozeMedication(reminder),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _ActionButton(
+                          title: 'تأجيل',
+                          icon: Iconsax.timer_pause,
+                          color: const Color(0xFFFF9800),
+                          onTap: busy
+                              ? null
+                              : () => controller.snoozeMedication(reminder),
+                          busy: busy,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  );
+                }),
                 const SizedBox(height: 12),
                 _InfoBox(
                   title: 'عدد العمليات المسجلة',
@@ -522,34 +533,49 @@ class _ActionButton extends StatelessWidget {
   final String title;
   final IconData icon;
   final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool busy;
 
   const _ActionButton({
     required this.title,
     required this.icon,
     required this.color,
     required this.onTap,
+    this.busy = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: color.withOpacity(0.10),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
+    return Opacity(
+      opacity: onTap == null ? 0.55 : 1,
+      child: Material(
+        color: color.withOpacity(0.10),
         borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          child: Column(
-            children: [
-              Icon(icon, color: color),
-              const SizedBox(height: 6),
-              Text(
-                title,
-                style: TextStyle(color: color, fontWeight: FontWeight.bold),
-              ),
-            ],
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Column(
+              children: [
+                if (busy)
+                  SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: color,
+                    ),
+                  )
+                else
+                  Icon(icon, color: color),
+                const SizedBox(height: 6),
+                Text(
+                  title,
+                  style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
           ),
         ),
       ),

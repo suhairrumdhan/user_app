@@ -2,6 +2,7 @@ import '../models/medicine_search_request.dart';
 import '../models/matched_medicine_result.dart';
 import 'medicine_normalizer.dart';
 import 'medicine_identity.dart';
+import 'medicine_search_query.dart';
 import '../models/medicine_sale_quote.dart';
 
 class MedicineMatcher {
@@ -11,6 +12,7 @@ class MedicineMatcher {
   static MatchedMedicineResult? matchMedicine({
     required MedicineSearchRequest request,
     required Map<String, dynamic> medicineData,
+    bool? soldByPiece,
   }) {
     final String pharmacyId = (medicineData['pharmacyId'] ?? '').toString();
 
@@ -24,22 +26,38 @@ class MedicineMatcher {
 
     if (name.isEmpty) return null;
 
-    final quote = MedicineSaleQuote.fromIndex(medicineData);
+    final quote = MedicineSaleQuote.fromIndex(
+      medicineData,
+      soldByPiece: soldByPiece,
+    );
     if (quote == null) return null;
-    if (!MedicineIdentity.matches(
-      requestedName: request.rawText,
-      availableName: name,
-      requestedStrength: request.strength,
+    final query = MedicineSearchQuery.clean(request.rawText);
+    final stockQuery = MedicineSearchQuery.clean(name);
+    final strict = MedicineIdentity.matches(
+      requestedName: query,
+      availableName: stockQuery,
+      requestedStrength: MedicineIdentity.strength(query),
       availableStrength: medicineData['strength']?.toString(),
-      requestedForm: request.dosageForm,
+      requestedForm: MedicineIdentity.form(query),
       availableForm:
           medicineData['dosageForm']?.toString() ??
           medicineData['unit']?.toString(),
-    )) {
-      return null;
-    }
-    const double score = 100;
-    const String matchType = 'exact_name_and_requested_details';
+    );
+    final queryBase = MedicineIdentity.name(query);
+    final stockBase = MedicineIdentity.name(stockQuery);
+    final genericBrandQuery =
+        MedicineIdentity.strength(query) == null &&
+        MedicineIdentity.form(query) == null &&
+        queryBase.split(' ').length == 1 &&
+        queryBase.length >= 3;
+    final family = genericBrandQuery && stockBase.startsWith('$queryBase ');
+    if (!strict && !family) return null;
+    final double score = strict ? 100 : 85;
+    final String matchType = family
+        ? 'brand_family_choice'
+        : query != request.rawText || stockQuery != name
+        ? 'cleaned_name_and_requested_details'
+        : 'exact_name_and_requested_details';
 
     final String? unit = medicineData['unit']?.toString();
     final String? imageUrl = medicineData['imageUrl']?.toString();
@@ -85,10 +103,22 @@ class MedicineMatcher {
     final List<MatchedMedicineResult> matches = [];
 
     for (final med in pharmacyMedicines) {
-      final result = matchMedicine(request: request, medicineData: med);
+      final supportsPieces = med['sellByPiece'] == true;
+      final variants = <bool?>[
+        if (supportsPieces) false,
+        if (supportsPieces) true,
+        if (!supportsPieces) null,
+      ];
+      for (final soldByPiece in variants) {
+        final result = matchMedicine(
+          request: request,
+          medicineData: med,
+          soldByPiece: soldByPiece,
+        );
 
-      if (result == null) continue;
-      matches.add(result);
+        if (result == null) continue;
+        matches.add(result);
+      }
     }
 
     if (matches.isEmpty) return [];
@@ -120,7 +150,8 @@ class MedicineMatcher {
     final Map<String, MatchedMedicineResult> unique = {};
 
     for (final item in matches) {
-      final key = MedicineNormalizer.normalize(item.matchedMedicineName);
+      final key =
+          '${MedicineNormalizer.normalize(item.matchedMedicineName)}:${item.soldByPiece}';
 
       if (!unique.containsKey(key)) {
         unique[key] = item;

@@ -137,7 +137,7 @@ class WelcomeScreen extends StatelessWidget {
                             maxWidth: isTablet ? 520 : 430,
                           ),
                           child: Text(
-                            'بوابتك للوصول إلى الصيدليات، إدارة الوصفات، ومتابعة طلبات الدواء بسهولة.',
+                            'ابحث عن دوائك وتابع طلباتك.',
                             textAlign: TextAlign.center,
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,

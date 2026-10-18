@@ -66,7 +66,8 @@ class ImageUploadService {
 
       // متابعة التقدم
       uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        double progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        double progress =
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
         print('📊 تقدم رفع الصورة: ${progress.toStringAsFixed(1)}%');
       });
 
@@ -108,7 +109,7 @@ class ImageUploadService {
           .child('profile.jpg');
 
       await ref.delete();
-      print('✅ تم حذف الصورة بنجاح');
+      print('✅ تم حذف الصورة.');
     } catch (e) {
       print('❌ خطأ في حذف الصورة: $e');
     }

@@ -75,7 +75,7 @@ class ChatOrderHeader extends StatelessWidget {
                     order.orderNumber != null &&
                     order.orderNumber!.trim().isNotEmpty)
                 ? 'طلب #${order.orderNumber}'
-                : 'طلب جاري التحميل...';
+                : 'جارٍ تحميل الطلب…';
 
             return Container(
               margin: const EdgeInsets.fromLTRB(16, 12, 16, 10),

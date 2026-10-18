@@ -14,7 +14,7 @@ class HealthRecordsPage extends StatelessWidget {
 
   final UserController userController = Get.find<UserController>();
   final HealthRecordController healthController =
-  Get.find<HealthRecordController>();
+      Get.find<HealthRecordController>();
   final FamilyController familyController = Get.find<FamilyController>();
 
   final Color pPrimaryColor = const Color(0xFF5EABD6);
@@ -32,8 +32,10 @@ class HealthRecordsPage extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12,
+              ),
               child: Row(
                 children: [
                   IconButton(
@@ -48,7 +50,6 @@ class HealthRecordsPage extends StatelessWidget {
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
-
                   ),
                 ],
               ),
@@ -81,9 +82,7 @@ class HealthRecordsPage extends StatelessWidget {
                               offset: const Offset(0, 4),
                             ),
                           ],
-                          border: Border.all(
-                            color: Colors.grey.shade200,
-                          ),
+                          border: Border.all(color: Colors.grey.shade200),
                         ),
                         child: TabBar(
                           indicator: BoxDecoration(
@@ -113,18 +112,23 @@ class HealthRecordsPage extends StatelessWidget {
                             fontSize: 13,
                           ),
                           splashBorderRadius: BorderRadius.circular(30),
-                          overlayColor:
-                          WidgetStateProperty.all(Colors.transparent),
+                          overlayColor: WidgetStateProperty.all(
+                            Colors.transparent,
+                          ),
                           dividerColor: Colors.transparent,
                           tabs: const [
                             Tab(
-                              icon: Icon(Icons.health_and_safety_outlined,
-                                  size: 18),
+                              icon: Icon(
+                                Icons.health_and_safety_outlined,
+                                size: 18,
+                              ),
                               text: 'ملفي الصحي',
                             ),
                             Tab(
-                              icon: Icon(Icons.family_restroom_outlined,
-                                  size: 18),
+                              icon: Icon(
+                                Icons.family_restroom_outlined,
+                                size: 18,
+                              ),
                               text: 'أفراد العائلة',
                             ),
                           ],
@@ -247,11 +251,7 @@ class HealthRecordsPage extends StatelessWidget {
               color: Colors.white.withOpacity(0.18),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: const Icon(
-              Iconsax.health,
-              color: Colors.white,
-              size: 28,
-            ),
+            child: const Icon(Iconsax.health, color: Colors.white, size: 28),
           ),
           const SizedBox(width: 14),
           const Expanded(
@@ -268,7 +268,7 @@ class HealthRecordsPage extends StatelessWidget {
                 ),
                 SizedBox(height: 6),
                 Text(
-                  'حدث معلوماتك الصحية الأساسية لتسهيل الطلبات وتحسين دقة الخدمات داخل التطبيق.',
+                  'حدّث بياناتك الصحية.',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 13,
@@ -345,11 +345,7 @@ class HealthRecordsPage extends StatelessWidget {
               color: Colors.white.withOpacity(0.18),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: const Icon(
-              Iconsax.people,
-              color: Colors.white,
-              size: 28,
-            ),
+            child: const Icon(Iconsax.people, color: Colors.white, size: 28),
           ),
           const SizedBox(width: 14),
           const Expanded(
@@ -366,7 +362,7 @@ class HealthRecordsPage extends StatelessWidget {
                 ),
                 SizedBox(height: 6),
                 Text(
-                  'تابع بيانات أفراد العائلة الصحية بشكل منظم وسريع من مكان واحد.',
+                  'تابع البيانات الصحية لأفراد العائلة.',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 13,
@@ -389,11 +385,7 @@ class HealthRecordsPage extends StatelessWidget {
         children: [
           _buildFamilyTopCard(),
           const SizedBox(height: 40),
-          Icon(
-            Iconsax.people,
-            size: 80,
-            color: Colors.grey[300],
-          ),
+          Icon(Iconsax.people, size: 80, color: Colors.grey[300]),
           const SizedBox(height: 16),
           Text(
             'لا يوجد أفراد عائلة',
@@ -436,10 +428,7 @@ class HealthRecordsPage extends StatelessWidget {
               offset: const Offset(0, 4),
             ),
           ],
-          border: Border.all(
-            color: pPrimaryColor.withOpacity(0.10),
-            width: 1,
-          ),
+          border: Border.all(color: pPrimaryColor.withOpacity(0.10), width: 1),
         ),
         child: Row(
           children: [
@@ -498,29 +487,20 @@ class HealthRecordsPage extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Icon(
-              Iconsax.arrow_left_1,
-              color: Colors.grey[400],
-              size: 18,
-            ),
+            Icon(Iconsax.arrow_left_1, color: Colors.grey[400], size: 18),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMetaChip({
-    required IconData icon,
-    required String label,
-  }) {
+  Widget _buildMetaChip({required IconData icon, required String label}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: pLightColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: pPrimaryColor.withOpacity(0.10),
-        ),
+        border: Border.all(color: pPrimaryColor.withOpacity(0.10)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

@@ -63,7 +63,7 @@ const TRANSITIONS = Object.freeze({
       pharmacy: Object.freeze(["confirmFullOrder"]),
     }),
     [ORDER_STATUS.PARTIAL_OFFER_PENDING]: Object.freeze({
-      pharmacy: Object.freeze(["createPartialOffer"]),
+      pharmacy: Object.freeze(["createPartialOffer", "proposeReplacementOffer", "proposeFullOffer", "confirmFullOrder"]),
     }),
     [ORDER_STATUS.REJECTED]: Object.freeze({
       pharmacy: Object.freeze(["rejectOrder"]),
@@ -74,18 +74,19 @@ const TRANSITIONS = Object.freeze({
   }),
   [ORDER_STATUS.PARTIAL_OFFER_PENDING]: Object.freeze({
     [ORDER_STATUS.PARTIAL_OFFER_PENDING]: Object.freeze({
-      pharmacy: Object.freeze(["revisePartialOffer"]),
+      pharmacy: Object.freeze(["revisePartialOffer", "proposeReplacementOffer", "proposeFullOffer"]),
     }),
     [ORDER_STATUS.CONFIRMED_RESERVED]: Object.freeze({
       user: Object.freeze(["acceptPartialOffer"]),
     }),
     [ORDER_STATUS.CANCELLED]: Object.freeze({
       user: Object.freeze(["rejectPartialOffer", "cancelOrder"]),
+      pharmacy: Object.freeze(["cancelPendingReplacement"]),
     }),
   }),
   [ORDER_STATUS.CONFIRMED_RESERVED]: Object.freeze({
     [ORDER_STATUS.PARTIAL_OFFER_PENDING]: Object.freeze({
-      pharmacy: Object.freeze(["revisePartialOffer"]),
+      pharmacy: Object.freeze(["revisePartialOffer", "proposeReplacementOffer", "proposeFullOffer"]),
     }),
     [ORDER_STATUS.PREPARING]: Object.freeze({
       pharmacy: Object.freeze(["startPreparing"]),
@@ -95,6 +96,9 @@ const TRANSITIONS = Object.freeze({
     }),
   }),
   [ORDER_STATUS.PREPARING]: Object.freeze({
+    [ORDER_STATUS.PARTIAL_OFFER_PENDING]: Object.freeze({
+      pharmacy: Object.freeze(["proposeReplacementOffer"]),
+    }),
     [ORDER_STATUS.READY]: Object.freeze({
       pharmacy: Object.freeze(["markReady"]),
     }),
@@ -103,6 +107,9 @@ const TRANSITIONS = Object.freeze({
     }),
   }),
   [ORDER_STATUS.READY]: Object.freeze({
+    [ORDER_STATUS.PARTIAL_OFFER_PENDING]: Object.freeze({
+      pharmacy: Object.freeze(["proposeReplacementOffer"]),
+    }),
     [ORDER_STATUS.COMPLETED]: Object.freeze({
       pharmacy: Object.freeze(["completeOrder"]),
     }),

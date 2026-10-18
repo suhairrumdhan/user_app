@@ -22,6 +22,56 @@ const {refreshMedicineSearchIndex, refreshPharmacySearchIndex,
 
 admin.initializeApp();
 const db = admin.firestore();
+const skipSyntheticAdminPerfEvent = (id) => process.env.ROSHITA_ADMIN_PERF_TEST === "true" &&
+  String(process.env.GCLOUD_PROJECT || "").startsWith("demo-") && String(id || "").startsWith("admperf_");
+const {refreshStockAlerts, scanStockAlerts} = require("./domain/stock-alerts");
+exports.onMedicineAlertWritten = onDocumentWritten(
+  {document: "pharmacies/{pharmacyId}/medicines/{medicineId}", retry: true},
+  (event) => refreshStockAlerts({db, ...event.params}),
+);
+exports.refreshStockExpiryAlerts = onSchedule({schedule: "every 60 minutes", timeZone: "UTC", region: "us-central1",
+  timeoutSeconds: 540, retryCount: 3}, () => scanStockAlerts({db}));
+const {SOURCES: ADMIN_LIST_SOURCES, refreshRow: refreshAdminListRow,
+  buildAdminList} = require("./domain/admin-lists");
+const {buildAdminVisibilityCommand} = require("./domain/admin-visibility");
+const {buildAdminInsights} = require("./domain/admin-insights");
+const {initializeAdminLists} = require("./domain/admin-initialize");
+exports.adminInsights = onCall({region: "us-central1", timeoutSeconds: 120, memory: "512MiB"},
+  buildAdminInsights({db, auth: admin.auth()}));
+exports.adminList = onCall({region: "us-central1"}, buildAdminList({db, auth: admin.auth()}));
+exports.adminVisibilityCommand = onCall({region: "us-central1"},
+  buildAdminVisibilityCommand({db, auth: admin.auth()}));
+// Temporary migration endpoint. It is safe to rerun and becomes a no-op after
+// every list marker reaches the current schema version. Delete after migration.
+exports.initializeAdminListsOnce = onSchedule({schedule: "every 5 minutes", timeZone: "UTC",
+  region: "us-central1", timeoutSeconds: 540, memory: "1GiB"}, async () => {
+  console.log("Admin list initialization", await initializeAdminLists({db}));
+});
+for (const [kind, source] of Object.entries(ADMIN_LIST_SOURCES)) {
+  exports[`adminList_${kind}`] = onDocumentWritten(
+    {document: `${source}/{id}`, region: "us-central1", retry: true},
+    async (event) => skipSyntheticAdminPerfEvent(event.params.id) ? undefined :
+      refreshAdminListRow({db, kind, id: event.params.id}),
+  );
+}
+const {buildPharmacyFinanceCommand} = require("./domain/pharmacy-finance");
+const {buildPharmacyReport} = require("./domain/pharmacy-reports");
+exports.getPharmacyReport = onCall({region: "us-central1", timeoutSeconds: 120, memory: "512MiB"}, async (request) => {
+  try { return await buildPharmacyReport({db})(request); } catch (error) {
+    const known = ["permission-denied", "failed-precondition", "invalid-argument"].includes(error.code);
+    throw new HttpsError(known ? error.code : "internal", known ? error.message : "تعذر إعداد التقرير. أعد المحاولة بعد مراجعة الاتصال.");
+  }
+});
+exports.pharmacyFinanceCommand = onCall({region: "us-central1"}, async (request) => {
+  try { return await buildPharmacyFinanceCommand({db})(request); } catch (error) {
+    throw new HttpsError(error.code || "internal", error.message || "تعذر حفظ العملية المالية");
+  }
+});
+
+const {buildRegistrationCommand} = require("./domain/registration-commands");
+exports.registrationCommand = onCall({region: "us-central1"}, (request) => buildRegistrationCommand({
+  db, auth: admin.auth(), bucket: admin.storage().bucket(),
+})(request));
 
 exports.processOrderDeadlines = onSchedule({
   schedule: "every 5 minutes", timeZone: "UTC", region: "us-central1",
@@ -39,6 +89,7 @@ exports.onMedicineStockWritten = onDocumentWritten(
 exports.onPharmacySearchProfileWritten = onDocumentWritten(
   {document: "pharmacies/{pharmacyId}", retry: true},
   async (event) => {
+    if (skipSyntheticAdminPerfEvent(event.params.pharmacyId)) return;
     if (!searchProfileChanged(event.data?.before.data(), event.data?.after.data())) return;
     await refreshPharmacySearchIndex({db, pharmacyId: event.params.pharmacyId});
   },
@@ -172,74 +223,16 @@ function orderNotificationTitle(status) {
   }
 }
 
+const {refreshAdminOrderSummary} = require("./domain/admin-order-summary");
 async function writeAdminOrderSummary(orderId) {
-  await db.runTransaction(async (transaction) => {
-  const snapshot = await transaction.get(db.collection("orders").doc(orderId));
-  if (!snapshot.exists) return;
-  const order = snapshot.data();
-  let canonicalStatus = "unknown";
-  let canonicalLabel = "حالة غير معروفة";
-  try {
-    canonicalStatus = parseOrderStatus(order.status).status;
-    canonicalLabel = statusLabel(canonicalStatus);
-  } catch {
-    // Unknown legacy values stay explicit and are never treated as received.
-  }
-  transaction.set(db.collection("adminOrderSummaries").doc(orderId), {
-    schemaVersion: Number(order.schemaVersion || 0),
-    orderId,
-    orderNumber: getOrderNumber(order, orderId),
-    pharmacyId: getOrderPharmacyId(order),
-    pharmacyName: getOrderPharmacyName(order),
-    status: canonicalStatus,
-    statusLabel: canonicalLabel,
-    totalItemsCount: Number(order.totalItemsCount || 0),
-    estimatedTotalPrice: Number(order.estimatedTotalPrice || 0),
-    invoiceId: text(order.invoiceId) || null,
-    offerVersion: Number(order.offerVersion || 0),
-    createdAt: order.createdAt || null,
-    updatedAt: order.updatedAt || null,
-    reviewStartedAt: order.reviewStartedAt || null,
-    pharmacyDelayAt: order.pharmacyDelayAt || null,
-    pharmacyReviewActiveMs: Number(order.pharmacyReviewActiveMs || 0),
-    pharmacyReadyDurationMs: Number(order.pharmacyReadyDurationMs || 0),
-    pharmacyDelayed: order.pharmacyDelayed === true,
-    userDecisionStartedAt: order.userDecisionStartedAt || null,
-    userDecisionDeadline: order.userDecisionDeadline || null,
-    userDecisionWaitMs: Number(order.userDecisionWaitMs || 0),
-    insuranceDecision: text(order.insuranceDecision) || null,
-    readyAt: order.readyAt || null,
-    pickupDeadline: order.pickupDeadline || null,
-    pickupOverdue: order.pickupOverdue === true,
-    pickupOverdueAt: order.pickupOverdueAt || null,
-    completedAt: order.completedAt || null,
-    cancelledAt: order.cancelledAt || null,
-    rejectedAt: order.rejectedAt || null,
-    notCollectedAt: order.notCollectedAt || null,
-    statusHistory: (Array.isArray(order.statusHistory) ? order.statusHistory : [])
-      .map((entry) => ({
-        status: text(entry.status),
-        label: text(entry.label),
-        changedByType: text(entry.changedByType),
-        command: text(entry.command),
-        changedAt: entry.changedAt || null,
-      })),
-  }, {merge: true});
-  });
+  return refreshAdminOrderSummary({db, orderId});
 }
+exports.adminOrderProjection = onDocumentWritten(
+  {document: "orders/{orderId}", region: "us-central1", retry: true},
+  async (event) => skipSyntheticAdminPerfEvent(event.params.orderId) ? undefined :
+    refreshAdminOrderSummary({db, orderId: event.params.orderId}),
+);
 
-async function commitInChunks(operations, chunkSize = 450) {
-  for (let i = 0; i < operations.length; i += chunkSize) {
-    const batch = db.batch();
-    const chunk = operations.slice(i, i + chunkSize);
-
-    chunk.forEach((op) => {
-      batch.set(op.ref, op.data, { merge: true });
-    });
-
-    await batch.commit();
-  }
-}
 
 function tokensFrom(data = {}) {
   return [...new Set([
@@ -437,21 +430,6 @@ exports.syncUserPushToken = onCall(
   },
 );
 
-async function getAdminEmployee(uid) {
-  if (!uid) return null;
-
-  const snapshot = await db.collection("adminEmployees").doc(uid).get();
-  if (!snapshot.exists) return null;
-
-  const employee = snapshot.data() || {};
-  return employee.isActive === true ? employee : null;
-}
-
-function adminAllowed(employee, permission) {
-  return employee?.role === "super_admin" ||
-    employee?.permissions?.[permission] === true;
-}
-
 async function sendMulticastInChunks(tokens, message) {
   let successCount = 0;
   let failureCount = 0;
@@ -488,67 +466,6 @@ exports.migrateLegacyEmployeeCredential = employeeAuth.migrateLegacyCredential;
 exports.managePharmacyEmployeeCredential = employeeAuth.manageCredential;
 exports.createPharmacyEmployeeSession = employeeAuth.loginEmployee;
 exports.revokePharmacyEmployeeSession = employeeAuth.revokeSession;
-
-/* =========================================================
-   2) Create Admin Employee
-   Used by the admin panel: httpsCallable("createAdminEmployee")
-========================================================= */
-
-exports.createAdminEmployee = onCall(async (request) => {
-  const actor = await getAdminEmployee(request.auth?.uid);
-  if (!adminAllowed(actor, "employees.create")) {
-    throw new HttpsError(
-      "permission-denied",
-      "غير مصرح بإنشاء حساب إداري.",
-    );
-  }
-
-  const payload = request.data || {};
-  const name = text(payload.name);
-  const email = text(payload.email).toLowerCase();
-  const password = text(payload.password);
-  const role = text(payload.role, "viewer");
-  const permissions = payload.permissions || {};
-
-  if (!name || !email || password.length < 8) {
-    throw new HttpsError(
-      "invalid-argument",
-      "الاسم والبريد وكلمة مرور من 8 أحرف مطلوبة.",
-    );
-  }
-
-  const user = await admin.auth().createUser({
-    email,
-    password,
-    displayName: name,
-  });
-
-  await db.collection("adminEmployees").doc(user.uid).set({
-    uid: user.uid,
-    name,
-    email: user.email,
-    role,
-    isActive: true,
-    permissions,
-    createdBy: request.auth.uid,
-    createdAt: now(),
-    updatedAt: now(),
-    source: "admin_callable",
-  });
-
-  await db.collection("adminAuditLogs").add({
-    action: "create_employee",
-    module: "employees",
-    targetType: "admin_employee",
-    targetId: user.uid,
-    targetName: name,
-    adminUid: request.auth.uid,
-    status: "success",
-    createdAt: now(),
-  });
-
-  return { uid: user.uid };
-});
 
 /* =========================================================
    3) Push Notification for User
@@ -1022,12 +939,36 @@ exports.onOrderUpdated = onDocumentUpdated(
     const beneficiaryType = getBeneficiaryType(after);
 
     const currentStatusLabel = text(after.statusLabel, orderStatusLabel(newStatus));
-    const title = orderNotificationTitle(newStatus);
-    const message = `${currentStatusLabel} طلب ${beneficiaryName} من ${pharmacyName}.`;
+    const replacementPending = canonicalNewStatus === ORDER_STATUS.PARTIAL_OFFER_PENDING &&
+      after.partialOffer?.kind === "replacement";
+    const fullPending = canonicalNewStatus === ORDER_STATUS.PARTIAL_OFFER_PENDING && after.partialOffer?.kind === "full";
+    const title = replacementPending ? "عرض تبديل الأصناف" : fullPending ? "عرض سعر الطلب الكامل" : orderNotificationTitle(newStatus);
+    const message = replacementPending ?
+      `أرسلت ${pharmacyName} عرض تبديل أصناف لطلب ${beneficiaryName}. راجع الأصناف والسعر قبل الموافقة.` :
+      fullPending ? `أرسلت ${pharmacyName} سعر الطلب الكامل. راجع المبلغ والأصناف قبل الموافقة والحجز.` :
+      `${currentStatusLabel} طلب ${beneficiaryName} من ${pharmacyName}.`;
 
     const historyLength = Array.isArray(after.statusHistory)
       ? after.statusHistory.length
       : Date.now();
+
+    if (["replacement", "full"].includes(before.partialOffer?.kind) &&
+        oldStatus === ORDER_STATUS.PARTIAL_OFFER_PENDING && pharmacyId &&
+        [ORDER_STATUS.CONFIRMED_RESERVED, ORDER_STATUS.CANCELLED].includes(canonicalNewStatus)) {
+      const accepted = canonicalNewStatus === ORDER_STATUS.CONFIRMED_RESERVED;
+      const full = before.partialOffer?.kind === "full";
+      const decisionMessage = accepted ? (full ? "وافق المستخدم على سعر الطلب الكامل. الأصناف محجوزة." :
+        "وافق المستخدم على عرض تبديل الأصناف. الأصناف الجديدة محجوزة.") : "أُلغي الطلب أثناء انتظار قرار العرض.";
+      await db.collection("pharmacies").doc(pharmacyId).collection("notifications")
+        .doc(`${full ? "full_price" : "replacement"}_decision_${orderId}_${historyLength}`).set({
+          pharmacyId, userId, orderId, type: "orderUpdate", referenceType: "order",
+          referenceId: orderId, actionRoute: "/orders", actionId: orderId,
+          title: accepted ? (full ? "تم قبول سعر الطلب الكامل" : "تم قبول عرض التبديل") : "تم إلغاء الطلب",
+          message: decisionMessage, body: decisionMessage, isActionable: true,
+          isRead: false, isDeleted: false, priority: "high", createdAt: now(),
+          extraData: {source: "order", status: canonicalNewStatus, offerVersion: after.offerVersion},
+        }, {merge: true});
+    }
 
     await db
       .collection("users")
@@ -1092,347 +1033,30 @@ exports.onOrderUpdated = onDocumentUpdated(
    Trigger: adminBroadcastNotifications/{broadcastId} created
 ========================================================= */
 
-exports.sendAdminBroadcast = onDocumentCreated(
-  "adminBroadcastNotifications/{broadcastId}",
-  async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-
-    const broadcast = snap.data() || {};
-    const broadcastId = event.params.broadcastId;
-    const broadcastRef = snap.ref;
-
-    const claimed = await db.runTransaction(async (transaction) => {
-      const current = await transaction.get(broadcastRef);
-      if (!current.exists) return false;
-
-      const status = text(current.data().status);
-      if (status && status !== "queued") return false;
-
-      transaction.set(broadcastRef, {
-        status: "processing",
-        processingAt: now(),
-      }, { merge: true });
-      return true;
+const {buildAdminBroadcast} = require("./domain/admin-broadcast");
+const adminBroadcast = buildAdminBroadcast({db, auth: admin.auth(),
+  sendUser: async ({userId, broadcastId, noticeId, title, body}) => {
+    const user = await db.doc(`users/${userId}`).get();
+    const tokens = await activeUserPushTokens(userId, user);
+    if (!tokens.length) return {success: false, reason: "no_active_device"};
+    const result = await sendMulticastInChunks(tokens, {
+      notification: {title, body},
+      data: {type: "adminMessage", broadcastId, notificationId: noticeId, eventId: noticeId,
+        referenceType: "system", referenceId: broadcastId, userId},
+      android: {priority: "high", collapseKey: broadcastId, notification: {tag: noticeId, sound: "default"}},
+      apns: {headers: {"apns-collapse-id": broadcastId}},
     });
-
-    if (!claimed) {
-      console.log("Skipped claimed broadcast:", broadcastId);
-      return;
-    }
-
-    const title = text(broadcast.title, "رسالة من الإدارة");
-    const message = text(broadcast.body || broadcast.message);
-    const target = text(broadcast.targetType || broadcast.target, "users");
-    const targetRoute = broadcast.targetRoute || null;
-    const targetIds = Array.isArray(broadcast.targetIds)
-      ? broadcast.targetIds.map((id) => text(id)).filter((id) => id)
-      : [];
-
-    if (!message || title.length > 80 || message.length > 500) {
-      await broadcastRef.set({
-        status: "failed",
-        failureReason: "Broadcast title/body is missing or exceeds 80/500.",
-        failedAt: now(),
-      }, { merge: true });
-      console.log("Rejected invalid broadcast:", broadcastId);
-      return;
-    }
-
-    const operations = [];
-    const broadcastTokens = new Set();
-
-    async function addUserTokens(userDoc) {
-      if (!userDoc.exists) return;
-      const tokens = await activeUserPushTokens(userDoc.id, userDoc);
-      tokens.forEach((token) => broadcastTokens.add(token));
-    }
-
-    async function addUsersNotifications(userIds = null) {
-      if (userIds && userIds.length > 0) {
-        const userDocs = await Promise.all(userIds.map((uid) =>
-          db.collection("users").doc(uid).get()));
-        await Promise.all(userDocs.map(addUserTokens));
-
-        userDocs.forEach((userDoc) => {
-          const uid = userDoc.id;
-          const ref = db
-            .collection("users")
-            .doc(uid)
-            .collection("notifications")
-            .doc(`admin_${broadcastId}`);
-
-          operations.push({
-            ref,
-            data: {
-              userId: uid,
-              type: "adminMessage",
-              title,
-              message,
-              body: message,
-
-              referenceType: "system",
-              referenceId: broadcastId,
-              actionRoute: targetRoute,
-              actionId: broadcastId,
-
-              orderId: null,
-              chatId: null,
-              pharmacyId: null,
-              pharmacyName: null,
-              prescriptionId: null,
-
-              beneficiaryId: null,
-              beneficiaryName: null,
-              beneficiaryType: null,
-
-              iconName: "admin_broadcast",
-              imageUrl: null,
-
-              isActionable: targetRoute !== null,
-              isDeleted: false,
-              isRead: false,
-              priority: text(broadcast.priority, "normal"),
-              pushHandledBy: "sendAdminBroadcast",
-
-              createdAt: now(),
-              readAt: null,
-              expiresAt: null,
-
-              extraData: {
-                source: "admin_panel_web",
-                broadcastId,
-                sentBy: broadcast.sentBy || null,
-              },
-            },
-          });
-        });
-
-        return;
-      }
-
-      const usersSnap = await db.collection("users").get();
-      await Promise.all(usersSnap.docs.map(addUserTokens));
-
-      usersSnap.docs.forEach((doc) => {
-        const uid = doc.id;
-
-        const ref = db
-          .collection("users")
-          .doc(uid)
-          .collection("notifications")
-          .doc(`admin_${broadcastId}`);
-
-        operations.push({
-          ref,
-          data: {
-            userId: uid,
-            type: "adminMessage",
-            title,
-            message,
-            body: message,
-
-            referenceType: "system",
-            referenceId: broadcastId,
-            actionRoute: targetRoute,
-            actionId: broadcastId,
-
-            orderId: null,
-            chatId: null,
-            pharmacyId: null,
-            pharmacyName: null,
-            prescriptionId: null,
-
-            beneficiaryId: null,
-            beneficiaryName: null,
-            beneficiaryType: null,
-
-            iconName: "admin_broadcast",
-            imageUrl: null,
-
-            isActionable: targetRoute !== null,
-            isDeleted: false,
-            isRead: false,
-            priority: text(broadcast.priority, "normal"),
-            pushHandledBy: "sendAdminBroadcast",
-
-            createdAt: now(),
-            readAt: null,
-            expiresAt: null,
-
-            extraData: {
-              source: "admin_panel_web",
-              broadcastId,
-              sentBy: broadcast.sentBy || null,
-            },
-          },
-        });
-      });
-    }
-
-    async function addPharmaciesNotifications(pharmacyIds = null) {
-      if (pharmacyIds && pharmacyIds.length > 0) {
-        const pharmacyDocs = await Promise.all(pharmacyIds.map((pharmacyId) =>
-          db.collection("pharmacies").doc(pharmacyId).get()));
-
-        pharmacyDocs.forEach((pharmacyDoc) => {
-          const pharmacyId = pharmacyDoc.id;
-          if (pharmacyDoc.exists) {
-            tokensFrom(pharmacyDoc.data()).forEach((token) =>
-              broadcastTokens.add(token));
-          }
-
-          const ref = db
-            .collection("pharmacies")
-            .doc(pharmacyId)
-            .collection("notifications")
-            .doc(`admin_${broadcastId}`);
-
-          operations.push({
-            ref,
-            data: {
-              pharmacyId,
-              type: "adminBroadcast",
-              title,
-              message,
-              body: message,
-
-              referenceType: "system",
-              referenceId: broadcastId,
-              actionRoute: targetRoute,
-              actionId: broadcastId,
-
-              iconName: "admin_broadcast",
-              imageUrl: null,
-
-              isActionable: targetRoute !== null,
-              isDeleted: false,
-              isRead: false,
-              priority: text(broadcast.priority, "normal"),
-              pushHandledBy: "sendAdminBroadcast",
-
-              createdAt: now(),
-              readAt: null,
-              expiresAt: null,
-
-              extraData: {
-                source: "admin_panel_web",
-                broadcastId,
-                sentBy: broadcast.sentBy || null,
-              },
-            },
-          });
-        });
-
-        return;
-      }
-
-      const pharmaciesSnap = await db.collection("pharmacies").get();
-
-      pharmaciesSnap.docs.forEach((doc) => {
-        const pharmacyId = doc.id;
-        tokensFrom(doc.data()).forEach((token) => broadcastTokens.add(token));
-
-        const ref = db
-          .collection("pharmacies")
-          .doc(pharmacyId)
-          .collection("notifications")
-          .doc(`admin_${broadcastId}`);
-
-        operations.push({
-          ref,
-          data: {
-            pharmacyId,
-            type: "adminBroadcast",
-            title,
-            message,
-            body: message,
-
-            referenceType: "system",
-            referenceId: broadcastId,
-            actionRoute: targetRoute,
-            actionId: broadcastId,
-
-            iconName: "admin_broadcast",
-            imageUrl: null,
-
-            isActionable: targetRoute !== null,
-            isDeleted: false,
-            isRead: false,
-            priority: text(broadcast.priority, "normal"),
-            pushHandledBy: "sendAdminBroadcast",
-
-            createdAt: now(),
-            readAt: null,
-            expiresAt: null,
-
-            extraData: {
-              source: "admin_panel_web",
-              broadcastId,
-              sentBy: broadcast.sentBy || null,
-            },
-          },
-        });
-      });
-    }
-
-    if (target === "users") {
-      await addUsersNotifications();
-    } else if (target === "pharmacies") {
-      await addPharmaciesNotifications();
-    } else if (target === "all") {
-      await addUsersNotifications();
-      await addPharmaciesNotifications();
-    } else if (target === "selected_users") {
-      await addUsersNotifications(targetIds);
-    } else if (target === "selected_pharmacies") {
-      await addPharmaciesNotifications(targetIds);
-    } else {
-      await broadcastRef.set({
-        status: "failed",
-        failureReason: `Unknown broadcast target: ${target}`,
-        failedAt: now(),
-      }, { merge: true });
-      console.log("Unknown broadcast target:", target);
-      return;
-    }
-
-    try {
-      await commitInChunks(operations);
-
-      const pushDelivery = await sendMulticastInChunks(
-        [...broadcastTokens],
-        {
-          notification: { title, body: message },
-          data: {
-            type: "admin_broadcast",
-            broadcastId,
-            targetType: target,
-          },
-        },
-      );
-
-      await broadcastRef.set({
-        status: "sent",
-        sentAt: now(),
-        deliveredCount: operations.length,
-        pushTargetCount: broadcastTokens.size,
-        pushSuccessCount: pushDelivery.successCount,
-        pushFailureCount: pushDelivery.failureCount,
-      }, { merge: true });
-
-      console.log(
-        "✅ Admin broadcast distributed:",
-        broadcastId,
-        operations.length,
-      );
-    } catch (error) {
-      await broadcastRef.set({
-        status: "failed",
-        failureReason: text(error?.message || error, "Unknown failure"),
-        failedAt: now(),
-      }, { merge: true });
-      throw error;
-    }
+    return {success: result.successCount > 0, reason: result.successCount ? null : "push_rejected"};
   },
+});
+exports.adminBroadcastCommand = onCall({region: "us-central1"}, adminBroadcast.command);
+exports.sendAdminBroadcast = onDocumentCreated(
+  {document: "adminBroadcastNotifications/{broadcastId}", region: "us-central1", retry: true, timeoutSeconds: 540},
+  async (event) => adminBroadcast.process(event.params.broadcastId),
 );
+exports.retryAdminBroadcast = onDocumentCreated(
+  {document: "adminBroadcastJobs/{jobId}", region: "us-central1", retry: true, timeoutSeconds: 540},
+  async (event) => adminBroadcast.process(event.data.data().broadcastId),
+);
+exports.recoverAdminBroadcasts = onSchedule({schedule: "every 1 minutes", timeZone: "UTC", region: "us-central1", timeoutSeconds: 540},
+  async () => adminBroadcast.recover());

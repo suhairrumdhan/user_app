@@ -14,10 +14,11 @@ class PharmacyResultCard extends StatelessWidget {
   final VoidCallback? onTapDetails;
 
   final void Function({
-  required String pharmacyId,
-  required String requestKey,
-  required MatchedMedicineResult newSelection,
-  })? onSelectAlternative;
+    required String pharmacyId,
+    required String requestKey,
+    required MatchedMedicineResult newSelection,
+  })?
+  onSelectAlternative;
 
   const PharmacyResultCard({
     super.key,
@@ -38,7 +39,8 @@ class PharmacyResultCard extends StatelessWidget {
       required String pharmacyId,
       required String requestKey,
       required MatchedMedicineResult newSelection,
-    })? onSelectAlternative,
+    })?
+    onSelectAlternative,
   }) {
     PharmacyResultCard(
       pharmacy: pharmacy,
@@ -58,9 +60,7 @@ class PharmacyResultCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: SearchUiColors.primary.withOpacity(0.08),
-        ),
+        border: Border.all(color: SearchUiColors.primary.withOpacity(0.08)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.045),
@@ -98,52 +98,50 @@ class PharmacyResultCard extends StatelessWidget {
           height: 46,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: SearchUiColors.primary.withOpacity(0.15),
-            ),
+            border: Border.all(color: SearchUiColors.primary.withOpacity(0.15)),
           ),
           clipBehavior: Clip.antiAlias,
           child: pharmacy.imageUrl.isNotEmpty
               ? Image.network(
-            pharmacy.imageUrl,
-            width: 46,
-            height: 46,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    SearchUiColors.primary,
-                    SearchUiColors.secondary,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: const Icon(
-                Iconsax.hospital,
-                color: Colors.white,
-                size: 22,
-              ),
-            ),
-          )
+                  pharmacy.imageUrl,
+                  width: 46,
+                  height: 46,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          SearchUiColors.primary,
+                          SearchUiColors.secondary,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: const Icon(
+                      Iconsax.hospital,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                )
               : Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  SearchUiColors.primary,
-                  SearchUiColors.secondary,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: const Icon(
-              Iconsax.hospital,
-              color: Colors.white,
-              size: 22,
-            ),
-          ),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        SearchUiColors.primary,
+                        SearchUiColors.secondary,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: const Icon(
+                    Iconsax.hospital,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -295,20 +293,14 @@ class PharmacyResultCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: SearchUiColors.light,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: SearchUiColors.primary.withOpacity(0.08),
-        ),
+        border: Border.all(color: SearchUiColors.primary.withOpacity(0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                size: 15,
-                color: SearchUiColors.primary,
-              ),
+              Icon(icon, size: 15, color: SearchUiColors.primary),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -461,9 +453,7 @@ class PharmacyResultCard extends StatelessWidget {
             label: const Text('التفاصيل'),
             style: OutlinedButton.styleFrom(
               foregroundColor: SearchUiColors.primary,
-              side: BorderSide(
-                color: SearchUiColors.primary.withOpacity(0.22),
-              ),
+              side: BorderSide(color: SearchUiColors.primary.withOpacity(0.22)),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -477,22 +467,21 @@ class PharmacyResultCard extends StatelessWidget {
 
   void _showDetailsDialog(BuildContext context) {
     final ValueNotifier<PharmacyModel> pharmacyNotifier =
-    ValueNotifier<PharmacyModel>(pharmacy);
+        ValueNotifier<PharmacyModel>(pharmacy);
 
     showDialog(
       context: context,
       builder: (_) {
         return Dialog(
-          insetPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 24,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 560,
-              maxHeight: 680,
-            ),
+            constraints: const BoxConstraints(maxWidth: 560, maxHeight: 680),
             child: ValueListenableBuilder<PharmacyModel>(
               valueListenable: pharmacyNotifier,
               builder: (context, currentPharmacy, __) {
@@ -508,7 +497,9 @@ class PharmacyResultCard extends StatelessWidget {
                           children: [
                             _buildDialogSummary(currentPharmacy),
                             const SizedBox(height: 14),
-                            if (currentPharmacy.matchedMedicines.isNotEmpty) ...[
+                            if (currentPharmacy
+                                .matchedMedicines
+                                .isNotEmpty) ...[
                               const Text(
                                 'الأدوية المتوفرة',
                                 style: TextStyle(
@@ -519,31 +510,34 @@ class PharmacyResultCard extends StatelessWidget {
                               ),
                               const SizedBox(height: 10),
                               ...currentPharmacy.matchedMedicines.map(
-                                    (item) => Padding(
+                                (item) => Padding(
                                   padding: const EdgeInsets.only(bottom: 10),
                                   child: _medicineTile(
                                     context,
                                     item,
                                     onChanged: (updatedItem) {
-                                      final updatedMatches =
-                                      currentPharmacy.matchedMedicines.map((m) {
-                                        if (m.requestKey == updatedItem.requestKey) {
-                                          return updatedItem;
-                                        }
-                                        return m;
-                                      }).toList();
+                                      final updatedMatches = currentPharmacy
+                                          .matchedMedicines
+                                          .map((m) {
+                                            if (m.requestKey ==
+                                                updatedItem.requestKey) {
+                                              return updatedItem;
+                                            }
+                                            return m;
+                                          })
+                                          .toList();
 
-                                      final updatedTotal =
-                                      updatedMatches.fold<double>(
-                                        0,
+                                      final updatedTotal = updatedMatches
+                                          .fold<double>(
+                                            0,
                                             (sum, item) => sum + item.price,
-                                      );
+                                          );
 
-                                      final updatedPharmacy =
-                                      currentPharmacy.copyWith(
-                                        matchedMedicines: updatedMatches,
-                                        totalEstimatedPrice: updatedTotal,
-                                      );
+                                      final updatedPharmacy = currentPharmacy
+                                          .copyWith(
+                                            matchedMedicines: updatedMatches,
+                                            totalEstimatedPrice: updatedTotal,
+                                          );
 
                                       pharmacyNotifier.value = updatedPharmacy;
 
@@ -557,7 +551,9 @@ class PharmacyResultCard extends StatelessWidget {
                                 ),
                               ),
                             ],
-                            if (currentPharmacy.missingMedicines.isNotEmpty) ...[
+                            if (currentPharmacy
+                                .missingMedicines
+                                .isNotEmpty) ...[
                               const SizedBox(height: 16),
                               const Text(
                                 'الأدوية غير المتوفرة',
@@ -574,30 +570,31 @@ class PharmacyResultCard extends StatelessWidget {
                                 children: currentPharmacy.missingMedicines
                                     .map(
                                       (name) => Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: SearchUiColors.danger
-                                          .withOpacity(0.08),
-                                      borderRadius:
-                                      BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: SearchUiColors.danger
-                                            .withOpacity(0.16),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: SearchUiColors.danger
+                                              .withOpacity(0.08),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          border: Border.all(
+                                            color: SearchUiColors.danger
+                                                .withOpacity(0.16),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          name,
+                                          style: const TextStyle(
+                                            color: SearchUiColors.danger,
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                    child: Text(
-                                      name,
-                                      style: const TextStyle(
-                                        color: SearchUiColors.danger,
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                )
+                                    )
                                     .toList(),
                               ),
                             ],
@@ -615,7 +612,10 @@ class PharmacyResultCard extends StatelessWidget {
     );
   }
 
-  Widget _buildDialogHeader(BuildContext context, PharmacyModel currentPharmacy) {
+  Widget _buildDialogHeader(
+    BuildContext context,
+    PharmacyModel currentPharmacy,
+  ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 10, 12),
       child: Row(
@@ -648,9 +648,7 @@ class PharmacyResultCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: SearchUiColors.light,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: SearchUiColors.primary.withOpacity(0.08),
-        ),
+        border: Border.all(color: SearchUiColors.primary.withOpacity(0.08)),
       ),
       child: Column(
         children: [
@@ -682,10 +680,7 @@ class PharmacyResultCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _dialogMetric(
-                  'التأمين',
-                  currentPharmacy.insuranceLabel,
-                ),
+                child: _dialogMetric('التأمين', currentPharmacy.insuranceLabel),
               ),
             ],
           ),
@@ -731,10 +726,10 @@ class PharmacyResultCard extends StatelessWidget {
   }
 
   Widget _medicineTile(
-      BuildContext context,
-      MatchedMedicineResult item, {
-        required ValueChanged<MatchedMedicineResult> onChanged,
-      }) {
+    BuildContext context,
+    MatchedMedicineResult item, {
+    required ValueChanged<MatchedMedicineResult> onChanged,
+  }) {
     return StatefulBuilder(
       builder: (context, setLocalState) {
         MatchedMedicineResult selected = item;
@@ -746,9 +741,7 @@ class PharmacyResultCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: SearchUiColors.primary.withOpacity(0.08),
-            ),
+            border: Border.all(color: SearchUiColors.primary.withOpacity(0.08)),
           ),
           child: Column(
             children: [
@@ -803,7 +796,7 @@ class PharmacyResultCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        '${selected.price.toStringAsFixed(2)} د.ل',
+                        '${selected.price.toStringAsFixed(2)} د.ل / ${selected.saleUnitLabel}',
                         style: const TextStyle(
                           color: SearchUiColors.darkText,
                           fontSize: 11.8,
@@ -838,7 +831,7 @@ class PharmacyResultCard extends StatelessWidget {
                 const Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    'النتائج المتشابهة',
+                    'نتائج أخرى',
                     style: TextStyle(
                       fontSize: 11.8,
                       fontWeight: FontWeight.w800,
@@ -864,8 +857,12 @@ class PharmacyResultCard extends StatelessWidget {
                           final nextAlternatives = <MatchedMedicineResult>[
                             oldSelected.copyWith(similarMatches: const []),
                             ...selected.similarMatches
-                                .where((e) =>
-                            e.matchedMedicineId != alt.matchedMedicineId)
+                                .where(
+                                  (e) =>
+                                      e.matchedMedicineId !=
+                                          alt.matchedMedicineId ||
+                                      e.soldByPiece != alt.soldByPiece,
+                                )
                                 .toList(),
                           ];
 
@@ -902,26 +899,24 @@ class PharmacyResultCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: SearchUiColors.primary.withOpacity(0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: SearchUiColors.primary.withOpacity(0.10),
-        ),
+        border: Border.all(color: SearchUiColors.primary.withOpacity(0.10)),
       ),
       clipBehavior: Clip.antiAlias,
       child: hasImage
           ? Image.network(
-        imageUrl!,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const Icon(
-          Iconsax.gallery,
-          size: 22,
-          color: SearchUiColors.primary,
-        ),
-      )
+              imageUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const Icon(
+                Iconsax.gallery,
+                size: 22,
+                color: SearchUiColors.primary,
+              ),
+            )
           : const Icon(
-        Iconsax.gallery,
-        size: 22,
-        color: SearchUiColors.primary,
-      ),
+              Iconsax.gallery,
+              size: 22,
+              color: SearchUiColors.primary,
+            ),
     );
   }
 
@@ -968,7 +963,7 @@ class PharmacyResultCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${item.price.toStringAsFixed(2)} د.ل',
+                    '${item.price.toStringAsFixed(2)} د.ل / ${item.saleUnitLabel}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -1003,8 +998,9 @@ class PharmacyResultCard extends StatelessWidget {
 
     if (lat == null || lng == null) return;
 
-    final url =
-    Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+    final url = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+    );
 
     _launchUrl(url);
   }

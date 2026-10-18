@@ -44,18 +44,20 @@ class FamilyMemberModel {
   }
 
   /// 🔹 تحويل إلى Firestore
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toMap({bool includeCreatedAt = true}) {
     return {
       "name": name,
       "relation": relation,
       "gender": gender,
       "bloodType": bloodType,
-      "dateOfBirth": dateOfBirth != null ? Timestamp.fromDate(dateOfBirth!) : null,
+      "dateOfBirth": dateOfBirth != null
+          ? Timestamp.fromDate(dateOfBirth!)
+          : null,
       "age": age,
       "allergies": allergies,
       "healthConditions": healthConditions,
       "currentMedications": currentMedications,
-      "createdAt": FieldValue.serverTimestamp(),
+      if (includeCreatedAt) "createdAt": FieldValue.serverTimestamp(),
     };
   }
 

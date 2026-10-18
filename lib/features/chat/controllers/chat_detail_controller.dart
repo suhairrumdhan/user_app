@@ -132,7 +132,7 @@ class ChatDetailController extends GetxController {
         ? 'لا توجد صلاحية كافية لإرفاق $attachmentType.'
         : rawError.contains('path is missing') || rawError.contains('not found')
         ? 'تعذر الوصول إلى $attachmentType المحدد. اختره مرة أخرى.'
-        : 'حدث خطأ أثناء إرفاق $attachmentType. حاول مرة أخرى.';
+        : 'تعذر إرفاق $attachmentType. حاول مرة أخرى.';
 
     Get.snackbar(
       'تعذر إرسال المرفق',

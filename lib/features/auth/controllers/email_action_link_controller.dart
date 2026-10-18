@@ -108,7 +108,7 @@ class EmailActionLinkController extends GetxController {
         Get.offAll(() => const LoginPage());
         _showMessage(
           title: 'تم تأكيد البريد',
-          message: 'تم تأكيد بريدك بنجاح. يمكنك تسجيل الدخول الآن.',
+          message: 'تم تأكيد البريد. سجل الدخول الآن.',
         );
         return;
       }
@@ -116,10 +116,7 @@ class EmailActionLinkController extends GetxController {
       await user.reload();
       await _auth.currentUser?.getIdToken(true);
       await _openAuthenticatedDestination(_auth.currentUser ?? user);
-      _showMessage(
-        title: 'تم التأكيد',
-        message: 'تم تأكيد بريدك الإلكتروني بنجاح.',
-      );
+      _showMessage(title: 'تم التأكيد', message: 'تم تأكيد البريد الإلكتروني.');
     } on FirebaseAuthException catch (error) {
       final currentUser = _auth.currentUser;
       if (currentUser != null) {
@@ -138,7 +135,7 @@ class EmailActionLinkController extends GetxController {
     } catch (_) {
       _showMessage(
         title: 'تعذر تأكيد البريد',
-        message: 'حدث خطأ غير متوقع. حاول فتح أحدث رابط مرة أخرى.',
+        message: 'تعذر فتح الرابط. استخدم أحدث رسالة بريد.',
         isError: true,
       );
     }
@@ -165,7 +162,7 @@ class EmailActionLinkController extends GetxController {
       case 'invalid-action-code':
         return 'الرابط غير صالح أو تم استخدامه مسبقاً. اطلب رابطاً جديداً.';
       case 'user-disabled':
-        return 'هذا الحساب معطل. يرجى التواصل مع الدعم.';
+        return 'الحساب معطل. تواصل مع الدعم.';
       case 'network-request-failed':
         return 'تعذر الاتصال بالإنترنت. تحقق من الشبكة وحاول مجدداً.';
       default:

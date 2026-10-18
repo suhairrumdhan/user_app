@@ -9,11 +9,30 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:flutter/services.dart';
 
 import 'prescription_diagnostics.dart';
+import 'prescription_text_layout.dart';
 
 class FileUtils {
   static const _pdfPageRenderer = MethodChannel('roshita/pdf_ocr_pages');
+
   static Future<File?> pickImage(ImageSource source) async {
     try {
+      if (source == ImageSource.gallery) {
+        // Use Android's document picker so vendor gallery activities are optional.
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+          allowMultiple: false,
+          allowCompression: false,
+        );
+        if (result == null || result.files.isEmpty) return null;
+        final path = result.files.single.path;
+        if (path == null) throw const FormatException('تعذر فتح الصورة');
+        final image = File(path);
+        if (!await image.exists() || await image.length() == 0) {
+          throw const FormatException('تعذر فتح الصورة');
+        }
+        return image;
+      }
       if (source == ImageSource.camera) {
         var status = await Permission.camera.status;
 
@@ -40,7 +59,7 @@ class FileUtils {
 
       return null;
     } catch (e) {
-      throw Exception('Error picking image: ${e.toString()}');
+      throw const FormatException('تعذر فتح الصورة. حاول اختيارها مرة أخرى.');
     }
   }
 
@@ -83,9 +102,14 @@ class FileUtils {
       final inputImage = InputImage.fromFile(imageFile);
       final recognizedText = await textRecognizer.processImage(inputImage);
 
-      final rawText = recognizedText.text.trim();
+      final rawText = _ocrPageText(recognizedText);
       if (diagnosticId != null) {
-        PrescriptionDiagnostics.text(diagnosticId, 'OCR_RAW', rawText);
+        PrescriptionDiagnostics.text(
+          diagnosticId,
+          'OCR_RAW',
+          recognizedText.text,
+        );
+        PrescriptionDiagnostics.text(diagnosticId, 'OCR_LAYOUT', rawText);
       }
       if (rawText.isEmpty) {
         throw const FormatException('لم يتم العثور على نص في الصورة');
@@ -115,18 +139,21 @@ class FileUtils {
         final extractor = PdfTextExtractor(document);
         for (var i = 0; i < document.pages.count; i++) {
           final pageText = extractor
-              .extractText(startPageIndex: i, endPageIndex: i)
+              .extractText(startPageIndex: i, endPageIndex: i, layoutText: true)
               .trim();
           pageTexts.add(pageText);
-          if (pageText.isEmpty) scannedPageIndices.add(i);
+          // An Arabic-only digital page is not an empty/scanned page.
+          if (pageText.isEmpty) {
+            scannedPageIndices.add(i);
+          }
         }
       } finally {
         document.dispose();
       }
 
-      final digitalText = pageTexts.join('\n').trim();
+      final digitalText = pageTexts.join('\n\f\n').trim();
       if (diagnosticId != null) {
-        PrescriptionDiagnostics.text(diagnosticId, 'PDF_RAW', digitalText);
+        PrescriptionDiagnostics.text(diagnosticId, 'PDF_LAYOUT', digitalText);
       }
       if (scannedPageIndices.isNotEmpty) {
         if (!Platform.isAndroid) {
@@ -149,7 +176,7 @@ class FileUtils {
             final recognized = await recognizer.processImage(
               InputImage.fromFile(image),
             );
-            final pageText = recognized.text.trim();
+            final pageText = _ocrPageText(recognized);
             pageTexts[scannedPageIndices[j]] = pageText;
             if (diagnosticId != null) {
               PrescriptionDiagnostics.text(
@@ -168,7 +195,7 @@ class FileUtils {
         }
       }
 
-      final rawText = pageTexts.join('\n').trim();
+      final rawText = pageTexts.join('\n\f\n').trim();
       if (rawText.isEmpty) {
         throw const FormatException('لم يتم العثور على نص في ملف PDF');
       }
@@ -179,5 +206,15 @@ class FileUtils {
       }
       rethrow;
     }
+  }
+
+  static String _ocrPageText(RecognizedText recognized) {
+    // ML Kit already groups words on a slanted baseline. Keep those native
+    // lines intact, and reunite fragments only when their bounds agree.
+    return PrescriptionTextLayout.pageText([
+      for (final block in recognized.blocks)
+        for (final line in block.lines)
+          PrescriptionTextFragment(line.text, line.boundingBox),
+    ]);
   }
 }

@@ -1,10 +1,37 @@
 import 'package:get/get.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:user_application/features/profile/models/user_model.dart';
 
 class UserRepository extends GetxController {
   static UserRepository get instance => Get.find<UserRepository>();
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  UserRepository({FirebaseFirestore? firestore})
+    : _db = firestore ?? FirebaseFirestore.instance;
+  final FirebaseFirestore _db;
+
+  Future<UserModel> ensureUserProfile(
+    User account, {
+    String? name,
+    String? phone,
+  }) async {
+    final ref = _db.collection('users').doc(account.uid);
+    return _db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(ref);
+      if (snapshot.exists) {
+        final data = Map<String, dynamic>.from(snapshot.data()!);
+        final patch = <String, dynamic>{};
+        if (name != null && name.isNotEmpty) patch['name'] = name;
+        if (phone != null && phone.isNotEmpty) patch['phone'] = phone;
+        if (patch.isNotEmpty) transaction.update(ref, patch);
+        return UserModel.fromJson({...data, ...patch}, account.uid);
+      }
+      final profile = UserModel.fromFirebaseUser(account);
+      if (name != null && name.isNotEmpty) profile.name = name;
+      if (phone != null && phone.isNotEmpty) profile.phone = phone;
+      transaction.set(ref, profile.toJson());
+      return profile;
+    });
+  }
 
   Future<void> createUser(UserModel user) async {
     try {

@@ -37,6 +37,9 @@ class AuthController extends GetxController {
     isLoading.value = false;
 
     if (firebaseUser != null) {
+      if (_userController.user.value?.id != firebaseUser.uid) {
+        _userController.clearUser();
+      }
       unawaited(_userController.loadUser(firebaseUser.uid));
     } else {
       _userController.clearUser();
@@ -58,7 +61,7 @@ class AuthController extends GetxController {
       _userController.clearUser();
       Get.offAll(() => const WelcomeScreen());
     } catch (e) {
-      Get.snackbar('خطأ', 'فشل تسجيل الخروج: ${e.toString()}');
+      Get.snackbar('خطأ', 'فشل تسجيل الخروج');
     } finally {
       isLoading.value = false;
     }
@@ -77,9 +80,9 @@ extension AuthControllerExtensions on AuthController {
     if (user.value == null) return;
     try {
       await user.value!.updatePassword(newPassword);
-      Get.snackbar('نجاح', 'تم تحديث كلمة المرور بنجاح');
+      Get.snackbar('نجاح', 'تم تحديث كلمة المرور.');
     } catch (e) {
-      Get.snackbar('خطأ', 'فشل تحديث كلمة المرور: ${e.toString()}');
+      Get.snackbar('خطأ', 'فشل تحديث كلمة المرور');
     }
   }
 
@@ -100,9 +103,9 @@ extension AuthControllerExtensions on AuthController {
       // إعادة تحميل المستخدم
       user.refresh();
 
-      Get.snackbar('نجاح', 'تم تحديث الصورة الشخصية بنجاح');
+      Get.snackbar('نجاح', 'تم تحديث الصورة.');
     } catch (e) {
-      Get.snackbar('خطأ', 'فشل تحديث الصورة: ${e.toString()}');
+      Get.snackbar('خطأ', 'فشل تحديث الصورة');
     }
   }
 }

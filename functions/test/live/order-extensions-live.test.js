@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const admin = require("firebase-admin");
 const {
+  exchangeCustomToken,
   initializeLiveSuite,
   readDocument,
   testOrder,
@@ -99,6 +100,10 @@ async function seedBase(context) {
     id: context.activeEmployeeId,
     roleId: "admin",
     isActive: true,
+    permissionOverrides: {
+      "orders.update_status": true,
+      "sales.refund": true,
+    },
     liveTest: true,
   });
   batch.set(context.db.doc(
@@ -165,14 +170,14 @@ test("F03 extensions and failures on the live Firebase project", {
       password: "LiveEmployee-2026",
     },
   );
-  context.activeEmployeeActor = {
-    employeeId: context.activeEmployeeId,
-    employeeSession: activeLogin.sessionToken,
-  };
-  context.inactiveEmployeeActor = {
-    employeeId: context.inactiveEmployeeId,
-    employeeSession: inactiveLogin.sessionToken,
-  };
+  context.tokens.activeEmployee = await exchangeCustomToken(
+    context.apiKey,
+    activeLogin.customToken,
+  );
+  context.tokens.inactiveEmployee = await exchangeCustomToken(
+    context.apiKey,
+    inactiveLogin.customToken,
+  );
   await context.db.doc(
     `pharmacies/${context.pharmacyUid}/employees/${context.inactiveEmployeeId}`,
   ).update({isActive: false});
@@ -359,6 +364,8 @@ test("F03 extensions and failures on the live Firebase project", {
           reservedQuantity: 0,
           pieceQuantity: 5,
           reservedPieceQuantity: 0,
+          sellByPiece: true,
+          unitsPerPackage: 10,
         },
       ));
       const orderId = await seedOrder(context, "piece", {
@@ -429,9 +436,7 @@ test("F03 extensions and failures on the live Firebase project", {
         (error) => error.code === "permission-denied",
       );
       await assert.rejects(
-        context.call("pharmacy", "confirmFullOrder", orderId, {
-          actor: context.inactiveEmployeeActor,
-        }),
+        context.call("inactiveEmployee", "confirmFullOrder", orderId),
         (error) => error.code === "permission-denied",
       );
       await assert.rejects(
@@ -534,8 +539,7 @@ test("F03 extensions and failures on the live Firebase project", {
         (error) => error.code === "permission-denied",
       );
       await assert.rejects(
-        context.call("pharmacy", "markNotCollected", orderId, {
-          actor: context.activeEmployeeActor,
+        context.call("activeEmployee", "markNotCollected", orderId, {
           payload: {reversalId},
         }),
         (error) => error.code === "failed-precondition",

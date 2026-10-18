@@ -17,7 +17,7 @@ class LocalNotificationService {
     tz_data.initializeTimeZones();
     tz.setLocalLocation(tz.getLocation('Africa/Tripoli'));
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings('ic_notification');
 
     const settings = InitializationSettings(
       android: androidSettings,
@@ -98,6 +98,7 @@ class LocalNotificationService {
         medicationChannelId,
         'Medication Reminders',
         channelDescription: 'Reminders for medications',
+        icon: 'ic_notification',
         importance: Importance.max,
         priority: Priority.high,
         playSound: true,
@@ -122,6 +123,7 @@ class LocalNotificationService {
         appointmentChannelId,
         'Appointment Reminders',
         channelDescription: 'Appointment reminder notifications',
+        icon: 'ic_notification',
         importance: Importance.max,
         priority: Priority.high,
         playSound: true,
@@ -135,6 +137,7 @@ class LocalNotificationService {
         snoozeChannelId,
         'Snoozed Health Reminders',
         channelDescription: 'Snoozed reminder notifications',
+        icon: 'ic_notification',
         importance: Importance.max,
         priority: Priority.high,
         playSound: true,

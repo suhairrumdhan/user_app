@@ -11,24 +11,36 @@ class ManualMedicineAnalysis {
     required this.originalName,
     required this.status,
     this.suggestedName,
+    this.suggestions = const [],
     this.failureMessage,
   });
 
   final String originalName;
   final ManualMedicineAnalysisStatus status;
   final String? suggestedName;
+  final List<String> suggestions;
   final String? failureMessage;
+
+  List<String> get suggestionOptions => suggestions.isNotEmpty
+      ? suggestions
+      : suggestedName == null
+      ? const []
+      : [suggestedName!];
 
   factory ManualMedicineAnalysis.manual(String name) => ManualMedicineAnalysis(
     originalName: name,
     status: ManualMedicineAnalysisStatus.manual,
   );
 
-  ManualMedicineAnalysis acceptSuggestion() => ManualMedicineAnalysis(
-    originalName: originalName,
-    status: ManualMedicineAnalysisStatus.accepted,
-    suggestedName: suggestedName,
-  );
+  ManualMedicineAnalysis acceptSuggestion([String? suggestion]) {
+    final selected = suggestion ?? suggestedName;
+    return ManualMedicineAnalysis(
+      originalName: originalName,
+      status: ManualMedicineAnalysisStatus.accepted,
+      suggestedName: selected,
+      suggestions: suggestions,
+    );
+  }
 }
 
 class ManualMedicineAnalysisService {
@@ -51,25 +63,18 @@ class ManualMedicineAnalysisService {
         return ManualMedicineAnalysis(
           originalName: originalName,
           status: ManualMedicineAnalysisStatus.failed,
-          failureMessage: 'رد خدمة Flask غير صالح؛ يمكنك إعادة المحاولة',
+          failureMessage: 'تعذر قراءة نتيجة التحليل؛ يمكنك إعادة المحاولة',
         );
       }
 
-      for (final item in medicines) {
-        if (item is! Map) continue;
-        // Legacy servers included uncertain products among accepted medicines.
-        if (item['needsReview'] == true) continue;
-        final suggestion =
-            (item['matchedDisplayName'] ?? item['parsedBrandName'])
-                ?.toString()
-                .trim();
-        if (suggestion != null && suggestion.isNotEmpty) {
-          return ManualMedicineAnalysis(
-            originalName: originalName,
-            status: ManualMedicineAnalysisStatus.matched,
-            suggestedName: suggestion,
-          );
-        }
+      final suggestions = _readSuggestions(response, medicines);
+      if (suggestions.isNotEmpty) {
+        return ManualMedicineAnalysis(
+          originalName: originalName,
+          status: ManualMedicineAnalysisStatus.matched,
+          suggestedName: suggestions.first,
+          suggestions: suggestions,
+        );
       }
 
       return ManualMedicineAnalysis(
@@ -85,14 +90,14 @@ class ManualMedicineAnalysisService {
       return ManualMedicineAnalysis(
         originalName: originalName,
         status: ManualMedicineAnalysisStatus.failed,
-        failureMessage: 'انتهت مهلة Flask؛ أعد المحاولة أو ابحث بالاسم اليدوي',
+        failureMessage: 'انتهت مهلة التحليل؛ أعد المحاولة أو ابحث بالاسم اليدوي',
       );
     } catch (_) {
       return ManualMedicineAnalysis(
         originalName: originalName,
         status: ManualMedicineAnalysisStatus.failed,
         failureMessage:
-            'تعذر الاتصال بـFlask؛ أعد المحاولة أو ابحث بالاسم اليدوي',
+            'تعذر الاتصال بخدمة التحليل؛ أعد المحاولة أو ابحث بالاسم اليدوي',
       );
     }
   }
@@ -106,5 +111,52 @@ class ManualMedicineAnalysisService {
       );
     }
     return results;
+  }
+
+  static List<String> _readSuggestions(
+    Map<String, dynamic> response,
+    List<dynamic> medicines,
+  ) {
+    final values = <String>[];
+
+    void add(dynamic value) {
+      final text = switch (value) {
+        String value => value.trim(),
+        Map value =>
+          (value['displayName'] ??
+                  value['name'] ??
+                  value['matchedDisplayName'] ??
+                  value['suggestedName'])
+              ?.toString()
+              .trim(),
+        _ => null,
+      };
+      if (text == null || text.isEmpty) return;
+      final normalized = text.toLowerCase();
+      if (values.any((item) => item.toLowerCase() == normalized)) return;
+      values.add(text);
+    }
+
+    void addList(dynamic list) {
+      if (list is! List) return;
+      for (final value in list) {
+        add(value);
+      }
+    }
+
+    addList(response['suggestions']);
+    addList(response['alternatives']);
+    for (final item in medicines) {
+      if (item is! Map || item['needsReview'] == true) continue;
+      addList(item['suggestions']);
+      addList(item['alternatives']);
+      add(
+        item['suggestedDisplayName'] ??
+            item['matchedDisplayName'] ??
+            item['displayName'] ??
+            item['parsedBrandName'],
+      );
+    }
+    return values.take(3).toList(growable: false);
   }
 }

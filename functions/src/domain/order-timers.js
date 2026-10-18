@@ -1,7 +1,6 @@
 "use strict";
 
 const {Timestamp, FieldPath} = require("firebase-admin/firestore");
-const DAY_MS = 24 * 60 * 60 * 1000;
 const ACTIVE_REVIEW = new Set(["underReview", "confirmedReserved", "preparing"]);
 const SCANNED_STATUSES = [...ACTIVE_REVIEW, "partialOfferPending", "ready"];
 
@@ -11,20 +10,11 @@ function millis(value) {
 }
 
 function timerState(order, instant) {
-  const stored = Number(order.pharmacyReviewActiveMs || 0);
-  const started = millis(order.reviewStartedAt);
-  const elapsed = Number.isFinite(stored) && stored >= 0 ? stored : 0;
-  // Decision waiting never contributes, even if an old snapshot retained start.
-  const activeMs = elapsed + (ACTIVE_REVIEW.has(order.status) && started !== null ?
-    Math.max(0, instant - started) : 0);
-  const ready = millis(order.readyAt);
-  const deadline = ready === null ? millis(order.pickupDeadline) : ready + DAY_MS;
-  return {
-    activeMs,
-    pharmacyDelayed: SCANNED_STATUSES.includes(order.status) && activeMs >= DAY_MS,
-    pickupOverdue: order.status === "ready" && deadline !== null && instant >= deadline,
-    deadline,
-  };
+  const state = require("./admin-delay").delaySummary(order, instant);
+  return {activeMs: state.pharmacyDelay.processingMs ?? 0,
+    pharmacyDelayed: state.pharmacyDelay.occurred,
+    pickupOverdue: state.userDelay.active,
+    deadline: millis(state.pickupDeadline)};
 }
 
 function notification({order, orderId, kind, timestamp, userId, pharmacyId}) {
@@ -57,8 +47,10 @@ async function processOrderTimer({db, orderId, clock = () => Date.now()}) {
     const alerts = [];
     for (const [kind, due] of [["review", state.pharmacyDelayed], ["pickup", state.pickupOverdue]]) {
       if (!due) continue;
-      const id = `timer_${kind}_${orderId}`;
-      const marker = orderRef.collection("timerEvents").doc(kind);
+      const cycle = Number(order.invoiceGeneration || 0);
+      const suffix = cycle > 0 ? `_cycle_${cycle}` : "";
+      const id = `timer_${kind}_${orderId}${suffix}`;
+      const marker = orderRef.collection("timerEvents").doc(`${kind}${suffix}`);
       const markerSnapshot = await transaction.get(marker);
       const pharmacyNotice = db.collection("pharmacies").doc(pharmacyId).collection("notifications").doc(id);
       const userNotice = kind === "pickup" ? db.collection("users").doc(userId).collection("notifications").doc(id) : null;

@@ -38,6 +38,7 @@ function orderFixture({
     status,
     statusHistory: [],
     medicines,
+    estimatedTotalPrice: medicines.reduce((sum, item) => sum + 10 * item.quantity, 0),
     offerVersion: 0,
     reservationId: null,
     pharmacyReviewActiveMs: 0,
@@ -51,6 +52,7 @@ function orderFixture({
 function medicineFixture({quantity = 10, reservedQuantity = 0} = {}) {
   return {
     id: "medicine-a",
+    sellingPrice: 10,
     quantity,
     reservedQuantity,
     isActive: true,
@@ -60,6 +62,8 @@ function medicineFixture({quantity = 10, reservedQuantity = 0} = {}) {
 
 function buildDatabase({order, medicine} = {}) {
   return new FakeFirestore({
+    "pharmacies/pharmacy-one": {status: "approved", isActive: true},
+    "pharmacies/pharmacy": {status: "approved", isActive: true},
     "orders/order-one": order || orderFixture(),
     "pharmacies/pharmacy-one/medicines/medicine-a":
       medicine || medicineFixture(),
@@ -153,7 +157,10 @@ test("full order lifecycle reserves once and ends completed", async () => {
     2,
   );
 
-  database.write("pharmacies/pharmacy-one/shifts/shift-one", {status: "open"});
+  database.write("pharmacies/pharmacy-one/shifts/shift-one", {
+    status: "open", pharmacyId: "pharmacy-one", openedByKey: "owner:pharmacy-one",
+  });
+  database.write("pharmacies/pharmacy-one/shift_states/owner:pharmacy-one", {activeShiftId: "shift-one"});
   await invoke(handler, {
     command: "startPreparing",
     payload: {invoiceId: "invoice-one", invoice: {
@@ -378,7 +385,7 @@ test("not-collected requires deadline employee and successful reversal", async (
     }),
   });
   const futureActor = seedEmployeeSession(futureDatabase, "pharmacy-one", "employee-manager",
-    {isActive: true, roleId: "admin", permissions: {"orders.update_status": true}});
+    {isActive: true, roleId: "admin", permissions: {"orders.update_status": true, "sales.create": true, "sales.refund": true, "sales.override_price": true}});
   futureDatabase.write("pharmacies/pharmacy-one/sales/reversal-one", {
     type: "refund",
     refSaleId: "invoice-one",
@@ -407,7 +414,7 @@ test("not-collected requires deadline employee and successful reversal", async (
     }),
   });
   const expiredActor = seedEmployeeSession(expiredDatabase, "pharmacy-one", "employee-manager",
-    {isActive: true, roleId: "admin", permissions: {"orders.update_status": true}});
+    {isActive: true, roleId: "admin", permissions: {"orders.update_status": true, "sales.create": true, "sales.refund": true, "sales.override_price": true}});
   expiredDatabase.write("pharmacies/pharmacy-one/sales/reversal-one", {
     type: "refund",
     refSaleId: "invoice-one",

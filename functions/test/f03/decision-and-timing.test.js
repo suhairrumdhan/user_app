@@ -55,12 +55,20 @@ function baseOrder(status, extra = {}) {
 
 test("user can explicitly continue an unresolved insured order", async () => {
   const database = new FakeFirestore({
-    "orders/order-one": baseOrder("received"),
+    "pharmacies/pharmacy-one": {status: "approved", isActive: true},
+    "pharmacies/pharmacy": {status: "approved", isActive: true},
+    "orders/order-one": baseOrder("received", {
+      estimatedTotalPrice: 15, grossEstimatedTotalPrice: 20,
+      insuranceEstimatedShare: 5, containsInsurance: true,
+    }),
   });
   await call(handler(database), "user-one", "continueWithoutInsurance");
   const order = database.read("orders/order-one");
   assert.equal(order.status, "underReview");
   assert.equal(order.insuranceDecision, "continueWithoutInsurance");
+  assert.equal(order.estimatedTotalPrice, 20);
+  assert.equal(order.customerEstimatedTotalPrice, 20);
+  assert.equal(order.insuranceEstimatedShare, 0);
   assert.ok(order.reviewStartedAt);
   assert.equal(
     order.pharmacyDelayAt.toMillis() - order.reviewStartedAt.toMillis(),
@@ -72,6 +80,8 @@ test("revising a partial offer invalidates the old version and counts user wait"
   const oldDecisionStart = Timestamp.fromDate(new Date("2026-01-01T00:00:00Z"));
   const items = [{medicineId: "medicine-a", quantity: 1, soldByPiece: false}];
   const database = new FakeFirestore({
+    "pharmacies/pharmacy-one": {status: "approved", isActive: true},
+    "pharmacies/pharmacy": {status: "approved", isActive: true},
     "orders/order-one": baseOrder("partialOfferPending", {
       offerVersion: 1,
       partialOffer: {version: 1, items},
@@ -83,6 +93,7 @@ test("revising a partial offer invalidates the old version and counts user wait"
       quantity: 5,
       reservedQuantity: 0,
       isActive: true,
+      sellingPrice: 10,
       expiryDate: Timestamp.fromDate(new Date("2099-01-01T00:00:00Z")),
     },
   });

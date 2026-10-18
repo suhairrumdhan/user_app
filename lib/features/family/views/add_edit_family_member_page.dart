@@ -131,7 +131,7 @@ class _AddEditFamilyMemberPageState extends State<AddEditFamilyMemberPage> {
       }
     } catch (e) {
       if (mounted) {
-        _showError('حدث خطأ أثناء الحفظ: ${e.toString()}');
+        _showError('حدث خطأ أثناء الحفظ');
         setState(() => loading = false);
       }
     }

@@ -2,8 +2,8 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const {sessionHash} = require("../../src/domain/pharmacy-employee-auth");
 const {
+  exchangeCustomToken,
   initializeLiveSuite,
   readDocument,
   testOrder,
@@ -39,7 +39,13 @@ test("F03 internal employee identity on the live Firebase project", {
   for (const id of [employeeId, secondEmployeeId]) {
     await context.db.doc(
       `pharmacies/${context.pharmacyUid}/employees/${id}`,
-    ).set({id, name: "Live Employee", roleId: "admin", isActive: true});
+    ).set({
+      id,
+      name: "Live Employee",
+      roleId: "admin",
+      isActive: true,
+      permissionOverrides: {"orders.update_status": true},
+    });
   }
   await writeEvidence(context, "running", {employeeId});
 
@@ -62,7 +68,7 @@ test("F03 internal employee identity on the live Firebase project", {
       );
       assert.equal(employee.password, undefined);
       assert.equal(credential.passwordHash === PASSWORD_ONE, false);
-      assert.equal(credential.algorithm, "pbkdf2-sha256");
+      assert.equal(credential.algorithm, "scrypt");
       await assert.rejects(
         context.callFunction(
           "pharmacy",
@@ -102,13 +108,17 @@ test("F03 internal employee identity on the live Firebase project", {
         },
       );
       assert.equal(firstLogin.employee.id, employeeId);
-      assert.ok(firstLogin.sessionToken.length >= 40);
+      assert.ok(firstLogin.customToken.length >= 40);
+      context.tokens.employeeOld = await exchangeCustomToken(
+        context.apiKey,
+        firstLogin.customToken,
+      );
       const stored = await readDocument(
         context,
         `pharmacies/${context.pharmacyUid}/employeeSessions/` +
-          sessionHash(firstLogin.sessionToken),
+          firstLogin.sessionId,
       );
-      assert.equal(JSON.stringify(stored).includes(firstLogin.sessionToken), false);
+      assert.equal(JSON.stringify(stored).includes(firstLogin.customToken), false);
     });
 
     let replacementLogin;
@@ -144,6 +154,10 @@ test("F03 internal employee identity on the live Firebase project", {
           password: PASSWORD_TWO,
         },
       );
+      context.tokens.employeeCurrent = await exchangeCustomToken(
+        context.apiKey,
+        replacementLogin.customToken,
+      );
     });
 
     await t.test("only the current non-revoked session can mutate an order", async () => {
@@ -170,26 +184,17 @@ test("F03 internal employee identity on the live Firebase project", {
         ));
       }
       await assert.rejects(
-        context.call("pharmacy", "confirmFullOrder", oldOrderId, {
-          actor: {employeeId, employeeSession: firstLogin.sessionToken},
-        }),
+        context.call("employeeOld", "confirmFullOrder", oldOrderId),
         (error) => error.code === "permission-denied",
       );
-      await context.call("pharmacy", "confirmFullOrder", currentOrderId, {
-        actor: {employeeId, employeeSession: replacementLogin.sessionToken},
-      });
+      await context.call("employeeCurrent", "confirmFullOrder", currentOrderId);
       await context.callFunction(
-        "pharmacy",
+        "employeeCurrent",
         "revokePharmacyEmployeeSession",
-        {
-          pharmacyId: context.pharmacyUid,
-          sessionToken: replacementLogin.sessionToken,
-        },
+        {},
       );
       await assert.rejects(
-        context.call("pharmacy", "confirmFullOrder", revokedOrderId, {
-          actor: {employeeId, employeeSession: replacementLogin.sessionToken},
-        }),
+        context.call("employeeCurrent", "confirmFullOrder", revokedOrderId),
         (error) => error.code === "permission-denied",
       );
     });

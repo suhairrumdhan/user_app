@@ -249,7 +249,7 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
     Get.back();
     Get.snackbar(
       'تم الحفظ',
-      'تم إنشاء تذكير الموعد بنجاح',
+      'تم حفظ تذكير الموعد.',
       snackPosition: SnackPosition.BOTTOM,
       backgroundColor: const Color(0xFF4CAF50),
       colorText: Colors.white,
@@ -500,9 +500,7 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
                               color: rTextDarkColor,
                             ),
                           ),
-                          subtitle: const Text(
-                            'سيتم تمييز هذا الموعد داخل نظام التذكيرات الصحية لاستخدامه لاحقًا',
-                          ),
+                          subtitle: const Text('تصنيف الموعد كموعد صحي'),
                         );
                       }),
                       const SizedBox(height: 20),

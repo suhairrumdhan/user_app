@@ -30,6 +30,7 @@ const {
 } = require("../helpers/environment");
 const {
   FIXED_NOW,
+  VALID_EXPIRY,
   resetFixtureData,
   snapshotFixtureData,
 } = require("../helpers/fixtures");
@@ -82,7 +83,38 @@ test("Firestore rejects cross-user and unauthorized admin access", async () => {
   await assertFails(getDoc(doc(userOne, "users/user-two")));
   await assertFails(setDoc(doc(userTwo, "users/user-one"), { name: "tampered" }));
   await assertFails(getDoc(doc(deniedAdmin, "users/user-one")));
-  await assertSucceeds(getDoc(doc(allowedAdmin, "users/user-one")));
+  await assertFails(getDoc(doc(allowedAdmin, "users/user-one")));
+});
+
+test("insurance rules enforce one deterministic policy document per beneficiary", async () => {
+  await resetFixtureData(testEnvironment);
+  const user = testEnvironment.authenticatedContext("user-one").firestore();
+  const valid = {
+    schemaVersion: 2,
+    beneficiaryId: "beneficiary-one",
+    beneficiaryType: "family",
+    beneficiaryName: "Beneficiary One",
+    companyCode: "C1",
+    companyName: "Company One",
+    policyNumber: "POLICY-ONE",
+    cardNumber: "POLICY-ONE",
+    coveredMemberIds: ["beneficiary-one"],
+    startDate: FIXED_NOW,
+    endDate: VALID_EXPIRY,
+  };
+
+  await assertSucceeds(setDoc(
+    doc(user, "users/user-one/insurances/beneficiary-one"),
+    valid,
+  ));
+  await assertFails(setDoc(
+    doc(user, "users/user-one/insurances/another-document"),
+    {...valid, policyNumber: "SECOND"},
+  ));
+  await assertFails(setDoc(
+    doc(user, "users/user-one/insurances/beneficiary-two"),
+    {...valid, beneficiaryId: "beneficiary-two", coveredMemberIds: ["beneficiary-one", "beneficiary-two"]},
+  ));
 });
 
 test("order state is server-only and admins receive summaries only", async () => {
@@ -116,8 +148,8 @@ test("signed-in users can read public pharmacy hours but cannot change them", as
 
 test("only the owning pharmacy can maintain its own medicine index", async () => {
   await resetFixtureData(testEnvironment);
-  const owner = testEnvironment.authenticatedContext("pharmacy-one").firestore();
-  const other = testEnvironment.authenticatedContext("pharmacy-two").firestore();
+  const owner = testEnvironment.authenticatedContext("pharmacy-one", {email_verified: true}).firestore();
+  const other = testEnvironment.authenticatedContext("pharmacy-two", {email_verified: true}).firestore();
   const user = testEnvironment.authenticatedContext("user-one").firestore();
   const path = "medicine_search_index/pharmacy-one_batch-valid";
   const projection = {pharmacyId: "pharmacy-one", medicineId: "batch-valid", available: true};
@@ -136,7 +168,7 @@ test("only the owning pharmacy can maintain its own medicine index", async () =>
 
 test("index creation requires an existing medicine and the exact owner-derived document id", async () => {
   await resetFixtureData(testEnvironment);
-  const owner = testEnvironment.authenticatedContext("pharmacy-one").firestore();
+  const owner = testEnvironment.authenticatedContext("pharmacy-one", {email_verified: true}).firestore();
   await assertFails(setDoc(doc(owner, "medicine_search_index/pharmacy-one_missing"), {
     pharmacyId: "pharmacy-one", medicineId: "missing", available: true,
   }));
@@ -147,20 +179,20 @@ test("index creation requires an existing medicine and the exact owner-derived d
 
 test("pharmacy can stop receiving orders but cannot grant itself approval or unblock itself", async () => {
   await resetFixtureData(testEnvironment);
-  const owner = testEnvironment.authenticatedContext("pharmacy-one").firestore();
+  const owner = testEnvironment.authenticatedContext("pharmacy-one", {email_verified: true}).firestore();
   const admin = testEnvironment.authenticatedContext("admin-allowed").firestore();
   const path = "pharmacies/pharmacy-one";
   await assertSucceeds(setDoc(doc(owner, path), {isOnline: false}, {merge: true}));
-  await assertSucceeds(setDoc(doc(admin, path), {isBlocked: true}, {merge: true}));
+  await assertFails(setDoc(doc(admin, path), {isBlocked: true}, {merge: true}));
   for (const patch of [{isBlocked: false}, {status: "pending"}, {isActive: false},
     {approvedBy: "self"}, {approvedDate: FIXED_NOW}, {sourceRequestId: "fake"}]) {
     await assertFails(setDoc(doc(owner, path), patch, {merge: true}));
   }
   await assertSucceeds(setDoc(doc(owner, path), {isOnline: true, phone: "fixture"}, {merge: true}));
-  await assertSucceeds(setDoc(doc(admin, path), {isBlocked: false}, {merge: true}));
+  await assertFails(setDoc(doc(admin, path), {isBlocked: false}, {merge: true}));
 });
 
-test("employee credentials and sessions are server-only while profile fields remain editable", async () => {
+test("employee account profiles credentials and sessions are server-only", async () => {
   await resetFixtureData(testEnvironment);
   await testEnvironment.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
@@ -176,10 +208,10 @@ test("employee credentials and sessions are server-only while profile fields rem
       employeeId: "employee-manager",
     });
   });
-  const owner = testEnvironment.authenticatedContext("pharmacy-one").firestore();
+  const owner = testEnvironment.authenticatedContext("pharmacy-one", {email_verified: true}).firestore();
   const employee = doc(owner, "pharmacies/pharmacy-one/employees/employee-manager");
   await assertSucceeds(getDoc(employee));
-  await assertSucceeds(setDoc(employee, {name: "Updated Manager"}, {merge: true}));
+  await assertFails(setDoc(employee, {name: "Updated Manager"}, {merge: true}));
   for (const mutation of [
     {username: "forged"},
     {usernameKey: "forged"},
@@ -205,7 +237,7 @@ test("employee credentials and sessions are server-only while profile fields rem
 
 test("canonical order invoices and ledger cannot be forged edited or deleted by a pharmacy", async () => {
   await resetFixtureData(testEnvironment);
-  const pharmacy = testEnvironment.authenticatedContext("pharmacy-one").firestore();
+  const pharmacy = testEnvironment.authenticatedContext("pharmacy-one", {email_verified: true}).firestore();
   const root = "pharmacies/pharmacy-one";
   await testEnvironment.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), `${root}/sales/order-fixture`), {
@@ -231,9 +263,9 @@ test("canonical order invoices and ledger cannot be forged edited or deleted by 
   }));
 });
 
-test("POS invoice and financial entry remain writable together using after-state", async () => {
+test("POS invoice and financial entry are server-only even in a client batch", async () => {
   await resetFixtureData(testEnvironment);
-  const pharmacy = testEnvironment.authenticatedContext("pharmacy-one").firestore();
+  const pharmacy = testEnvironment.authenticatedContext("pharmacy-one", {email_verified: true}).firestore();
   const root = "pharmacies/pharmacy-one";
   const batch = writeBatch(pharmacy);
   batch.set(doc(pharmacy, `${root}/sales/pos-fixture`), {
@@ -242,8 +274,8 @@ test("POS invoice and financial entry remain writable together using after-state
   batch.set(doc(pharmacy, `${root}/financial_transactions/pos-fixture-sale`), {
     referenceCollection: "sales", referenceId: "pos-fixture", amount: 10, metadata: null,
   });
-  await assertSucceeds(batch.commit());
-  await assertSucceeds(setDoc(doc(pharmacy, `${root}/sales/pos-fixture`), {notes: "printed"}, {merge: true}));
+  await assertFails(batch.commit());
+  await assertFails(setDoc(doc(pharmacy, `${root}/sales/pos-fixture`), {notes: "printed"}, {merge: true}));
   await assertFails(setDoc(doc(pharmacy, `${root}/sales/pos-fixture`), {source: "order"}, {merge: true}));
 });
 
@@ -254,7 +286,7 @@ test("users and pharmacies cannot change server-owned order incidents or quarant
     await setDoc(doc(context.firestore(), "pharmacies/pharmacy-one/quarantinedReturns/return-one"), {quantity: 1});
   });
   const user = testEnvironment.authenticatedContext("user-one").firestore();
-  const pharmacy = testEnvironment.authenticatedContext("pharmacy-one").firestore();
+  const pharmacy = testEnvironment.authenticatedContext("pharmacy-one", {email_verified: true}).firestore();
   const incident = doc(user, "users/user-one/orderIncidents/order-one");
   await assertSucceeds(getDoc(incident));
   await assertFails(setDoc(incident, {occurrenceCount: 0}));
@@ -269,7 +301,7 @@ test("only the order user and pharmacy can access its chat", async () => {
   await resetFixtureData(testEnvironment);
   const userDb = testEnvironment.authenticatedContext("user-one").firestore();
   const pharmacyDb = testEnvironment
-    .authenticatedContext("pharmacy-one")
+    .authenticatedContext("pharmacy-one", {email_verified: true})
     .firestore();
   const outsiderDb = testEnvironment.authenticatedContext("user-two").firestore();
 
@@ -382,7 +414,7 @@ test("an order participant can atomically create a missing deterministic chat", 
   }));
 
   const pharmacyDb = testEnvironment
-    .authenticatedContext("pharmacy-one")
+    .authenticatedContext("pharmacy-one", {email_verified: true})
     .firestore();
   const outsiderDb = testEnvironment.authenticatedContext("user-two").firestore();
   const anonymousDb = testEnvironment.unauthenticatedContext().firestore();

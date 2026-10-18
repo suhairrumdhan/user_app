@@ -25,16 +25,20 @@ function setup() {
   let instant = START;
   let sequence = 0;
   const db = new FakeFirestore({
+    "pharmacies/pharmacy-one": {status: "approved", isActive: true},
+    "pharmacies/pharmacy": {status: "approved", isActive: true},
     [ORDER]: {schemaVersion: 3, orderId: "order-one", orderNumber: "TEST-ONE",
       status: "underReview", statusHistory: [], user: {userId: "user-one"},
       pharmacy: {pharmacyId: "pharmacy-one"}, insurance: {enabled: false},
       medicines: [{matchedMedicineId: "medicine-a", matchedMedicineName: "Drug", quantity: 3}],
-      offerVersion: 0, reservationId: null, pharmacyReviewActiveMs: 0,
+      estimatedTotalPrice: 30, offerVersion: 0, reservationId: null, pharmacyReviewActiveMs: 0,
       reviewStartedAt: Timestamp.fromMillis(START)},
     [STOCK]: {quantity: 10, reservedQuantity: 0, pieceQuantity: 0,
       reservedPieceQuantity: 0, isActive: true,
+      sellingPrice: 10,
       expiryDate: Timestamp.fromDate(new Date("2099-01-01T00:00:00Z"))},
-    "pharmacies/pharmacy-one/shifts/shift-one": {status: "open", cashTotal: 0,
+    "pharmacies/pharmacy-one/shift_states/owner:pharmacy-one": {activeShiftId: "shift-one"},
+    "pharmacies/pharmacy-one/shifts/shift-one": {status: "open", pharmacyId: "pharmacy-one", openedByKey: "owner:pharmacy-one", cashTotal: 0,
       cardTotal: 0, salesCount: 0},
   });
   const handler = buildOrderCommandHandler({db, HttpsError: HttpError,
@@ -63,6 +67,18 @@ async function firstAcceptance(h) {
   await h.call("acceptPartialOffer", {offerVersion: 1});
   return h.db.read(ORDER).reservationId;
 }
+
+test("invoice cannot charge more than the accepted partial offer", async () => {
+  const h = setup();
+  await firstAcceptance(h);
+  const increased = invoice(2);
+  increased.invoice.items[0].unitPrice = 11;
+  increased.invoice.subtotal = 22;
+  increased.invoice.total = 22;
+  await assert.rejects(h.call("startPreparing", increased), {code: "aborted", message: /stale-offer-price/});
+  assert.equal(h.db.read(ORDER).status, "confirmedReserved");
+  assert.equal(h.db.paths("pharmacies/pharmacy-one/sales/").length, 0);
+});
 
 test("INT-13 two real command decision cycles produce 26h and one alert per kind", async () => {
   const h = setup();
@@ -196,11 +212,13 @@ test("changed inventory never silently reduces revised accepted quantities", asy
   await firstAcceptance(h);
   await h.call("revisePartialOffer", {items: items(2), offerVersion: 1});
   h.db.write(STOCK, {...h.db.read(STOCK), quantity: 1});
+  h.db.write(`${STOCK}/batches/legacy-opening`, {...h.db.read(`${STOCK}/batches/legacy-opening`), quantity: 1});
   const before = [...h.db.documents.entries()];
   await assert.rejects(h.call("acceptPartialOffer", {offerVersion: 2}, "revised-accept-operation"),
     {code: "failed-precondition"});
   assert.deepEqual([...h.db.documents.entries()], before);
   h.db.write(STOCK, {...h.db.read(STOCK), quantity: 3});
+  h.db.write(`${STOCK}/batches/legacy-opening`, {...h.db.read(`${STOCK}/batches/legacy-opening`), quantity: 3});
   await h.call("acceptPartialOffer", {offerVersion: 2}, "revised-accept-operation");
   assert.equal(h.db.read(STOCK).reservedQuantity, 2);
   assert.equal(h.db.read(ORDER).acceptedOfferVersion, 2);

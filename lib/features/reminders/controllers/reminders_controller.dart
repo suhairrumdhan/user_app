@@ -26,6 +26,23 @@ class RemindersController extends GetxController {
       <AppointmentReminderModel>[].obs;
 
   final RxList<ReminderLogModel> logs = <ReminderLogModel>[].obs;
+  final RxSet<int> medicationOperationsInProgress = <int>{}.obs;
+
+  bool isMedicationOperationInProgress(int reminderId) =>
+      medicationOperationsInProgress.contains(reminderId);
+
+  Future<void> _runMedicationOperation(
+    int reminderId,
+    Future<void> Function() operation,
+  ) async {
+    if (medicationOperationsInProgress.contains(reminderId)) return;
+    medicationOperationsInProgress.add(reminderId);
+    try {
+      await operation();
+    } finally {
+      medicationOperationsInProgress.remove(reminderId);
+    }
+  }
 
   @override
   void onInit() {
@@ -51,6 +68,7 @@ class RemindersController extends GetxController {
     medicationReminders.clear();
     appointmentReminders.clear();
     logs.clear();
+    medicationOperationsInProgress.clear();
     _activeUserId = nextUserId;
 
     if (nextUserId == null || nextUserId.isEmpty) return;
@@ -167,13 +185,15 @@ class RemindersController extends GetxController {
   Future<void> deleteMedicationReminder(
     MedicationReminderModel reminder,
   ) async {
-    await ReminderSchedulerService.cancelMedicationReminder(reminder);
-    await _repo.deleteMedicationReminder(reminder.id);
+    await _runMedicationOperation(reminder.id, () async {
+      await ReminderSchedulerService.cancelMedicationReminder(reminder);
+      await _repo.deleteMedicationReminder(reminder.id);
 
-    await _repo.deleteLogsByReminder(
-      reminderType: 'medication',
-      reminderLocalId: reminder.id,
-    );
+      await _repo.deleteLogsByReminder(
+        reminderType: 'medication',
+        reminderLocalId: reminder.id,
+      );
+    });
   }
 
   Future<void> deleteAppointmentReminder(
@@ -191,23 +211,27 @@ class RemindersController extends GetxController {
   // ========= PAUSE / RESUME =========
 
   Future<void> pauseMedication(MedicationReminderModel reminder) async {
-    await ReminderSchedulerService.cancelMedicationReminder(reminder);
+    await _runMedicationOperation(reminder.id, () async {
+      await ReminderSchedulerService.cancelMedicationReminder(reminder);
 
-    reminder.status = 'paused';
-    reminder.updatedAt = DateTime.now();
+      reminder.status = 'paused';
+      reminder.updatedAt = DateTime.now();
 
-    await _repo.updateMedicationReminder(reminder);
+      await _repo.updateMedicationReminder(reminder);
+    });
   }
 
   Future<void> resumeMedication(MedicationReminderModel reminder) async {
-    final notificationIds =
-        await ReminderSchedulerService.scheduleMedicationReminder(reminder);
+    await _runMedicationOperation(reminder.id, () async {
+      final notificationIds =
+          await ReminderSchedulerService.scheduleMedicationReminder(reminder);
 
-    reminder.notificationIds = notificationIds;
-    reminder.status = 'active';
-    reminder.updatedAt = DateTime.now();
+      reminder.notificationIds = notificationIds;
+      reminder.status = 'active';
+      reminder.updatedAt = DateTime.now();
 
-    await _repo.updateMedicationReminder(reminder);
+      await _repo.updateMedicationReminder(reminder);
+    });
   }
 
   Future<void> pauseAppointment(AppointmentReminderModel reminder) async {
@@ -233,78 +257,48 @@ class RemindersController extends GetxController {
   // ========= ACTIONS =========
 
   Future<void> markMedicationTaken(MedicationReminderModel reminder) async {
-    reminder.lastTakenAt = DateTime.now();
-
-    await _repo.updateMedicationReminder(reminder);
-
-    await _addLog(
-      reminderType: 'medication',
-      reminderId: reminder.id,
-      ownerId: reminder.owner.beneficiaryId,
-      ownerName: reminder.owner.name,
-      action: 'taken',
-      title: reminder.medicineName,
-    );
+    await _runMedicationOperation(reminder.id, () async {
+      final actionAt = DateTime.now();
+      final recorded = await _repo.recordMedicationAction(
+        reminder: reminder,
+        action: 'taken',
+        actionAt: actionAt,
+      );
+      if (recorded) reminder.lastTakenAt = actionAt;
+    });
   }
 
   Future<void> snoozeMedication(
     MedicationReminderModel reminder, {
     Duration duration = const Duration(minutes: 10),
   }) async {
-    await ReminderSchedulerService.scheduleSnooze(
-      reminderLocalId: reminder.id,
-      title: '💊 ${reminder.medicineName}',
-      body: 'تم تأجيل التذكير',
-      duration: duration,
-    );
+    await _runMedicationOperation(reminder.id, () async {
+      final actionAt = DateTime.now();
+      final recorded = await _repo.recordMedicationAction(
+        reminder: reminder,
+        action: 'snoozed',
+        actionAt: actionAt,
+      );
+      if (!recorded) return;
 
-    reminder.lastSnoozedAt = DateTime.now();
-
-    await _repo.updateMedicationReminder(reminder);
-
-    await _addLog(
-      reminderType: 'medication',
-      reminderId: reminder.id,
-      ownerId: reminder.owner.beneficiaryId,
-      ownerName: reminder.owner.name,
-      action: 'snoozed',
-      title: reminder.medicineName,
-    );
+      reminder.lastSnoozedAt = actionAt;
+      await ReminderSchedulerService.scheduleSnooze(
+        reminderLocalId: reminder.id,
+        title: '💊 ${reminder.medicineName}',
+        body: 'تم تأجيل التذكير',
+        duration: duration,
+      );
+    });
   }
 
   Future<void> skipMedication(MedicationReminderModel reminder) async {
-    await _addLog(
-      reminderType: 'medication',
-      reminderId: reminder.id,
-      ownerId: reminder.owner.beneficiaryId,
-      ownerName: reminder.owner.name,
-      action: 'skipped',
-      title: reminder.medicineName,
-    );
-  }
-
-  // ========= LOG =========
-
-  Future<void> _addLog({
-    required String reminderType,
-    required int reminderId,
-    required String ownerId,
-    required String ownerName,
-    required String action,
-    String? title,
-  }) async {
-    final log = ReminderLogModel()
-      ..reminderType = reminderType
-      ..reminderLocalId = reminderId
-      ..ownerBeneficiaryId = ownerId
-      ..ownerName = ownerName
-      ..actionType = action
-      ..scheduledAt = DateTime.now()
-      ..actionAt = DateTime.now()
-      ..title = title
-      ..createdAt = DateTime.now();
-
-    await _repo.addLog(log);
+    await _runMedicationOperation(reminder.id, () async {
+      await _repo.recordMedicationAction(
+        reminder: reminder,
+        action: 'skipped',
+        actionAt: DateTime.now(),
+      );
+    });
   }
 
   @override

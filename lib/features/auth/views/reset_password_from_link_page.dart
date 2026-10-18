@@ -120,13 +120,13 @@ class _ResetPasswordFromLinkPageState extends State<ResetPasswordFromLinkPage> {
         await _openAuthenticatedDestination(user);
       }
 
-      _showMessage('تم تغيير كلمة المرور وتسجيل الدخول بنجاح.', isError: false);
+      _showMessage('تم تغيير كلمة المرور وتسجيل الدخول.', isError: false);
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       if (passwordWasChanged) {
         Get.offAll(() => const LoginPage());
         _showMessage(
-          'تم تغيير كلمة المرور، لكن تعذر تسجيل الدخول تلقائياً. استخدم كلمة المرور الجديدة.',
+          'تم تغيير كلمة المرور. سجل الدخول بالكلمة الجديدة.',
           isError: true,
         );
       } else {
@@ -137,7 +137,7 @@ class _ResetPasswordFromLinkPageState extends State<ResetPasswordFromLinkPage> {
       if (passwordWasChanged) {
         Get.offAll(() => const LoginPage());
         _showMessage(
-          'تم تغيير كلمة المرور. سجّل الدخول باستخدام كلمة المرور الجديدة.',
+          'تم تغيير كلمة المرور. سجل الدخول بالكلمة الجديدة.',
           isError: true,
         );
       } else {
@@ -169,7 +169,7 @@ class _ResetPasswordFromLinkPageState extends State<ResetPasswordFromLinkPage> {
       case 'invalid-action-code':
         return 'الرابط غير صالح أو تم استخدامه مسبقاً.';
       case 'user-disabled':
-        return 'هذا الحساب معطل. يرجى التواصل مع الدعم.';
+        return 'الحساب معطل. تواصل مع الدعم.';
       default:
         return 'تعذر التحقق من الرابط. اطلب رابطاً جديداً.';
     }
@@ -306,7 +306,7 @@ class _ResetPasswordFromLinkPageState extends State<ResetPasswordFromLinkPage> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'أدخل كلمة المرور الجديدة مرة واحدة هنا، وبعد نجاح التغيير سيسجّل التطبيق دخولك تلقائياً.',
+            'أدخل كلمة المرور الجديدة.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 15,

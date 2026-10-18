@@ -28,11 +28,14 @@ function setup(seed = {}) {
 }
 
 async function provision(h, employeeId = "employee", username = "Staff", password = "secret1") {
-  await h.owner(h.handlers.manageAccount, {action: "create", employeeId, username, password,
-    profile: {name: "Staff", roleId: "pharmacist", isActive: true}});
+  h.db.write("pharmacies/pharmacy/roles/pharmacist", {
+    id: "pharmacist", name: "Pharmacist", isActive: true,
+  });
   h.db.write("pharmacies/pharmacy/permissions/pharmacist", {
     permissions: {"orders.update_status": true, "employees.update": true},
   });
+  await h.owner(h.handlers.manageAccount, {action: "create", employeeId, username, password,
+    profile: {name: "Staff", roleId: "pharmacist", isActive: true}});
 }
 
 test("username normalization is stable and rejects path/control characters", () => {

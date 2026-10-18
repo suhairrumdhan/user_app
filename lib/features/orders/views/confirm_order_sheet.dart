@@ -10,6 +10,8 @@ import '../../search/views/search_ui_colors.dart';
 import '../models/order_status.dart';
 import '../services/order_service.dart';
 import '../../../shared/availability_policy.dart';
+import '../../../shared/pending_order_commands.dart';
+import '../../../shared/user_facing_error.dart';
 import '../../search/models/medicine_sale_quote.dart';
 
 class ConfirmOrderSheet extends StatefulWidget {
@@ -81,6 +83,7 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
   );
 
   Future<void> _submitOrder() async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
     debugPrint(
       'ConfirmOrderSheet submit tapped: selected=${_selectedItems.length} '
       'pharmacyId=${widget.pharmacy.id}',
@@ -156,13 +159,60 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
 
       if (!mounted) return;
 
-      Get.snackbar(
-        'تعذر إرسال الطلب',
-        'حاول مجددًا',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        margin: const EdgeInsets.all(12),
+      if (e is PendingOrderConflict) {
+        final saved = Map<String, dynamic>.from(e.request['payload'] as Map);
+        final previous = Map<String, dynamic>.from(saved['order'] as Map);
+        final pharmacy = previous['pharmacy'] as Map? ?? const {};
+        final beneficiary = previous['beneficiary'] as Map? ?? const {};
+        final resume = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('تأكيد المحاولة السابقة'),
+            content: Text(
+              'توجد محاولة إرسال سابقة إلى ${pharmacy['pharmacyName'] ?? pharmacy['name'] ?? 'الصيدلية'}'
+              ' للمستفيد ${beneficiary['name'] ?? 'المحدد'}.\n'
+              'تحقق من الطلب السابق قبل إرسال طلب جديد.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('رجوع'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('استعادة المحاولة السابقة'),
+              ),
+            ],
+          ),
+        );
+        if (resume == true && mounted) {
+          try {
+            final restored = await OrderService.instance.resumePendingCreation(
+              e.request,
+            );
+            if (!mounted) return;
+            await _showOrderSavedDialog(restored);
+            if (mounted) Navigator.of(context).pop(restored);
+          } catch (_) {
+            if (mounted)
+              messenger?.showSnackBar(
+                const SnackBar(
+                  content: Text('تعذر التحقق من الطلب السابق. أعد المحاولة.'),
+                ),
+              );
+          }
+        }
+        return;
+      }
+
+      final message = userFacingError(e);
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            message.trim().isEmpty ? 'تعذر إرسال الطلب، حاول مجددًا' : message,
+          ),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       if (mounted) {
@@ -177,7 +227,7 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
     final orderNumber = order.orderNumber?.trim();
     final orderReference = orderNumber != null && orderNumber.isNotEmpty
         ? orderNumber
-        : order.id;
+        : 'بدون رقم';
 
     await showDialog<void>(
       context: context,
@@ -215,6 +265,21 @@ class _ConfirmOrderSheetState extends State<ConfirmOrderSheet> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (order.status == OrderStatus.received &&
+                    order.insurance.enabled) ...[
+                  const Text(
+                    'حُفظ الطلب، لكنه لم يُرسل للصيدلية لأن التأمين لم يُعتمد.',
+                  ),
+                  for (final reason
+                      in (order.insuranceResolution['reasons'] as List? ??
+                              const [])
+                          .whereType<Map>())
+                    Text('${reason['message'] ?? ''}'),
+                  const Text(
+                    'افتح تفاصيل الطلب لعرض السعر بدون تأمين أو إلغاء الطلب.',
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(

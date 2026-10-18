@@ -72,6 +72,14 @@ class MedicineNormalizer {
     'FOR',
   ];
 
+  static final Map<String, String> _formAliases = {
+    for (final entry in dosageForms.entries)
+      for (final alias in entry.value) alias: entry.key,
+  };
+  static final RegExp _formPattern = RegExp(
+    r'\b(?:' + _formAliases.keys.map(RegExp.escape).join('|') + r')\b',
+  );
+
   static String normalize(String input) {
     if (input.trim().isEmpty) return '';
 
@@ -133,21 +141,15 @@ class MedicineNormalizer {
       unique.add('${baseParts[0]} ${baseParts[1]}');
     }
 
-    return unique
-        .where((e) => e.trim().isNotEmpty)
-        .toList();
+    return unique.where((e) => e.trim().isNotEmpty).toList();
   }
 
   static String? extractStrength(String input) {
     final normalized = normalize(input);
 
     final patterns = [
-      RegExp(
-        r'(\d+(?:\.\d+)?)\s*(MG|MCG|G|IU)\s*/\s*(\d+(?:\.\d+)?)\s*(ML)',
-      ),
-      RegExp(
-        r'(\d+(?:\.\d+)?)\s*(MG|MCG|G|ML|IU|%)',
-      ),
+      RegExp(r'(\d+(?:\.\d+)?)\s*(MG|MCG|G|IU)\s*/\s*(\d+(?:\.\d+)?)\s*(ML)'),
+      RegExp(r'(\d+(?:\.\d+)?)\s*(MG|MCG|G|ML|IU|%)'),
     ];
 
     for (final regex in patterns) {
@@ -180,13 +182,8 @@ class MedicineNormalizer {
   static String? extractDosageForm(String input) {
     final normalized = normalize(input);
 
-    for (final entry in dosageForms.entries) {
-      for (final alias in entry.value) {
-        final normalizedAlias = normalize(alias);
-        if (normalized.contains(normalizedAlias)) {
-          return entry.key;
-        }
-      }
+    for (final canonical in dosageForms.keys) {
+      if (normalized.contains(canonical)) return canonical;
     }
 
     return null;
@@ -203,19 +200,14 @@ class MedicineNormalizer {
     }
 
     if (dosageForm != null && dosageForm.isNotEmpty) {
-      for (final alias in dosageForms[dosageForm] ?? const <String>[]) {
-        text = text.replaceAll(
-          RegExp(r'\b' + RegExp.escape(normalize(alias)) + r'\b'),
-          ' ',
-        );
-      }
+      text = text.replaceAll(
+        RegExp(r'\b' + RegExp.escape(dosageForm) + r'\b'),
+        ' ',
+      );
     }
 
     for (final word in _genericNoiseWords) {
-      text = text.replaceAll(
-        RegExp(r'\b' + RegExp.escape(word) + r'\b'),
-        ' ',
-      );
+      text = text.replaceAll(RegExp(r'\b' + RegExp.escape(word) + r'\b'), ' ');
     }
 
     // remove standalone numbers
@@ -301,7 +293,7 @@ class MedicineNormalizer {
 
     final matrix = List.generate(
       a.length + 1,
-          (_) => List<int>.filled(b.length + 1, 0),
+      (_) => List<int>.filled(b.length + 1, 0),
     );
 
     for (int i = 0; i <= a.length; i++) {
@@ -344,7 +336,9 @@ class MedicineNormalizer {
     final xParts = baseX.split(' ').where((e) => e.isNotEmpty).toList();
     final yParts = baseY.split(' ').where((e) => e.isNotEmpty).toList();
 
-    if (xParts.isNotEmpty && yParts.isNotEmpty && xParts.first == yParts.first) {
+    if (xParts.isNotEmpty &&
+        yParts.isNotEmpty &&
+        xParts.first == yParts.first) {
       // PANADOL vs PANADOL EXTRA
       return 0.92;
     }
@@ -358,9 +352,12 @@ class MedicineNormalizer {
 
     if (baseX.isNotEmpty && baseY.isNotEmpty) {
       final baseDistance = levenshteinDistance(baseX, baseY);
-      final baseMaxLen = baseX.length > baseY.length ? baseX.length : baseY.length;
-      final baseLevenshtein =
-      baseMaxLen == 0 ? 1 : 1 - (baseDistance / baseMaxLen);
+      final baseMaxLen = baseX.length > baseY.length
+          ? baseX.length
+          : baseY.length;
+      final baseLevenshtein = baseMaxLen == 0
+          ? 1
+          : 1 - (baseDistance / baseMaxLen);
       final baseTrigram = trigramSimilarity(baseX, baseY);
       final baseScore = (baseLevenshtein * 0.45) + (baseTrigram * 0.55);
 
@@ -378,67 +375,56 @@ class MedicineNormalizer {
         .replaceAll('-', ' ')
         .replaceAll(RegExp(r'\s*/\s*'), '/')
         .replaceAllMapped(
-      RegExp(r'([A-Z])(\d)'),
+          RegExp(r'([A-Z])(\d)'),
           (m) => '${m.group(1)} ${m.group(2)}',
-    )
+        )
         .replaceAllMapped(
-      RegExp(r'(\d)([A-Z])'),
+          RegExp(r'(\d)([A-Z])'),
           (m) => '${m.group(1)} ${m.group(2)}',
-    );
+        );
   }
 
   static String _normalizeUnits(String text) {
     return text
         .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*MG\b'),
+          RegExp(r'(\d+(?:\.\d+)?)\s*MG\b'),
           (m) => '${m.group(1)}MG',
-    )
+        )
         .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*MCG\b'),
+          RegExp(r'(\d+(?:\.\d+)?)\s*MCG\b'),
           (m) => '${m.group(1)}MCG',
-    )
+        )
         .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*G\b'),
+          RegExp(r'(\d+(?:\.\d+)?)\s*G\b'),
           (m) => '${m.group(1)}G',
-    )
+        )
         .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*ML\b'),
+          RegExp(r'(\d+(?:\.\d+)?)\s*ML\b'),
           (m) => '${m.group(1)}ML',
-    )
+        )
         .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*IU\b'),
+          RegExp(r'(\d+(?:\.\d+)?)\s*IU\b'),
           (m) => '${m.group(1)}IU',
-    )
+        )
         .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*%\b'),
+          RegExp(r'(\d+(?:\.\d+)?)\s*%\b'),
           (m) => '${m.group(1)}%',
-    )
+        )
         .replaceAllMapped(
-      RegExp(r'(\d+(?:\.\d+)?)\s*(MG|MCG|G|ML|IU)\b'),
+          RegExp(r'(\d+(?:\.\d+)?)\s*(MG|MCG|G|ML|IU)\b'),
           (m) => '${m.group(1)} ${m.group(2)}',
-    );
+        );
   }
 
   static String _normalizeDosageAliases(String text) {
-    String normalized = text;
-
-    dosageForms.forEach((canonical, aliases) {
-      for (final alias in aliases) {
-        normalized = normalized.replaceAll(
-          RegExp(r'\b' + RegExp.escape(alias) + r'\b'),
-          canonical,
-        );
-      }
-    });
-
-    return normalized;
+    return text.replaceAllMapped(
+      _formPattern,
+      (match) => _formAliases[match.group(0)!]!,
+    );
   }
 
   static String _removeNoise(String text) {
-    return text.replaceAll(
-      RegExp(r'[^A-Z0-9\s/%]'),
-      ' ',
-    );
+    return text.replaceAll(RegExp(r'[^A-Z0-9\s/%]'), ' ');
   }
 
   static String _collapseSpaces(String text) {

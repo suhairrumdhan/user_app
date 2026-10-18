@@ -61,6 +61,8 @@ class MatchedMedicineResult {
 
   bool get isStrongMatch => matchScore >= 80;
 
+  String get saleUnitLabel => soldByPiece ? 'قطعة' : 'عبوة';
+
   Map<String, dynamic> toMap() {
     return {
       'requestKey': requestKey,
@@ -109,14 +111,14 @@ class MatchedMedicineResult {
       matchedMedicineId: matchedMedicineId ?? this.matchedMedicineId,
       matchedMedicineName: matchedMedicineName ?? this.matchedMedicineName,
       matchedScientificName:
-      matchedScientificName ?? this.matchedScientificName,
+          matchedScientificName ?? this.matchedScientificName,
       price: price ?? this.price,
       isAlternative: isAlternative ?? this.isAlternative,
       soldByPiece: soldByPiece ?? this.soldByPiece,
       unit: unit ?? this.unit,
       availableQuantity: availableQuantity ?? this.availableQuantity,
       availablePieceQuantity:
-      availablePieceQuantity ?? this.availablePieceQuantity,
+          availablePieceQuantity ?? this.availablePieceQuantity,
       isAvailable: isAvailable ?? this.isAvailable,
       matchScore: matchScore ?? this.matchScore,
       matchType: matchType ?? this.matchType,
@@ -131,7 +133,9 @@ class MatchedMedicineResult {
       requestedName: map['requestedName']?.toString() ?? '',
       imageUrl: map['imageUrl']?.toString(),
       similarMatches: (map['similarMatches'] as List<dynamic>? ?? [])
-          .map((e) => MatchedMedicineResult.fromMap(Map<String, dynamic>.from(e)))
+          .map(
+            (e) => MatchedMedicineResult.fromMap(Map<String, dynamic>.from(e)),
+          )
           .toList(),
       pharmacyId: map['pharmacyId']?.toString() ?? '',
       matchedMedicineId: map['matchedMedicineId']?.toString() ?? '',

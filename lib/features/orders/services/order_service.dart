@@ -5,6 +5,8 @@ import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../shared/pending_order_commands.dart';
 
+import '../../family/controllers/family_controller.dart';
+import '../../family/models/family_member_model.dart';
 import '../../pharmacy/models/pharmacy_model.dart';
 import '../../prescription/models/beneficiary_model.dart';
 import '../../profile/controllers/user_controller.dart';
@@ -149,6 +151,18 @@ class OrderService {
     debugPrint('🔥 pharmacyId: ${pharmacy.id}');
     debugPrint('🔥 userId: ${currentUser.id}');
 
+    // Do not build an order from a possibly stale screen-level list. The
+    // beneficiary snapshot must reflect the stored family member at submit time.
+    FamilyMemberModel? familyMember;
+    if (!beneficiary.isSelf) {
+      familyMember = await Get.find<FamilyController>().getMember(
+        beneficiary.id,
+      );
+      if (familyMember == null) {
+        throw Exception('تعذر العثور على فرد العائلة المحدد');
+      }
+    }
+
     final order = OrderSnapshotBuilder.buildOrderFromMatches(
       ownerUserId: currentUser.id,
       userSnapshot: OrderSnapshotBuilder.buildUserSnapshot(
@@ -156,6 +170,7 @@ class OrderService {
       ),
       pharmacy: pharmacy,
       beneficiary: beneficiary,
+      familyMember: familyMember,
       selectedMatches: selectedMatches,
       quantitiesByMatchedMedicineId: quantitiesByMatchedMedicineId,
       useInsurance: useInsurance,
@@ -220,6 +235,11 @@ class OrderService {
       return order.copyWith(
         id: result['orderId']?.toString() ?? '',
         orderNumber: result['orderNumber']?.toString(),
+        estimatedTotalPrice: (result['estimatedTotalPrice'] as num?)
+            ?.toDouble(),
+        insuranceResolution: Map<String, dynamic>.from(
+          result['insuranceResolution'] ?? const {},
+        ),
         status: createdStatus,
         statusLabel: createdStatus.label,
         operationId: envelope['operationId']?.toString(),
@@ -238,10 +258,54 @@ class OrderService {
     }
   }
 
-  Future<OrderModel?> getOrderById(String orderId) async {
+  Future<OrderModel> resumePendingCreation(Map<String, dynamic> saved) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final payload = Map<String, dynamic>.from(saved['payload'] as Map);
+    final original = Map<String, dynamic>.from(payload['order'] as Map);
+    if (saved['command'] != 'createOrder' ||
+        uid == null ||
+        (original['user'] as Map?)?['userId'] != uid) {
+      throw StateError('تعذر استعادة الطلب في جلسة الدخول الحالية.');
+    }
+    final envelope = await _executeCommand(
+      command: 'createOrder',
+      operationId: saved['operationId'] as String,
+      payload: payload,
+      actor: Map<String, dynamic>.from(saved['actor'] as Map? ?? const {}),
+    );
+    if (FirebaseAuth.instance.currentUser?.uid != uid) {
+      throw StateError('تغيرت جلسة الدخول.');
+    }
+    final result = Map<String, dynamic>.from(envelope['result'] as Map);
+    final orderId = result['orderId'] as String;
+    try {
+      final order = await getOrderById(orderId, fromServer: true);
+      if (FirebaseAuth.instance.currentUser?.uid != uid) {
+        throw StateError('تغيرت جلسة الدخول.');
+      }
+      if (order != null) return order;
+    } on FirebaseException {
+      // The command already confirmed saving. Do not report a failed send
+      // because a separate read lost its connection.
+    }
+    return OrderModel.fromMap(orderId, {
+      ...original,
+      'orderNumber': result['orderNumber'],
+      'status': result['status'],
+      'estimatedTotalPrice': result['estimatedTotalPrice'],
+      'insuranceResolution': result['insuranceResolution'] ?? const {},
+    });
+  }
+
+  Future<OrderModel?> getOrderById(
+    String orderId, {
+    bool fromServer = false,
+  }) async {
     if (orderId.trim().isEmpty) return null;
 
-    final doc = await _ordersRef.doc(orderId).get();
+    final doc = await _ordersRef
+        .doc(orderId)
+        .get(fromServer ? const GetOptions(source: Source.server) : null);
     if (!doc.exists) return null;
 
     return OrderModel.fromFirestore(doc);
@@ -331,6 +395,31 @@ class OrderService {
       operationId: newOperationId('continue-without-insurance'),
       orderId: orderId,
       payload: const {'note': 'اختار المستخدم متابعة الطلب دون تغطية تأمينية'},
+    );
+  }
+
+  Future<void> requestInsuranceRemoval({
+    required String orderId,
+    int? version,
+  }) async {
+    await _executeCommand(
+      command: 'requestInsuranceRemoval',
+      operationId: newOperationId('insurance-removal-request'),
+      orderId: orderId,
+      payload: {if (version != null) 'version': version},
+    );
+  }
+
+  Future<void> decideInsuranceRemoval({
+    required String orderId,
+    required int version,
+    required bool accept,
+  }) async {
+    await _executeCommand(
+      command: accept ? 'acceptInsuranceRemoval' : 'cancelInsuranceRemoval',
+      operationId: newOperationId('insurance-removal-decision'),
+      orderId: orderId,
+      payload: {'version': version},
     );
   }
 

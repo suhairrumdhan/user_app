@@ -3,7 +3,8 @@
 const {FieldValue, FieldPath, Timestamp} = require("firebase-admin/firestore");
 const {stockUnits} = require("./stock-units");
 const {pharmacyVisibleInSearch, pharmacyAcceptsNewOrders, medicineSaleState} = require("./availability-policy");
-const INDEX_VERSION = 7;
+const INDEX_VERSION = 8;
+const {loadStock, stockProjection} = require("./batch-stock");
 
 function normalize(value) {
   return String(value || "").trim().toUpperCase().replace(/&/g, " AND ").replace(/\+/g, " PLUS ")
@@ -51,6 +52,10 @@ function buildMedicineSearchIndex({pharmacyId, medicineId, pharmacy, medicine, i
   const sale = medicineSaleState(medicine, instant);
   let stock;
   try { stock = stockUnits(medicine); } catch (_) { stock = null; }
+  if (stock && medicine.batchSchemaVersion === 1) {
+    stock.availablePackages = Number(medicine.availableQuantity || 0);
+    stock.availablePieces = Number(medicine.availablePieceQuantity || 0);
+  }
   const location = pharmacy.location && typeof pharmacy.location === "object" ? pharmacy.location : {};
   const sellingPrice = finite(medicine.sellingPrice);
   const piecesEnabled = medicine.sellByPiece === true;
@@ -102,8 +107,20 @@ async function refreshMedicineSearchIndex({db, pharmacyId, medicineId, clock = (
       transaction.delete(indexRef);
       return {removed: true};
     }
+    let currentMedicine = medicine.data();
+    if (currentMedicine.batchSchemaVersion === 1) {
+      const stock = await loadStock(transaction, medicineRef, Timestamp.fromMillis(clock()), medicine);
+      currentMedicine = {...currentMedicine, ...stockProjection(stock)};
+      const projection = {};
+      for (const key of ["availableQuantity", "availablePieceQuantity", "expiryDate"]) {
+        if (JSON.stringify(medicine.data()[key]) !== JSON.stringify(currentMedicine[key])) projection[key] = currentMedicine[key];
+      }
+      // Update only changed derived fields: the resulting trigger converges
+      // without an endless updatedAt-only write loop.
+      if (Object.keys(projection).length) transaction.update(medicineRef, projection);
+    }
     transaction.set(indexRef, {...buildMedicineSearchIndex({pharmacyId, medicineId,
-      pharmacy: pharmacy.data(), medicine: medicine.data(), instant: clock()}),
+      pharmacy: pharmacy.data(), medicine: currentMedicine, instant: clock()}),
     updatedAt: FieldValue.serverTimestamp()});
     return {removed: false};
   });

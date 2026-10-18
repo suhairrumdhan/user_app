@@ -192,7 +192,7 @@ void main() {
       );
       await expectLater(
         execute('changed', (_) async => fail('must not send'), version: 2),
-        throwsStateError,
+        throwsA(isA<PendingOrderConflict>()),
       );
       final result = await execute('retry', (saved) async => saved);
       expect(result['operationId'], 'original');

@@ -137,7 +137,14 @@ function profilePatch(data) {
     if (source[key] !== undefined) result[key] = clean(source[key]);
   }
   if (source.isActive !== undefined) result.isActive = source.isActive === true;
-  if (source.hiringDate !== undefined) result.hiringDate = source.hiringDate;
+  if (source.hiringDate !== undefined) {
+    const hiringMillis = typeof source.hiringDate?.toMillis === "function" ?
+      source.hiringDate.toMillis() : Date.parse(source.hiringDate);
+    if (!Number.isFinite(hiringMillis)) {
+      throw new EmployeeSessionError("invalid-argument", "تاريخ التعيين غير صالح.");
+    }
+    result.hiringDate = Timestamp.fromMillis(hiringMillis);
+  }
   const overrides = cleanOverrides(source.permissionOverrides);
   if (overrides !== undefined) {
     result.permissionOverrides = overrides;
@@ -192,6 +199,16 @@ function buildEmployeeSessionHandlers({
         }
 
         const existing = employeeSnapshot.exists ? employeeSnapshot.data() : {};
+        if (action !== "disable" && (action === "create" ||
+            (patch.roleId !== undefined && patch.roleId !== existing.roleId))) {
+          const roleId = safeId(patch.roleId, "معرف الدور");
+          const roleSnapshot = await transaction.get(pharmacyRef.collection("roles").doc(roleId));
+          const permissionsSnapshot = await transaction.get(pharmacyRef.collection("permissions").doc(roleId));
+          if (!roleSnapshot.exists || !permissionsSnapshot.exists) {
+            throw new EmployeeSessionError("failed-precondition", "اختر دورًا محفوظًا وصالحًا من أدوار الصيدلية.");
+          }
+          patch.roleDisplay = clean(roleSnapshot.data().name) || roleId;
+        }
         const username = clean(data.username !== undefined ? data.username : existing.username);
         const key = usernameKey(username);
         const oldKey = clean(existing.usernameKey);

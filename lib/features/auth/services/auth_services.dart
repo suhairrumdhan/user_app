@@ -2,19 +2,21 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../app/core/services/push_notification_service.dart';
 import '../../profile/controllers/user_controller.dart' show UserController;
 import '../../health_records/views/health_info.dart';
 import '../../pharmacy/views/home_page.dart';
 import '../views/welcome_page.dart';
-import '../../profile/models/user_model.dart';
 import 'email_action_service.dart';
+import 'user_repository.dart';
 import '../views/email_verification_page.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final EmailActionService _emailActions = EmailActionService();
+  AuthService({FirebaseAuth? auth, EmailActionService? emailActions})
+    : _auth = auth ?? FirebaseAuth.instance,
+      _emailActions = emailActions ?? EmailActionService(auth: auth);
+  final FirebaseAuth _auth;
+  final EmailActionService _emailActions;
 
   // ---------- تسجيل مستخدم جديد ----------
   // ---------- تسجيل مستخدم جديد ----------
@@ -37,28 +39,25 @@ class AuthService {
     }
 
     setLoading(true);
+    var accountCreated = false;
     try {
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
-        password: password.trim(),
+        password: password,
       );
 
       final uid = credential.user!.uid;
-      await credential.user!.updateDisplayName(name.trim());
-
-      final newUser = UserModel(
-        id: uid,
+      accountCreated = true;
+      await UserRepository.instance.ensureUserProfile(
+        credential.user!,
         name: name.trim(),
-        email: email.trim(),
         phone: phoneNumber.trim(),
-        createdAt: DateTime.now(),
-        healthInfoCompleted: false,
       );
-
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .set(newUser.toJson());
+      try {
+        await credential.user!.updateDisplayName(name.trim());
+      } catch (error) {
+        debugPrint('Display name sync deferred: $error');
+      }
       final userController = Get.find<UserController>();
       await userController.loadUser(uid);
 
@@ -77,13 +76,11 @@ class AuthService {
       print('🔥 FirebaseAuthException code: ${e.code}'); // للتتبع
 
       if (e.code == 'email-already-in-use') {
-        message =
-            "❌ هذا البريد الإلكتروني مسجل بالفعل. يرجى استخدام بريد آخر أو تسجيل الدخول";
+        message = "البريد مسجل بالفعل. سجل الدخول أو استخدم بريدًا آخر.";
       } else if (e.code == 'weak-password') {
-        message =
-            "❌ كلمة المرور ضعيفة جداً. يرجى استخدام كلمة مرور أقوى (أكثر من 6 أحرف، تحتوي على أرقام ورموز وحروف)";
+        message = "كلمة المرور ضعيفة. استخدم حروفًا وأرقامًا ورموزًا.";
       } else if (e.code == 'invalid-email') {
-        message = "❌ البريد الإلكتروني غير صالح";
+        message = "أدخل بريدًا إلكترونيًا صحيحًا.";
       }
 
       if (context.mounted) {
@@ -100,7 +97,11 @@ class AuthService {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("حدث خطأ غير متوقع: ${e.toString()}"),
+            content: Text(
+              accountCreated
+                  ? 'تم إنشاء الحساب. سجل الدخول لإكمال بياناتك.'
+                  : 'تعذر إنشاء الحساب. أعد المحاولة.',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -120,12 +121,12 @@ class AuthService {
   }) async {
     // تحقق أولي قبل الإرسال
     if (email.isEmpty) {
-      onError?.call("❌ يرجى إدخال البريد الإلكتروني");
+      onError?.call("أدخل البريد الإلكتروني.");
       return;
     }
 
     if (password.isEmpty) {
-      onError?.call("❌ يرجى إدخال كلمة المرور");
+      onError?.call("أدخل كلمة المرور.");
       return;
     }
 
@@ -136,10 +137,10 @@ class AuthService {
 
       final credential = await _auth.signInWithEmailAndPassword(
         email: email.trim(),
-        password: password.trim(),
+        password: password,
       );
 
-      print('✅ تم تسجيل الدخول بنجاح');
+      print('تم تسجيل الدخول.');
 
       final user = credential.user;
       if (user != null) {
@@ -150,14 +151,12 @@ class AuthService {
         }
 
         print('📁 جلب بيانات المستخدم من Firestore...');
-        final doc = await FirebaseFirestore.instance
-            .collection("users")
-            .doc(user.uid)
-            .get();
+        final profile = await UserRepository.instance.ensureUserProfile(user);
+        await Get.find<UserController>().loadUser(user.uid);
 
         if (!context.mounted) return;
 
-        if (doc.exists && doc.data()?['healthInfoCompleted'] == true) {
+        if (profile.healthInfoCompleted) {
           print('🏠 التوجه إلى HomePage');
           Get.offAll(() => const HomePage());
         } else {
@@ -168,7 +167,7 @@ class AuthService {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("✅ تم تسجيل الدخول بنجاح"),
+              content: Text("تم تسجيل الدخول."),
               backgroundColor: Colors.green,
               duration: Duration(seconds: 2),
             ),
@@ -185,25 +184,22 @@ class AuthService {
         case 'invalid-credential':
         case 'user-not-found':
         case 'wrong-password':
-          message =
-              " البريد الإلكتروني أو كلمة المرور غير صحيحة\n يرجى التأكد من بيانات الدخول";
+          message = "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
           break;
         case 'invalid-email':
-          message =
-              " صيغة البريد الإلكتروني غير صحيحة\n مثال: name@example.com";
+          message = "أدخل بريدًا إلكترونيًا صحيحًا.";
           break;
         case 'user-disabled':
-          message = " هذا الحساب معطل\n يرجى الاتصال بالدعم الفني";
+          message = "الحساب معطل. تواصل مع الدعم.";
           break;
         case 'too-many-requests':
-          message = "⚠️ تم تجاوز عدد المحاولات المسموحة\n يرجى المحاولة لاحقاً";
+          message = "محاولات كثيرة. حاول لاحقًا.";
           break;
         case 'network-request-failed':
-          message =
-              "⚠️ مشكلة في الاتصال بالإنترنت\n يرجى التحقق من اتصالك بالإنترنت";
+          message = "تحقق من اتصال الإنترنت وأعد المحاولة.";
           break;
         default:
-          message = " خطأ: ${e.message}\n يرجى المحاولة مرة أخرى";
+          message = "تعذر تسجيل الدخول. حاول مرة أخرى.";
       }
 
       if (context.mounted) {
@@ -227,7 +223,7 @@ class AuthService {
       print('الرسالة: $e');
       print('========================================');
 
-      String message = " حدث خطأ: ${e.toString()}\n يرجى المحاولة مرة أخرى";
+      String message = "تعذر تسجيل الدخول. أعد المحاولة.";
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -303,7 +299,7 @@ class AuthService {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("فشل تسجيل الدخول، يرجى المحاولة مرة أخرى"),
+              content: Text("تعذر تسجيل الدخول. أعد المحاولة."),
               backgroundColor: Colors.red,
             ),
           );
@@ -311,33 +307,12 @@ class AuthService {
         return;
       }
 
-      print('✅ تم تسجيل الدخول بنجاح: ${user.uid}');
+      print('تم تسجيل الدخول.: ${user.uid}');
 
       print('📁 التحقق من وجود المستخدم في Firestore...');
-      final doc = await FirebaseFirestore.instance
-          .collection("users")
-          .doc(user.uid)
-          .get();
-
-      if (!doc.exists) {
-        print('📝 إنشاء مستخدم جديد في Firestore...');
-        await FirebaseFirestore.instance.collection("users").doc(user.uid).set({
-          'id': user.uid,
-          'uid': user.uid,
-          'email': user.email,
-          'name': user.displayName ?? 'مستخدم Google',
-          'photoUrl': user.photoURL ?? '',
-          'phone': user.phoneNumber ?? '',
-          'createdAt': Timestamp.now(),
-          'provider': 'google.com',
-          'healthInfoCompleted': false,
-        });
-        print('✅ تم إنشاء مستخدم جديد في Firestore');
-      } else {
-        print('✅ المستخدم موجود مسبقاً في Firestore');
-      }
-
-      final healthInfoCompleted = doc.data()?['healthInfoCompleted'] ?? false;
+      final profile = await UserRepository.instance.ensureUserProfile(user);
+      await Get.find<UserController>().loadUser(user.uid);
+      final healthInfoCompleted = profile.healthInfoCompleted;
       print('📊 healthInfoCompleted: $healthInfoCompleted');
 
       if (!context.mounted) return;
@@ -353,7 +328,7 @@ class AuthService {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("✅ تم تسجيل الدخول بنجاح"),
+            content: Text("تم تسجيل الدخول."),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
           ),
@@ -366,17 +341,16 @@ class AuthService {
       String message = "";
       switch (e.code) {
         case 'account-exists-with-different-credential':
-          message =
-              "هذا البريد مرتبط بحساب آخر. يرجى تسجيل الدخول باستخدام الطريقة الأخرى.";
+          message = "البريد مرتبط بحساب آخر. استخدم طريقة الدخول السابقة.";
           break;
         case 'invalid-credential':
-          message = "بيانات الاعتماد غير صالحة. يرجى المحاولة مرة أخرى.";
+          message = "تعذر التحقق من بيانات الدخول. أعد المحاولة.";
           break;
         case 'operation-not-allowed':
-          message = "تسجيل الدخول بجوجل غير مفعل. يرجى مراجعة الدعم الفني.";
+          message = "الدخول عبر Google غير متاح حاليًا. تواصل مع الدعم.";
           break;
         default:
-          message = "خطأ في تسجيل الدخول: ${e.message}";
+          message = "تعذر تسجيل الدخول. حاول مرة أخرى.";
       }
 
       if (context.mounted) {
@@ -396,7 +370,7 @@ class AuthService {
       print('Stack trace: $stackTrace');
       print('========================================');
 
-      String message = "حدث خطأ غير متوقع: ${e.toString()}";
+      String message = "تعذر إتمام العملية. أعد المحاولة.";
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

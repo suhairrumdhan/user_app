@@ -10,10 +10,7 @@ import '../../health_records/widgets/health_info_card.dart';
 class FamilyMemberHealthPage extends StatelessWidget {
   final String memberId;
 
-  const FamilyMemberHealthPage({
-    super.key,
-    required this.memberId,
-  });
+  const FamilyMemberHealthPage({super.key, required this.memberId});
 
   final Color pPrimaryColor = const Color(0xFF5EABD6);
   final Color pSecondaryColor = const Color(0xFF7BC4EA);
@@ -29,7 +26,7 @@ class FamilyMemberHealthPage extends StatelessWidget {
 
     return Obx(() {
       final member = familyController.members.firstWhereOrNull(
-            (m) => m.id == memberId,
+        (m) => m.id == memberId,
       );
 
       if (member == null) {
@@ -51,8 +48,10 @@ class FamilyMemberHealthPage extends StatelessWidget {
           child: Column(
             children: [
               Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     IconButton(
@@ -95,7 +94,9 @@ class FamilyMemberHealthPage extends StatelessWidget {
                       HealthInfoCard(
                         icon: Iconsax.drop3,
                         title: 'فصيلة الدم',
-                        items: member.bloodType != null ? [member.bloodType!] : [],
+                        items: member.bloodType != null
+                            ? [member.bloodType!]
+                            : [],
                         emptyMessage: 'لم يتم تحديد فصيلة الدم',
                         color: pPrimaryColor,
                         fieldType: 'bloodType',
@@ -196,7 +197,7 @@ class FamilyMemberHealthPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'متابعة السجل الصحي والبيانات الطبية الخاصة بهذا الفرد بشكل منظم وواضح.',
+                  'السجل الصحي لفرد العائلة.',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.95),
                     fontSize: 13,
@@ -224,10 +225,7 @@ class FamilyMemberHealthPage extends StatelessWidget {
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(
-          color: pPrimaryColor.withOpacity(0.10),
-          width: 1,
-        ),
+        border: Border.all(color: pPrimaryColor.withOpacity(0.10), width: 1),
       ),
       child: Row(
         children: [
@@ -289,18 +287,13 @@ class FamilyMemberHealthPage extends StatelessWidget {
     );
   }
 
-  Widget _buildMetaChip({
-    required IconData icon,
-    required String label,
-  }) {
+  Widget _buildMetaChip({required IconData icon, required String label}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: pLightColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: pPrimaryColor.withOpacity(0.10),
-        ),
+        border: Border.all(color: pPrimaryColor.withOpacity(0.10)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

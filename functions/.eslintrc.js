@@ -21,6 +21,12 @@ module.exports = {
   },
   overrides: [
     {
+      files: ["test/admin_panel/TC-ADM-P05-full-load.js"],
+      parserOptions: {sourceType: "module"},
+      globals: {__ENV: "readonly", __VU: "readonly", __ITER: "readonly"},
+      rules: {quotes: ["error", "single", {allowTemplateLiterals: true}]},
+    },
+    {
       files: ["**/*.spec.*"],
       env: {
         mocha: true,
@@ -28,5 +34,9 @@ module.exports = {
       rules: {},
     },
   ],
-  globals: {},
+  // BigInt is a standard ES2020 global and is supported by the configured
+  // Node.js 24 runtime. ESLint's legacy `es6` environment does not declare it.
+  globals: {
+    BigInt: "readonly",
+  },
 };

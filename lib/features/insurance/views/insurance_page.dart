@@ -26,8 +26,10 @@ class InsurancePage extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12,
+              ),
               child: Row(
                 children: [
                   IconButton(
@@ -42,7 +44,6 @@ class InsurancePage extends StatelessWidget {
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
-
                   ),
                   const Spacer(),
                   GestureDetector(
@@ -61,11 +62,7 @@ class InsurancePage extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: Icon(
-                        Iconsax.add,
-                        color: pPrimaryColor,
-                        size: 22,
-                      ),
+                      child: Icon(Iconsax.add, color: pPrimaryColor, size: 22),
                     ),
                   ),
                 ],
@@ -107,7 +104,7 @@ class InsurancePage extends StatelessWidget {
                         _buildTopCard(),
                         const SizedBox(height: 18),
                         ...insurances.map(
-                              (insurance) => Padding(
+                          (insurance) => Padding(
                             padding: const EdgeInsets.only(bottom: 14),
                             child: _buildInsuranceCard(insurance, context),
                           ),
@@ -173,7 +170,7 @@ class InsurancePage extends StatelessWidget {
                 ),
                 SizedBox(height: 6),
                 Text(
-                  'أضيفي شركات التأمين الخاصة بك وحددي فترة التغطية والأشخاص المشمولين بها.',
+                  'أضف التأمين وحدد فترة التغطية والمستفيد.',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 13,
@@ -196,11 +193,7 @@ class InsurancePage extends StatelessWidget {
         children: [
           _buildTopCard(),
           const SizedBox(height: 40),
-          Icon(
-            Iconsax.shield_cross,
-            size: 80,
-            color: Colors.grey[300],
-          ),
+          Icon(Iconsax.shield_cross, size: 80, color: Colors.grey[300]),
           const SizedBox(height: 16),
           Text(
             "لا توجد شركات تأمين",
@@ -213,10 +206,7 @@ class InsurancePage extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             "أضيفي شركة التأمين الخاصة بك الآن",
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
           ),
           const SizedBox(height: 24),
           ElevatedButton(
@@ -226,10 +216,7 @@ class InsurancePage extends StatelessWidget {
             style: ElevatedButton.styleFrom(
               backgroundColor: pPrimaryColor,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 12,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -241,10 +228,7 @@ class InsurancePage extends StatelessWidget {
     );
   }
 
-  Widget _buildInsuranceCard(
-      InsuranceModel insurance,
-      BuildContext context,
-      ) {
+  Widget _buildInsuranceCard(InsuranceModel insurance, BuildContext context) {
     final bool isActive = insurance.isActive;
 
     return Container(
@@ -327,23 +311,15 @@ class InsurancePage extends StatelessWidget {
                 onSelected: (value) {
                   if (value == 'edit') {
                     Get.to(
-                          () => AddEditInsurancePage(
-                        insuranceId: insurance.id,
-                      ),
+                      () => AddEditInsurancePage(insuranceId: insurance.id),
                     );
                   } else if (value == 'delete') {
                     _showDeleteDialog(context, insurance);
                   }
                 },
                 itemBuilder: (context) => const [
-                  PopupMenuItem(
-                    value: 'edit',
-                    child: Text('تعديل'),
-                  ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Text('حذف'),
-                  ),
+                  PopupMenuItem(value: 'edit', child: Text('تعديل')),
+                  PopupMenuItem(value: 'delete', child: Text('حذف')),
                 ],
                 icon: const Icon(Icons.more_vert),
               ),
@@ -359,7 +335,7 @@ class InsurancePage extends StatelessWidget {
           const SizedBox(height: 12),
           _buildInfoRow(
             icon: Iconsax.card,
-            title: 'رقم البطاقة',
+            title: 'رقم وثيقة المستفيد',
             value: insurance.cardNumber,
           ),
           const SizedBox(height: 12),
@@ -385,8 +361,12 @@ class InsurancePage extends StatelessWidget {
           const SizedBox(height: 12),
           _buildInfoRow(
             icon: Iconsax.profile_2user,
-            title: 'عدد المشمولين',
-            value: '${insurance.coveredMemberIds.length} أشخاص',
+            title: 'المستفيد',
+            value: insurance.beneficiaryName.trim().isNotEmpty
+                ? insurance.beneficiaryName
+                : (insurance.beneficiaryId == 'self'
+                      ? 'صاحب الحساب'
+                      : 'فرد من العائلة'),
           ),
         ],
       ),
@@ -403,9 +383,7 @@ class InsurancePage extends StatelessWidget {
       decoration: BoxDecoration(
         color: pLightColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: pPrimaryColor.withOpacity(0.10),
-        ),
+        border: Border.all(color: pPrimaryColor.withOpacity(0.10)),
       ),
       child: Row(
         children: [
@@ -422,9 +400,7 @@ class InsurancePage extends StatelessWidget {
             child: Text(
               value,
               textAlign: TextAlign.end,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -442,9 +418,7 @@ class InsurancePage extends StatelessWidget {
       decoration: BoxDecoration(
         color: pLightColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: pPrimaryColor.withOpacity(0.10),
-        ),
+        border: Border.all(color: pPrimaryColor.withOpacity(0.10)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -462,10 +436,7 @@ class InsurancePage extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             value,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           ),
         ],
       ),
@@ -476,9 +447,7 @@ class InsurancePage extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("حذف شركة التأمين"),
         content: Text("هل أنت متأكد من حذف ${insurance.companyName}؟"),
         actions: [
@@ -491,10 +460,7 @@ class InsurancePage extends StatelessWidget {
               Navigator.pop(context);
               controller.deleteInsurance(insurance.id);
             },
-            child: const Text(
-              "حذف",
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text("حذف", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),

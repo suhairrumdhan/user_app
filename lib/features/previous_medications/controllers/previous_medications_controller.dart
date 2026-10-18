@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/previous_medication_model.dart';
 import '../services/previous_medications_service.dart';
@@ -22,7 +23,17 @@ class PreviousMedicationsController extends GetxController {
 
   PreviousMedicationsController({
     PreviousMedicationsService? service,
-  }) : _service = service ?? PreviousMedicationsService();
+    Stream<String?>? sessions,
+    String? Function()? currentUserId,
+  }) : _service = service ?? PreviousMedicationsService(),
+       _sessions =
+           sessions ??
+           FirebaseAuth.instance.authStateChanges().map((user) => user?.uid),
+       _currentUserId =
+           currentUserId ?? (() => FirebaseAuth.instance.currentUser?.uid);
+
+  final Stream<String?> _sessions;
+  final String? Function() _currentUserId;
 
   // =========================================================
   // State
@@ -42,6 +53,9 @@ class PreviousMedicationsController extends GetxController {
   final RxnString selectedRecordId = RxnString();
 
   StreamSubscription<List<PreviousMedicationModel>>? _recordsSubscription;
+  StreamSubscription<String?>? _authSubscription;
+  int _recordsGeneration = 0;
+  String? _sessionUid;
 
   // =========================================================
   // Lifecycle
@@ -50,11 +64,22 @@ class PreviousMedicationsController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    bindRecordsStream();
+    _authSubscription = _sessions.listen((uid) {
+      if (_sessionUid == uid && _recordsGeneration > 0) return;
+      _sessionUid = uid;
+      isRefreshing.value = false;
+      selectedBeneficiaryId.value = null;
+      selectedRecordId.value = null;
+      selectedFilter.value = PreviousMedicationsFilter.all;
+      allRecords.clear();
+      bindRecordsStream();
+    });
   }
 
   @override
   void onClose() {
+    ++_recordsGeneration;
+    _authSubscription?.cancel();
     _recordsSubscription?.cancel();
     super.onClose();
   }
@@ -63,55 +88,74 @@ class PreviousMedicationsController extends GetxController {
   // Stream Binding
   // =========================================================
 
-  void bindRecordsStream({
-    String? beneficiaryId,
-  }) {
+  void bindRecordsStream({String? beneficiaryId}) {
+    final generation = ++_recordsGeneration;
+    final uid = _currentUserId();
     _recordsSubscription?.cancel();
+    _recordsSubscription = null;
+    allRecords.clear();
+    if (uid == null) {
+      isLoading.value = false;
+      return;
+    }
 
     if (beneficiaryId != null) {
-      selectedBeneficiaryId.value =
-      beneficiaryId.trim().isEmpty ? null : beneficiaryId.trim();
+      selectedBeneficiaryId.value = beneficiaryId.trim().isEmpty
+          ? null
+          : beneficiaryId.trim();
     }
 
     isLoading.value = true;
 
     _recordsSubscription = _service
-        .watchAll(
-      beneficiaryId: selectedBeneficiaryId.value,
-    )
+        .watchAll(userId: uid, beneficiaryId: selectedBeneficiaryId.value)
         .listen(
           (records) {
-        allRecords.assignAll(records);
-        isLoading.value = false;
-      },
-      onError: (_) {
-        isLoading.value = false;
-        Get.snackbar(
-          'خطأ',
-          'تعذر تحميل الأدوية السابقة',
-          snackPosition: SnackPosition.BOTTOM,
+            if (generation != _recordsGeneration || _currentUserId() != uid) {
+              return;
+            }
+            allRecords.assignAll(records);
+            isLoading.value = false;
+          },
+          onError: (_) {
+            if (generation != _recordsGeneration || _currentUserId() != uid) {
+              return;
+            }
+            isLoading.value = false;
+            Get.snackbar(
+              'خطأ',
+              'تعذر تحميل الأدوية السابقة',
+              snackPosition: SnackPosition.BOTTOM,
+            );
+          },
         );
-      },
-    );
   }
 
   Future<void> refreshRecords() async {
+    final generation = _recordsGeneration;
+    final uid = _currentUserId();
+    if (uid == null) return;
     try {
       isRefreshing.value = true;
 
       final data = await _service.getAll(
+        userId: uid,
         beneficiaryId: selectedBeneficiaryId.value,
       );
 
+      if (generation != _recordsGeneration || _currentUserId() != uid) return;
       allRecords.assignAll(data);
     } catch (_) {
+      if (generation != _recordsGeneration || _currentUserId() != uid) return;
       Get.snackbar(
         'خطأ',
         'تعذر تحديث الأدوية السابقة',
         snackPosition: SnackPosition.BOTTOM,
       );
     } finally {
-      isRefreshing.value = false;
+      if (generation == _recordsGeneration && _currentUserId() == uid) {
+        isRefreshing.value = false;
+      }
     }
   }
 
@@ -125,8 +169,9 @@ class PreviousMedicationsController extends GetxController {
 
   void setBeneficiaryFilter(String? beneficiaryId) {
     final cleaned = beneficiaryId?.trim();
-    selectedBeneficiaryId.value =
-    (cleaned == null || cleaned.isEmpty) ? null : cleaned;
+    selectedBeneficiaryId.value = (cleaned == null || cleaned.isEmpty)
+        ? null
+        : cleaned;
     bindRecordsStream();
   }
 
@@ -137,8 +182,9 @@ class PreviousMedicationsController extends GetxController {
 
   void selectRecord(String? recordId) {
     final cleaned = recordId?.trim();
-    selectedRecordId.value =
-    (cleaned == null || cleaned.isEmpty) ? null : cleaned;
+    selectedRecordId.value = (cleaned == null || cleaned.isEmpty)
+        ? null
+        : cleaned;
   }
 
   void clearSelectedRecord() {
@@ -387,7 +433,7 @@ class PreviousMedicationsController extends GetxController {
       await _service.addOrUpdateRecord(model, merge: true);
       Get.snackbar(
         'تم',
-        'تم حفظ الدواء السابق بنجاح',
+        'تمت إضافة الدواء إلى السجل.',
         snackPosition: SnackPosition.BOTTOM,
       );
     } catch (_) {
@@ -554,15 +600,11 @@ class PreviousMedicationsController extends GetxController {
     }
   }
 
-  Future<void> markReminderCompleted({
-    required String recordId,
-  }) async {
+  Future<void> markReminderCompleted({required String recordId}) async {
     try {
       isProcessing.value = true;
 
-      await _service.markReminderCompleted(
-        recordId: recordId,
-      );
+      await _service.markReminderCompleted(recordId: recordId);
     } catch (_) {
       Get.snackbar(
         'خطأ',
@@ -574,15 +616,11 @@ class PreviousMedicationsController extends GetxController {
     }
   }
 
-  Future<void> clearReminderLink({
-    required String recordId,
-  }) async {
+  Future<void> clearReminderLink({required String recordId}) async {
     try {
       isProcessing.value = true;
 
-      await _service.clearReminderLink(
-        recordId: recordId,
-      );
+      await _service.clearReminderLink(recordId: recordId);
 
       Get.snackbar(
         'تم',
@@ -613,11 +651,7 @@ class PreviousMedicationsController extends GetxController {
         clearSelectedRecord();
       }
 
-      Get.snackbar(
-        'تم',
-        'تم حذف السجل',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      Get.snackbar('تم', 'تم حذف السجل', snackPosition: SnackPosition.BOTTOM);
     } catch (_) {
       Get.snackbar(
         'خطأ',

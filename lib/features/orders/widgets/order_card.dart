@@ -82,14 +82,17 @@ class OrderCard extends StatelessWidget {
                 const SizedBox(width: 12),
                 _compactInfo(
                   Iconsax.money_4,
-                  order.estimatedTotalPrice != null
-                      ? '${order.estimatedTotalPrice!.toStringAsFixed(2)} د.ل'
+                  order.currentCustomerTotalPrice != null
+                      ? '${!order.isAwaitingInsuranceRemoval && order.invoiceId == null && !(order.acceptedOfferVersion == order.offerVersion && order.offerVersion > 0) ? '≈' : ''}${order.currentCustomerTotalPrice!.toStringAsFixed(2)} د.ل'
                       : 'السعر غير محدد',
                 ),
                 const SizedBox(width: 12),
                 _compactInfo(Iconsax.calendar_1, _formatDate(order.createdAt)),
                 const Spacer(),
-                if (order.containsInsurance) _tag('تأمين'),
+                if (order.isAwaitingInsuranceRemoval)
+                  _tag('بدون تأمين')
+                else if (order.containsInsurance)
+                  _tag('تأمين'),
                 const SizedBox(width: 5),
                 const Icon(Iconsax.arrow_left_2, size: 16),
               ],
@@ -103,23 +106,27 @@ class OrderCard extends StatelessWidget {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF0E5),
+                  color: SearchUiColors.light,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFFF8A3D)),
+                  border: Border.all(
+                    color: SearchUiColors.primary.withValues(alpha: .2),
+                  ),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Iconsax.notification_bing,
-                      color: Color(0xFFFF6D00),
+                      color: SearchUiColors.primary,
                       size: 18,
                     ),
                     SizedBox(width: 7),
                     Expanded(
                       child: Text(
-                        'لديك عرض من الصيدلية بانتظار ردك',
+                        order.partialOffer['kind'] == 'replacement'
+                            ? 'عرض تبديل الأصناف بانتظار موافقتك'
+                            : 'لديك عرض من الصيدلية بانتظار ردك',
                         style: TextStyle(
-                          color: Color(0xFF9A3F00),
+                          color: SearchUiColors.darkText,
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
                         ),
@@ -195,7 +202,9 @@ class OrderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(9),
       ),
       child: Text(
-        order.status.label,
+        order.insuranceRemoval['status'] == 'pending'
+            ? 'بانتظار قرار الدفع بدون تأمين'
+            : order.displayStatusLabel,
         style: TextStyle(
           color: color,
           fontSize: 10,

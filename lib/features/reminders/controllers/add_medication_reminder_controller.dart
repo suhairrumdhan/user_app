@@ -242,7 +242,7 @@ class AddMedicationReminderController extends GetxController {
     } catch (e) {
       Get.snackbar(
         'خطأ',
-        'فشل في حفظ التذكير: $e',
+        'فشل في حفظ التذكير',
         snackPosition: SnackPosition.BOTTOM,
       );
       return null;

@@ -1,3 +1,4 @@
+import '../../../shared/libya_phone.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -51,7 +52,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       if (user.dateOfBirth != null) {
         _selectedBirthDate.value = user.dateOfBirth;
-        _birthDateController.text = DateFormat('yyyy/MM/dd').format(user.dateOfBirth!);
+        _birthDateController.text = DateFormat(
+          'yyyy/MM/dd',
+        ).format(user.dateOfBirth!);
       }
     }
   }
@@ -67,7 +70,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Future<void> _selectBirthDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _selectedBirthDate.value ?? DateTime.now().subtract(const Duration(days: 365 * 18)),
+      initialDate:
+          _selectedBirthDate.value ??
+          DateTime.now().subtract(const Duration(days: 365 * 18)),
       firstDate: DateTime(1900),
       lastDate: DateTime.now(),
       builder: (context, child) {
@@ -102,7 +107,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       if (user == null || userModel == null) return;
 
       final newName = _nameController.text.trim();
-      final newPhone = _phoneController.text.trim();
+      final newPhone = LibyaPhone.normalize(_phoneController.text);
       final newBirthDate = _selectedBirthDate.value;
 
       final Map<String, dynamic> updates = {};
@@ -125,13 +130,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
       }
 
       await userController.loadUser(userModel.id);
-      _showSuccess('تم حفظ التغييرات بنجاح');
+      _showSuccess('تم حفظ التغييرات.');
 
       if (mounted) {
         Navigator.of(context).pop();
       }
     } catch (e) {
-      _showError('خطأ غير متوقع: ${e.toString()}');
+      _showError('تعذر حفظ البيانات. أعد المحاولة.');
     } finally {
       if (mounted) {
         _loading.value = false;
@@ -181,7 +186,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
             children: [
               // AppBar بنفس تصميم ProfilePage
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     IconButton(
@@ -217,7 +225,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     child: ListView(
                       padding: const EdgeInsets.all(20),
                       children: [
-
                         // بطاقة المعلومات الشخصية
                         _buildPersonalInfoCard(),
                         const SizedBox(height: 30),
@@ -237,7 +244,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     });
   }
 
-
   Widget _buildPersonalInfoCard() {
     return _buildInfoCard(
       children: [
@@ -246,11 +252,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
           label: 'الاسم الكامل',
           icon: Iconsax.user,
           validator: (value) =>
-          value == null || value.isEmpty ? 'يرجى إدخال الاسم' : null,
+              value == null || value.isEmpty ? 'يرجى إدخال الاسم' : null,
         ),
         const SizedBox(height: 16),
         _buildModernTextField(
           controller: _phoneController,
+          validator: (value) => LibyaPhone.validate(value, required: false),
           label: 'رقم الهاتف',
           icon: Iconsax.call,
           inputType: TextInputType.phone,
@@ -267,48 +274,47 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Widget _buildSaveButton() {
-    return Obx(() => Container(
-      width: double.infinity,
-      height: 52,
-      decoration: BoxDecoration(
-        color: pPrimaryColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: pPrimaryColor.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: _loading.value ? null : _saveChanges,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: pPrimaryColor,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+    return Obx(
+      () => Container(
+        width: double.infinity,
+        height: 52,
+        decoration: BoxDecoration(
+          color: pPrimaryColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: pPrimaryColor.withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        child: _loading.value
-            ? const SizedBox(
-          height: 22,
-          width: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: Colors.white,
+        child: ElevatedButton(
+          onPressed: _loading.value ? null : _saveChanges,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: pPrimaryColor,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
-        )
-            : const Text(
-          'حفظ التغييرات',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          child: _loading.value
+              ? const SizedBox(
+                  height: 22,
+                  width: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text(
+                  'حفظ التغييرات',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
         ),
       ),
-    ));
+    );
   }
 
   Widget _buildInfoCard({required List<Widget> children}) {
@@ -336,7 +342,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     color: pPrimaryColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(Iconsax.user_edit, color: pPrimaryColor, size: 20),
+                  child: Icon(
+                    Iconsax.user_edit,
+                    color: pPrimaryColor,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 const Text(
@@ -390,7 +400,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: pPrimaryColor, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
     );
   }
@@ -411,7 +424,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
             labelText: label,
             labelStyle: const TextStyle(color: Color(0xFF7F8C8D), fontSize: 13),
             prefixIcon: Icon(icon, color: pPrimaryColor, size: 20),
-            suffixIcon: Icon(Iconsax.calendar_1, color: pPrimaryColor, size: 18),
+            suffixIcon: Icon(
+              Iconsax.calendar_1,
+              color: pPrimaryColor,
+              size: 18,
+            ),
             filled: true,
             fillColor: const Color(0xFFF8F9FA),
             border: OutlineInputBorder(
@@ -426,11 +443,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: pPrimaryColor, width: 2),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
           ),
         ),
       ),
     );
   }
-
 }

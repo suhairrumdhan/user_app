@@ -2,6 +2,18 @@ import '../../search/models/medicine_search_request.dart';
 import '../models/medicine_model.dart';
 
 class DrugParser {
+  /// Text without medication evidence is never inserted into the medicine list.
+  static List<String> parseUncertainText(Map<String, dynamic> response) {
+    final entries = response['uncertainText'];
+    if (entries is! List) return const [];
+    return entries
+        .whereType<Map>()
+        .map((entry) => (entry['text'] ?? '').toString().trim())
+        .where((text) => text.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+
   /// New responses carry source ordering; old responses remain readable.
   static List<MedicineModel> parseReviewResponse(
     Map<String, dynamic> response,

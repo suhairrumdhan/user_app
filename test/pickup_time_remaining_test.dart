@@ -56,16 +56,4 @@ void main() {
       isFalse,
     );
   });
-
-  test('uses the 24-hour pickup window for legacy ready orders', () {
-    final readyAt = DateTime.utc(2026, 9, 14, 9);
-
-    expect(
-      PickupTimeRemaining.resolveDeadline(
-        explicitDeadline: null,
-        readyAt: readyAt,
-      ),
-      readyAt.add(const Duration(hours: 24)),
-    );
-  });
 }

@@ -59,6 +59,10 @@ async function ensureUser(auth, uid, email, name) {
 
 async function tokenFor(auth, apiKey, uid) {
   const customToken = await auth.createCustomToken(uid);
+  return exchangeCustomToken(apiKey, customToken);
+}
+
+async function exchangeCustomToken(apiKey, customToken) {
   const response = await fetch(
     `https://identitytoolkit.googleapis.com/v1/accounts:` +
       `signInWithCustomToken?key=${apiKey}`,
@@ -162,7 +166,8 @@ async function initializeLiveSuite(suiteName, {isolatedIdentities = false} = {})
     outsiderUid: identities.outsider.uid,
   };
   context.call = (actor, command, orderId, options = {}) => callRaw(
-    actor ? tokens[actor] : null,
+    actor ? tokens[actor === "pharmacy" && context.employeeTokenKey ?
+      context.employeeTokenKey : actor] : null,
     {
       schemaVersion: options.schemaVersion ?? 3,
       command,
@@ -239,6 +244,7 @@ async function writeEvidence(context, status, extra = {}) {
 module.exports = {
   LIVE_PROJECT_ID,
   LiveCallableError,
+  exchangeCustomToken,
   initializeLiveSuite,
   readDocument,
   testOrder,

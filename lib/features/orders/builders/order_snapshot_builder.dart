@@ -16,6 +16,7 @@ class OrderSnapshotBuilder {
   static OrderBeneficiarySnapshot buildBeneficiarySnapshot({
     required BeneficiaryModel beneficiary,
     required String ownerUserId,
+    FamilyMemberModel? familyMember,
   }) {
     final userController = Get.find<UserController>();
     final familyController = Get.find<FamilyController>();
@@ -29,17 +30,19 @@ class OrderSnapshotBuilder {
 
       final allergies = _safeStringList(currentUser.allergies);
       final healthConditions = _safeStringList(currentUser.healthConditions);
-      final currentMedications =
-      _safeStringList(currentUser.currentMedications);
+      final currentMedications = _safeStringList(
+        currentUser.currentMedications,
+      );
 
-      final hasHealthData = allergies.isNotEmpty ||
+      final hasHealthData =
+          allergies.isNotEmpty ||
           healthConditions.isNotEmpty ||
           currentMedications.isNotEmpty ||
           _hasText(currentUser.bloodType) ||
           _resolveAge(
-            explicitAge: null,
-            dateOfBirth: currentUser.dateOfBirth,
-          ) !=
+                explicitAge: null,
+                dateOfBirth: currentUser.dateOfBirth,
+              ) !=
               null ||
           currentUser.dateOfBirth != null ||
           _hasText(currentUser.gender);
@@ -70,12 +73,12 @@ class OrderSnapshotBuilder {
       );
     }
 
-    final FamilyMemberModel? member = familyController.members
-        .cast<FamilyMemberModel?>()
-        .firstWhere(
+    final FamilyMemberModel? member =
+        familyMember ??
+        familyController.members.cast<FamilyMemberModel?>().firstWhere(
           (m) => m?.id == beneficiary.id,
-      orElse: () => null,
-    );
+          orElse: () => null,
+        );
 
     if (member == null) {
       throw Exception('تعذر العثور على بيانات المستفيد من أفراد العائلة');
@@ -85,7 +88,8 @@ class OrderSnapshotBuilder {
     final healthConditions = _safeStringList(member.healthConditions);
     final currentMedications = _safeStringList(member.currentMedications);
 
-    final hasHealthData = allergies.isNotEmpty ||
+    final hasHealthData =
+        allergies.isNotEmpty ||
         healthConditions.isNotEmpty ||
         currentMedications.isNotEmpty ||
         _hasText(member.bloodType) ||
@@ -97,15 +101,12 @@ class OrderSnapshotBuilder {
       beneficiaryId: beneficiary.id,
       ownerUserId: ownerUserId,
       type: BeneficiaryType.family,
-      name: _safeName(
-        preferred: beneficiary.name,
-        fallback: member.name,
-      ),
+      name: _safeName(preferred: beneficiary.name, fallback: member.name),
       relationLabel: beneficiary.relation.trim().isNotEmpty
           ? beneficiary.relation.trim()
           : (member.relation?.trim().isNotEmpty == true
-          ? member.relation!.trim()
-          : 'فرد من العائلة'),
+                ? member.relation!.trim()
+                : 'فرد من العائلة'),
       familyMemberId: member.id,
       gender: _safeText(member.gender),
       bloodType: _safeText(member.bloodType),
@@ -133,27 +134,31 @@ class OrderSnapshotBuilder {
 
     final insuranceController = Get.find<InsuranceController>();
 
+    final beneficiaryKey = beneficiary.isSelf ? 'self' : beneficiary.id;
     final activeInsurances = insuranceController.insurances.where((item) {
-      if (!item.isActive) return false;
-
-      if (beneficiary.isSelf) {
-        return true;
-      }
-
-      return item.coveredMemberIds.contains(beneficiary.id);
+      return item.beneficiaryId == beneficiaryKey;
     }).toList();
 
     if (activeInsurances.isEmpty) {
-      return const OrderInsuranceSnapshot(
-        enabled: false,
-        companyCodes: [],
-        companyNames: [],
-        cardNumbers: [],
+      throw Exception(
+        'لا توجد وثيقة تأمين للمستفيد المحدد. حدّث الوثيقة أو أرسل الطلب دون تأمين.',
+      );
+    }
+    if (activeInsurances.length > 1) {
+      throw Exception(
+        'المستفيد مرتبط بأكثر من وثيقة تأمين. احتفظ بوثيقة واحدة فقط.',
       );
     }
 
+    final selected = activeInsurances.single;
+
     return OrderInsuranceSnapshot(
       enabled: true,
+      beneficiaryId: beneficiaryKey,
+      insuranceDocumentId: selected.id,
+      companyCode: selected.companyCode.trim().toUpperCase(),
+      companyName: selected.companyName.trim(),
+      policyNumber: selected.cardNumber.trim(),
       companyCodes: activeInsurances
           .map((e) => e.companyCode.trim().toUpperCase())
           .where((e) => e.isNotEmpty)
@@ -186,10 +191,12 @@ class OrderSnapshotBuilder {
       isOpenNow: pharmacy.isOpenNow,
       latitude: pharmacy.latitude,
       longitude: pharmacy.longitude,
-      distanceKm:
-      pharmacy.distanceKm > 0 ? pharmacy.distanceKm : pharmacy.distance,
-      estimatedTotalPrice:
-      pharmacy.totalEstimatedPrice > 0 ? pharmacy.totalEstimatedPrice : null,
+      distanceKm: pharmacy.distanceKm > 0
+          ? pharmacy.distanceKm
+          : pharmacy.distance,
+      estimatedTotalPrice: pharmacy.totalEstimatedPrice > 0
+          ? pharmacy.totalEstimatedPrice
+          : null,
       pharmacyScore: pharmacy.pharmacyScore > 0 ? pharmacy.pharmacyScore : null,
     );
   }
@@ -201,17 +208,20 @@ class OrderSnapshotBuilder {
     return selectedMatches.map((matched) {
       final quantity =
           quantitiesByMatchedMedicineId['${matched.matchedMedicineId}:${matched.soldByPiece}'] ??
-          quantitiesByMatchedMedicineId[matched.matchedMedicineId] ?? 1;
+          quantitiesByMatchedMedicineId[matched.matchedMedicineId] ??
+          1;
 
-      final normalizedRequested =
-      MedicineNormalizer.normalize(matched.requestedName);
-      final strength =
-      MedicineNormalizer.extractStrength(matched.requestedName);
-      final dosageForm =
-      MedicineNormalizer.extractDosageForm(matched.requestedName);
+      final selectedName =
+          matched.matchType == 'brand_family_choice' ||
+              matched.matchType == 'cleaned_name_and_requested_details'
+          ? matched.matchedMedicineName
+          : matched.requestedName;
+      final normalizedRequested = MedicineNormalizer.normalize(selectedName);
+      final strength = MedicineNormalizer.extractStrength(selectedName);
+      final dosageForm = MedicineNormalizer.extractDosageForm(selectedName);
 
       return OrderMedicineItem(
-        requestedName: matched.requestedName,
+        requestedName: selectedName,
         normalizedName: normalizedRequested,
         strength: strength,
         dosageForm: dosageForm,
@@ -233,6 +243,7 @@ class OrderSnapshotBuilder {
     required OrderUserSnapshot userSnapshot,
     required PharmacyModel pharmacy,
     required BeneficiaryModel beneficiary,
+    FamilyMemberModel? familyMember,
     required List<MatchedMedicineResult> selectedMatches,
     required Map<String, int> quantitiesByMatchedMedicineId,
     required bool useInsurance,
@@ -247,6 +258,7 @@ class OrderSnapshotBuilder {
     final beneficiarySnapshot = buildBeneficiarySnapshot(
       beneficiary: beneficiary,
       ownerUserId: ownerUserId,
+      familyMember: familyMember,
     );
 
     final insuranceSnapshot = buildInsuranceSnapshot(
@@ -254,9 +266,7 @@ class OrderSnapshotBuilder {
       useInsurance: useInsurance,
     );
 
-    final pharmacySnapshot = buildPharmacySnapshot(
-      pharmacy: pharmacy,
-    );
+    final pharmacySnapshot = buildPharmacySnapshot(pharmacy: pharmacy);
 
     final medicineItems = buildMedicineItemsFromMatches(
       selectedMatches: selectedMatches,
@@ -266,7 +276,8 @@ class OrderSnapshotBuilder {
     final now = DateTime.now();
     final containsInsurance = insuranceSnapshot.hasInsurance;
 
-    final hasSensitiveHealthData = beneficiarySnapshot.allergies.isNotEmpty ||
+    final hasSensitiveHealthData =
+        beneficiarySnapshot.allergies.isNotEmpty ||
         beneficiarySnapshot.healthConditions.isNotEmpty ||
         beneficiarySnapshot.currentMedications.isNotEmpty ||
         beneficiarySnapshot.hasHealthData;
@@ -275,13 +286,15 @@ class OrderSnapshotBuilder {
 
     final calculatedTotal = medicineItems.fold<double>(
       0,
-          (sum, item) => sum + item.lineTotal,
+      (sum, item) => sum + item.lineTotal,
     );
 
     return OrderModel(
       user: userSnapshot,
       pharmacy: pharmacySnapshot.copyWith(
-        estimatedTotalPrice: calculatedTotal > 0 ? calculatedTotal : pharmacySnapshot.estimatedTotalPrice,
+        estimatedTotalPrice: calculatedTotal > 0
+            ? calculatedTotal
+            : pharmacySnapshot.estimatedTotalPrice,
       ),
       beneficiary: beneficiarySnapshot,
       insurance: insuranceSnapshot,
@@ -295,7 +308,7 @@ class OrderSnapshotBuilder {
       chatId: _safeOptionalText(chatId),
       totalItemsCount: medicineItems.fold<int>(
         0,
-            (sum, item) => sum + item.quantity,
+        (sum, item) => sum + item.quantity,
       ),
       estimatedTotalPrice: calculatedTotal > 0 ? calculatedTotal : null,
       hasSensitiveHealthData: hasSensitiveHealthData,
@@ -332,9 +345,7 @@ class OrderSnapshotBuilder {
     return text;
   }
 
-  static OrderUserSnapshot buildUserSnapshot({
-    required String userId,
-  }) {
+  static OrderUserSnapshot buildUserSnapshot({required String userId}) {
     final userController = Get.find<UserController>();
     final currentUser = userController.user.value;
 
@@ -344,27 +355,22 @@ class OrderSnapshotBuilder {
 
     return OrderUserSnapshot(
       userId: userId,
-      name: _safeName(
-        preferred: currentUser.name,
-        fallback: 'مستخدم',
-      ),
+      name: _safeName(preferred: currentUser.name, fallback: 'مستخدم'),
       phone: _safeText(currentUser.phone),
       email: _safeText(currentUser.email),
       profileImageUrl: _safeText(currentUser.profileImageUrl),
     );
   }
 
-  static int? _resolveAge({
-    int? explicitAge,
-    DateTime? dateOfBirth,
-  }) {
+  static int? _resolveAge({int? explicitAge, DateTime? dateOfBirth}) {
     if (explicitAge != null && explicitAge > 0) return explicitAge;
     if (dateOfBirth == null) return null;
 
     final now = DateTime.now();
     int age = now.year - dateOfBirth.year;
 
-    final hasHadBirthdayThisYear = now.month > dateOfBirth.month ||
+    final hasHadBirthdayThisYear =
+        now.month > dateOfBirth.month ||
         (now.month == dateOfBirth.month && now.day >= dateOfBirth.day);
 
     if (!hasHadBirthdayThisYear) {

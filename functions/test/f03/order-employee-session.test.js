@@ -26,7 +26,7 @@ function setup(employee = {}) {
       orderId: "order-one",
       user: {userId: "user-one"},
       pharmacy: {pharmacyId: "pharmacy-one"},
-      status: "underReview",
+      status: "underReview", estimatedTotalPrice: 10,
       statusHistory: [],
       medicines: [{matchedMedicineId: "medicine-one", quantity: 1}],
       offerVersion: 0,
@@ -34,7 +34,7 @@ function setup(employee = {}) {
       reviewStartedAt: Timestamp.fromMillis(now - 1000),
     },
     "pharmacies/pharmacy-one/medicines/medicine-one": {
-      id: "medicine-one",
+      id: "medicine-one", sellingPrice: 10,
       quantity: 5,
       reservedQuantity: 0,
       isActive: true,

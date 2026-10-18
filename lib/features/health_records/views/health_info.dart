@@ -27,9 +27,24 @@ class _HealthInfoScreenState extends State<HealthInfoScreen> {
   final TextEditingController otherDiseaseController = TextEditingController();
   final TextEditingController dateController = TextEditingController();
 
-  final List<String> bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+  final List<String> bloodTypes = [
+    'A+',
+    'A-',
+    'B+',
+    'B-',
+    'AB+',
+    'AB-',
+    'O+',
+    'O-',
+  ];
   final List<String> genders = ['ذكر', 'أنثى'];
-  final List<String> commonDiseases = ['السكري', 'ضغط الدم', 'أمراض القلب', 'الربو', 'أمراض الكلى'];
+  final List<String> commonDiseases = [
+    'السكري',
+    'ضغط الدم',
+    'أمراض القلب',
+    'الربو',
+    'أمراض الكلى',
+  ];
 
   @override
   void initState() {
@@ -45,7 +60,8 @@ class _HealthInfoScreenState extends State<HealthInfoScreen> {
       medications = user.currentMedications.join(', ');
       chronicDiseases = List.from(user.healthConditions);
       if (dateOfBirth != null) {
-        dateController.text = "${dateOfBirth!.year}-${dateOfBirth!.month}-${dateOfBirth!.day}";
+        dateController.text =
+            "${dateOfBirth!.year}-${dateOfBirth!.month}-${dateOfBirth!.day}";
       }
     }
   }
@@ -72,7 +88,8 @@ class _HealthInfoScreenState extends State<HealthInfoScreen> {
     if (selectedDate != null) {
       setState(() {
         dateOfBirth = selectedDate;
-        dateController.text = "${selectedDate.year}-${selectedDate.month}-${selectedDate.day}";
+        dateController.text =
+            "${selectedDate.year}-${selectedDate.month}-${selectedDate.day}";
       });
     }
   }
@@ -84,8 +101,16 @@ class _HealthInfoScreenState extends State<HealthInfoScreen> {
         allDiseases.add(otherDiseaseController.text.trim());
       }
 
-      final allergiesList = allergies.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-      final medicationsList = medications.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      final allergiesList = allergies
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      final medicationsList = medications
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
 
       await userController.updateHealthInfo(
         bloodType: bloodType,
@@ -98,15 +123,21 @@ class _HealthInfoScreenState extends State<HealthInfoScreen> {
       );
 
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ في حفظ المعلومات: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('خطأ في حفظ المعلومات')));
     }
   }
 
   Future<void> _skipHealthInfo() async {
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
   }
 
   @override
@@ -129,23 +160,29 @@ class _HealthInfoScreenState extends State<HealthInfoScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 8),
-            const Text('(اختياري - يمكنك تخطي هذه الخطوة)', style: TextStyle(color: Colors.grey)),
+            const Text('خطوة اختيارية', style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 20),
 
             CustomDropdownField<String>(
               label: 'فصيلة الدم',
               value: bloodType,
-              items: bloodTypes.map((bt) => DropdownMenuItem(value: bt, child: Text(bt))).toList(),
+              items: bloodTypes
+                  .map((bt) => DropdownMenuItem(value: bt, child: Text(bt)))
+                  .toList(),
               onChanged: (val) => setState(() => bloodType = val),
-              icon: OctIcons.code_of_conduct, // ✅ Pass IconData directly (no Icon wrapper)
+              icon: OctIcons
+                  .code_of_conduct, // ✅ Pass IconData directly (no Icon wrapper)
             ),
 
             CustomDropdownField<String>(
               label: 'الجنس',
               value: gender,
-              items: genders.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
+              items: genders
+                  .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                  .toList(),
               onChanged: (val) => setState(() => gender = val),
-              icon: Iconsax.man_outline, // ✅ Pass IconData directly (no Icon wrapper)
+              icon: Iconsax
+                  .man_outline, // ✅ Pass IconData directly (no Icon wrapper)
             ),
             // تاريخ الميلاد
             CustomTextField(
@@ -189,7 +226,7 @@ class _HealthInfoScreenState extends State<HealthInfoScreen> {
 
             ElevatedButton.icon(
               onPressed: _saveHealthInfo,
-              icon: const  Icon(EvaIcons.checkmark),
+              icon: const Icon(EvaIcons.checkmark),
               label: const Text('حفظ المعلومات'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF5EABD6),
@@ -205,7 +242,10 @@ class _HealthInfoScreenState extends State<HealthInfoScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 side: const BorderSide(color: Colors.grey),
               ),
-              child: const Text('تخطي الآن', style: TextStyle(color: Colors.grey)),
+              child: const Text(
+                'تخطي الآن',
+                style: TextStyle(color: Colors.grey),
+              ),
             ),
           ],
         ),

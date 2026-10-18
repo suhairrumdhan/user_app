@@ -57,6 +57,31 @@ void main() {
     );
   });
 
+  test('keeps up to three distinct Flask suggestions in order', () async {
+    final result = await ManualMedicineAnalysisService(
+      analyzer: (_) async => {
+        'suggestions': [
+          {'displayName': 'PANADOL 500 mg TAB'},
+          {'displayName': 'PANADOL EXTRA TAB'},
+          {'displayName': 'PANADOL ADVANCE 500 mg TAB'},
+          {'displayName': 'PANADOL COLD TAB'},
+        ],
+        'medicines': <dynamic>[],
+      },
+    ).analyzeOne('panadol');
+
+    expect(result.status, ManualMedicineAnalysisStatus.matched);
+    expect(result.suggestionOptions, [
+      'PANADOL 500 mg TAB',
+      'PANADOL EXTRA TAB',
+      'PANADOL ADVANCE 500 mg TAB',
+    ]);
+    expect(
+      result.acceptSuggestion('PANADOL EXTRA TAB').suggestedName,
+      'PANADOL EXTRA TAB',
+    );
+  });
+
   test(
     'malformed response is a service failure, not a successful empty list',
     () async {
@@ -66,7 +91,7 @@ void main() {
 
       expect(result.status, ManualMedicineAnalysisStatus.failed);
       expect(result.originalName, 'Original Name');
-      expect(result.failureMessage, contains('رد خدمة'));
+      expect(result.failureMessage, contains('تعذر قراءة'));
     },
   );
 

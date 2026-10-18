@@ -49,9 +49,12 @@ extension OrderStatusX on OrderStatus {
         return next == OrderStatus.preparing ||
             next == OrderStatus.partialOfferPending;
       case OrderStatus.preparing:
-        return next == OrderStatus.ready || next == OrderStatus.cancelled;
+        return next == OrderStatus.ready ||
+            next == OrderStatus.cancelled ||
+            next == OrderStatus.partialOfferPending;
       case OrderStatus.ready:
         return next == OrderStatus.completed ||
+            next == OrderStatus.partialOfferPending ||
             next == OrderStatus.cancelled ||
             next == OrderStatus.notCollected;
       case OrderStatus.completed:
@@ -485,12 +488,22 @@ class OrderBeneficiarySnapshot {
 
 class OrderInsuranceSnapshot {
   final bool enabled;
+  final String? beneficiaryId;
+  final String? insuranceDocumentId;
+  final String? companyCode;
+  final String? companyName;
+  final String? policyNumber;
   final List<String> companyCodes;
   final List<String> companyNames;
   final List<String> cardNumbers;
 
   const OrderInsuranceSnapshot({
     this.enabled = false,
+    this.beneficiaryId,
+    this.insuranceDocumentId,
+    this.companyCode,
+    this.companyName,
+    this.policyNumber,
     this.companyCodes = const [],
     this.companyNames = const [],
     this.cardNumbers = const [],
@@ -501,6 +514,11 @@ class OrderInsuranceSnapshot {
   factory OrderInsuranceSnapshot.fromMap(Map<String, dynamic> map) {
     return OrderInsuranceSnapshot(
       enabled: map['enabled'] == true,
+      beneficiaryId: map['beneficiaryId']?.toString(),
+      insuranceDocumentId: map['insuranceDocumentId']?.toString(),
+      companyCode: map['companyCode']?.toString(),
+      companyName: map['companyName']?.toString(),
+      policyNumber: (map['policyNumber'] ?? map['cardNumber'])?.toString(),
       companyCodes: _toStringList(map['companyCodes']),
       companyNames: _toStringList(map['companyNames']),
       cardNumbers: _toStringList(map['cardNumbers']),
@@ -510,6 +528,11 @@ class OrderInsuranceSnapshot {
   Map<String, dynamic> toMap() {
     return {
       'enabled': enabled,
+      'beneficiaryId': beneficiaryId,
+      'insuranceDocumentId': insuranceDocumentId,
+      'companyCode': companyCode,
+      'companyName': companyName,
+      'policyNumber': policyNumber,
       'companyCodes': companyCodes,
       'companyNames': companyNames,
       'cardNumbers': cardNumbers,
@@ -519,12 +542,22 @@ class OrderInsuranceSnapshot {
 
   OrderInsuranceSnapshot copyWith({
     bool? enabled,
+    String? beneficiaryId,
+    String? insuranceDocumentId,
+    String? companyCode,
+    String? companyName,
+    String? policyNumber,
     List<String>? companyCodes,
     List<String>? companyNames,
     List<String>? cardNumbers,
   }) {
     return OrderInsuranceSnapshot(
       enabled: enabled ?? this.enabled,
+      beneficiaryId: beneficiaryId ?? this.beneficiaryId,
+      insuranceDocumentId: insuranceDocumentId ?? this.insuranceDocumentId,
+      companyCode: companyCode ?? this.companyCode,
+      companyName: companyName ?? this.companyName,
+      policyNumber: policyNumber ?? this.policyNumber,
       companyCodes: companyCodes ?? this.companyCodes,
       companyNames: companyNames ?? this.companyNames,
       cardNumbers: cardNumbers ?? this.cardNumbers,
@@ -704,6 +737,10 @@ class OrderModel {
   final String? chatId;
   final int totalItemsCount;
   final double? estimatedTotalPrice;
+  final double? initialCustomerEstimatedTotalPrice;
+  final double? finalCustomerTotalPrice;
+  final double? finalGrossTotalPrice;
+  final double? finalInsuranceShare;
   final bool hasSensitiveHealthData;
   final bool containsInsurance;
   final String? prescriptionId;
@@ -722,7 +759,10 @@ class OrderModel {
   final String? commandResultRef;
   final String? invoiceId;
   final int offerVersion;
+  final int? acceptedOfferVersion;
   final Map<String, dynamic> partialOffer;
+  final Map<String, dynamic> insuranceRemoval;
+  final Map<String, dynamic> insuranceResolution;
   final String? reservationId;
   final String? reservationState;
   final DateTime? reviewStartedAt;
@@ -759,6 +799,10 @@ class OrderModel {
     this.chatId,
     required this.totalItemsCount,
     this.estimatedTotalPrice,
+    this.initialCustomerEstimatedTotalPrice,
+    this.finalCustomerTotalPrice,
+    this.finalGrossTotalPrice,
+    this.finalInsuranceShare,
     this.hasSensitiveHealthData = false,
     this.containsInsurance = false,
     this.prescriptionId,
@@ -777,7 +821,10 @@ class OrderModel {
     this.commandResultRef,
     this.invoiceId,
     this.offerVersion = 0,
+    this.acceptedOfferVersion,
     this.partialOffer = const {},
+    this.insuranceRemoval = const {},
+    this.insuranceResolution = const {},
     this.reservationId,
     this.reservationState,
     this.reviewStartedAt,
@@ -799,6 +846,38 @@ class OrderModel {
       status == OrderStatus.received || status == OrderStatus.underReview;
   bool get isManual => requestSource == OrderRequestSource.manual;
   bool get isPrescription => requestSource == OrderRequestSource.prescription;
+
+  String get displayStatusLabel {
+    if (status == OrderStatus.partialOfferPending) {
+      if (partialOffer['kind'] == 'full')
+        return 'بانتظار موافقة سعر الطلب الكامل';
+      if (partialOffer['kind'] == 'replacement')
+        return 'بانتظار موافقة تبديل الأصناف';
+    }
+    return status.label;
+  }
+
+  bool get isAwaitingInsuranceRemoval =>
+      insuranceRemoval['status'] == 'pending' &&
+      ![
+        OrderStatus.completed,
+        OrderStatus.cancelled,
+        OrderStatus.rejected,
+        OrderStatus.notCollected,
+      ].contains(status);
+
+  double? get currentCustomerTotalPrice {
+    if (isAwaitingInsuranceRemoval) {
+      final quote = insuranceRemoval['quote'];
+      if (quote is Map) return _toDouble(quote['customerTotal']);
+      return null;
+    }
+    if (status == OrderStatus.partialOfferPending &&
+        partialOffer['quote'] is Map) {
+      return _toDouble((partialOffer['quote'] as Map)['customerTotal']);
+    }
+    return finalCustomerTotalPrice ?? estimatedTotalPrice;
+  }
 
   factory OrderModel.fromMap(String id, Map<String, dynamic> map) {
     return OrderModel(
@@ -839,6 +918,12 @@ class OrderModel {
           ? map['totalItemsCount'] as int
           : int.tryParse('${map['totalItemsCount']}') ?? 0,
       estimatedTotalPrice: _toDouble(map['estimatedTotalPrice']),
+      initialCustomerEstimatedTotalPrice: _toDouble(
+        map['initialCustomerEstimatedTotalPrice'],
+      ),
+      finalCustomerTotalPrice: _toDouble(map['finalCustomerTotalPrice']),
+      finalGrossTotalPrice: _toDouble(map['finalGrossTotalPrice']),
+      finalInsuranceShare: _toDouble(map['finalInsuranceShare']),
       hasSensitiveHealthData: map['hasSensitiveHealthData'] == true,
       containsInsurance: map['containsInsurance'] == true,
       prescriptionId: map['prescriptionId']?.toString(),
@@ -861,7 +946,16 @@ class OrderModel {
       offerVersion: map['offerVersion'] is int
           ? map['offerVersion'] as int
           : int.tryParse('${map['offerVersion']}') ?? 0,
+      acceptedOfferVersion: map['acceptedOfferVersion'] is int
+          ? map['acceptedOfferVersion'] as int
+          : int.tryParse('${map['acceptedOfferVersion']}'),
       partialOffer: Map<String, dynamic>.from(map['partialOffer'] ?? const {}),
+      insuranceResolution: Map<String, dynamic>.from(
+        map['insuranceResolution'] ?? const {},
+      ),
+      insuranceRemoval: Map<String, dynamic>.from(
+        map['insuranceRemoval'] ?? const {},
+      ),
       reservationId: map['reservationId']?.toString(),
       reservationState: map['reservationState']?.toString(),
       reviewStartedAt: _toDateTime(map['reviewStartedAt']),
@@ -904,6 +998,10 @@ class OrderModel {
       'chatId': chatId,
       'totalItemsCount': totalItemsCount,
       'estimatedTotalPrice': estimatedTotalPrice,
+      'initialCustomerEstimatedTotalPrice': initialCustomerEstimatedTotalPrice,
+      'finalCustomerTotalPrice': finalCustomerTotalPrice,
+      'finalGrossTotalPrice': finalGrossTotalPrice,
+      'finalInsuranceShare': finalInsuranceShare,
       'hasSensitiveHealthData': hasSensitiveHealthData,
       'containsInsurance': containsInsurance,
       'prescriptionId': prescriptionId,
@@ -930,7 +1028,10 @@ class OrderModel {
       'commandResultRef': commandResultRef,
       'invoiceId': invoiceId,
       'offerVersion': offerVersion,
+      'acceptedOfferVersion': acceptedOfferVersion,
       'partialOffer': partialOffer,
+      'insuranceRemoval': insuranceRemoval,
+      'insuranceResolution': insuranceResolution,
       'reservationId': reservationId,
       'reservationState': reservationState,
       'reviewStartedAt': reviewStartedAt != null
@@ -987,6 +1088,10 @@ class OrderModel {
     String? chatId,
     int? totalItemsCount,
     double? estimatedTotalPrice,
+    double? initialCustomerEstimatedTotalPrice,
+    double? finalCustomerTotalPrice,
+    double? finalGrossTotalPrice,
+    double? finalInsuranceShare,
     bool? hasSensitiveHealthData,
     bool? containsInsurance,
     String? prescriptionId,
@@ -1005,7 +1110,10 @@ class OrderModel {
     String? commandResultRef,
     String? invoiceId,
     int? offerVersion,
+    int? acceptedOfferVersion,
     Map<String, dynamic>? partialOffer,
+    Map<String, dynamic>? insuranceRemoval,
+    Map<String, dynamic>? insuranceResolution,
     String? reservationId,
     String? reservationState,
     DateTime? reviewStartedAt,
@@ -1042,6 +1150,13 @@ class OrderModel {
       chatId: chatId ?? this.chatId,
       totalItemsCount: totalItemsCount ?? this.totalItemsCount,
       estimatedTotalPrice: estimatedTotalPrice ?? this.estimatedTotalPrice,
+      initialCustomerEstimatedTotalPrice:
+          initialCustomerEstimatedTotalPrice ??
+          this.initialCustomerEstimatedTotalPrice,
+      finalCustomerTotalPrice:
+          finalCustomerTotalPrice ?? this.finalCustomerTotalPrice,
+      finalGrossTotalPrice: finalGrossTotalPrice ?? this.finalGrossTotalPrice,
+      finalInsuranceShare: finalInsuranceShare ?? this.finalInsuranceShare,
       hasSensitiveHealthData:
           hasSensitiveHealthData ?? this.hasSensitiveHealthData,
       containsInsurance: containsInsurance ?? this.containsInsurance,
@@ -1061,7 +1176,10 @@ class OrderModel {
       commandResultRef: commandResultRef ?? this.commandResultRef,
       invoiceId: invoiceId ?? this.invoiceId,
       offerVersion: offerVersion ?? this.offerVersion,
+      acceptedOfferVersion: acceptedOfferVersion ?? this.acceptedOfferVersion,
       partialOffer: partialOffer ?? this.partialOffer,
+      insuranceRemoval: insuranceRemoval ?? this.insuranceRemoval,
+      insuranceResolution: insuranceResolution ?? this.insuranceResolution,
       reservationId: reservationId ?? this.reservationId,
       reservationState: reservationState ?? this.reservationState,
       reviewStartedAt: reviewStartedAt ?? this.reviewStartedAt,

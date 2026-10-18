@@ -136,4 +136,30 @@ void main() {
       );
     }
   });
+
+  test('matcher exposes package and piece as separate purchasable options', () {
+    final request = MedicineSearchRequest(
+      requestKey: 'request',
+      rawText: 'Example Drug',
+      normalizedText: 'EXAMPLE DRUG',
+    );
+    final matches = MedicineMatcher.findTopMatches(
+      request: request,
+      pharmacyMedicines: [
+        {
+          ...index,
+          'sellingPrice': 12,
+          'piecePrice': 6,
+          'unitsPerPackage': 2,
+          'availableQuantity': 4,
+          'availablePackages': 4,
+          'availablePieces': 8,
+          'sellByPiece': true,
+        },
+      ],
+    );
+    expect(matches.map((m) => m.soldByPiece), containsAll(<bool>[false, true]));
+    expect(matches.firstWhere((m) => !m.soldByPiece).price, 12);
+    expect(matches.firstWhere((m) => m.soldByPiece).price, 6);
+  });
 }

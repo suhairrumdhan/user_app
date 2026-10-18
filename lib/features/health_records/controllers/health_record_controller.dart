@@ -44,7 +44,7 @@ class HealthRecordController extends GetxController {
     } catch (e) {
       Get.snackbar(
         'خطأ',
-        'فشل في تحديث السجل الصحي: $e',
+        'فشل في تحديث السجل الصحي',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,
@@ -80,7 +80,7 @@ class HealthRecordController extends GetxController {
     } catch (e) {
       Get.snackbar(
         'خطأ',
-        'فشل في تحديث السجل الصحي: $e',
+        'فشل في تحديث السجل الصحي',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,
@@ -137,7 +137,7 @@ class HealthRecordController extends GetxController {
     } catch (e) {
       Get.snackbar(
         'خطأ',
-        'فشل في تحديث المعلومات: $e',
+        'فشل في تحديث المعلومات',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,
@@ -168,7 +168,7 @@ class HealthRecordController extends GetxController {
     } catch (e) {
       Get.snackbar(
         'خطأ',
-        'فشل في تحديث فصيلة الدم: $e',
+        'فشل في تحديث فصيلة الدم',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,
@@ -198,7 +198,7 @@ class HealthRecordController extends GetxController {
     } catch (e) {
       Get.snackbar(
         'خطأ',
-        'فشل في تحديث فصيلة الدم: $e',
+        'فشل في تحديث فصيلة الدم',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,

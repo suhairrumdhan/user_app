@@ -25,7 +25,7 @@ class LoginController extends GetxController {
   // دالة التحقق من البريد الإلكتروني
   String? validateEmail(String value) {
     if (value.isEmpty) {
-      return "❌ يرجى إدخال البريد الإلكتروني";
+      return "أدخل البريد الإلكتروني.";
     }
 
     // تحقق من وجود @ و . بعدها
@@ -35,15 +35,15 @@ class LoginController extends GetxController {
 
     final parts = value.split('@');
     if (parts.length != 2) {
-      return "❌ البريد الإلكتروني غير صالح";
+      return "أدخل بريدًا إلكترونيًا صحيحًا.";
     }
 
     if (parts[0].isEmpty) {
-      return "❌ يرجى إدخال الجزء الأول من البريد الإلكتروني";
+      return "أكمل البريد الإلكتروني.";
     }
 
     if (!parts[1].contains('.')) {
-      return "❌ البريد الإلكتروني يجب أن يحتوي على دومين صحيح (مثال: gmail.com)";
+      return "أدخل بريدًا إلكترونيًا صحيحًا، مثل name@gmail.com.";
     }
 
     final domainParts = parts[1].split('.');
@@ -57,7 +57,7 @@ class LoginController extends GetxController {
   // دالة التحقق من كلمة المرور
   String? validatePassword(String value) {
     if (value.isEmpty) {
-      return "❌ يرجى إدخال كلمة المرور";
+      return "أدخل كلمة المرور.";
     }
 
     if (value.length < 6) {
@@ -170,9 +170,7 @@ class _LoginPageState extends State<LoginPage> {
       );
     } else {
       // إذا فشل الـ validation، نعرض رسالة عامة
-      controller.showServerError(
-        "يرجى التأكد من إدخال البريد الإلكتروني وكلمة المرور بشكل صحيح",
-      );
+      controller.showServerError("تحقق من البريد الإلكتروني وكلمة المرور.");
     }
   }
 

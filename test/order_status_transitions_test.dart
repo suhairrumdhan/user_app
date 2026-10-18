@@ -50,7 +50,7 @@ void main() {
         OrderStatus.partialOfferPending,
         actorType: 'pharmacy',
       ),
-      isFalse,
+      isTrue,
     );
   });
   test('insurance decision and unknown actors match the source contract', () {

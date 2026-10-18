@@ -93,6 +93,20 @@ class RemindersRepository {
     return _local.addLog(log);
   }
 
+  Future<bool> recordMedicationAction({
+    required MedicationReminderModel reminder,
+    required String action,
+    required DateTime actionAt,
+    Duration duplicateWindow = const Duration(seconds: 30),
+  }) {
+    return _local.recordMedicationAction(
+      reminder: reminder,
+      action: action,
+      actionAt: actionAt,
+      duplicateWindow: duplicateWindow,
+    );
+  }
+
   Future<List<ReminderLogModel>> getAllLogs() {
     return _local.getAllLogs();
   }
